@@ -1,0 +1,180 @@
+# ~/.hermes/config.yaml  (Railway'da: /data/hermes/config.yaml)
+#
+# MUHIM: bu faylda hech qanday token/parol YOZILMAYDI.
+# Barcha maxfiy qiymatlar ${ENV_VAR} orqali .env fayldan o'qiladi.
+#
+# ARXITEKTURA ESLATMASI: Bu Jarvis BULUTDA (Railway) ishlaydi, sizning
+# qo'lingizdagi qurilmada emas. Shuning uchun:
+#   ✅ Obsidian xotira      — ishlaydi (vault serverning o'zida saqlanadi)
+#   ✅ Kod yozish/ishga tushirish — ishlaydi (Jarvisning o'z bulut-konteynerida)
+#   ✅ GitHub                — repo yaratish/push/PR/issue (o'zi qila oladi)
+#   ✅ Render deploy         — xizmatlarni joylashtirish, log ko'rish
+#   ✅ Supabase              — backend, baza, auth, storage boshqaruvi
+#   ✅ PostgreSQL            — to'g'ridan-to'g'ri SQL so'rovlar
+#   ✅ Brauzer (Playwright)  — veb-sahifa ochish, test, skrinshot
+#   ✅ Ovoz (STT/TTS)       — ishlaydi
+#   ❌ Sizning kompyuteringizni boshqarish — kompyuter yo'q, kerak emas
+#   ❌ Sizning telefoningizni masofadan boshqarish — texnik jihatdan
+#      mumkin emas: bulutdagi server telefoningizga jismoniy/tarmoq orqali
+#      ulana olmaydi (ADB USB yoki bir Wi-Fi tarmog'ini talab qiladi).
+#      Buni keyinchalik alohida (masalan doim yoqiq turadigan eski
+#      Android qurilma + Termux orqali) qo'shish mumkin.
+
+# ---------------------------------------------------------------------------
+# 1) OBSIDIAN — bulut-ichi xotira (vault serverning doimiy diskida saqlanadi)
+# ---------------------------------------------------------------------------
+# Vault Hermes'ning o'z doimiy diskida (${HERMES_HOME}/vault) yaratiladi —
+# tashqi fayl tizimiga bog'liq emas, hech narsa qo'shimcha sozlash shart emas.
+# Bu oddiy Markdown-fayllar papkasi, ya'ni to'liq Obsidian-formatga mos —
+# xohlasangiz keyinchalik Obsidian Sync yoki Syncthing bilan telefoningizdagi
+# Obsidian ilovasiga ulab, vizual ko'rinishda ham ochishingiz mumkin bo'ladi.
+mcp_servers:
+  obsidian:
+    command: "npx"
+    args:
+      - "-y"
+      - "obsidian-mcp"
+      - "${HERMES_HOME}/vault"
+    tools:
+      exclude: []
+    enabled: true
+
+  # Telefon/kompyuter masofadan boshqaruvi OLIB TASHLANDI — bulut hostingda
+  # texnik jihatdan ishlamaydi (yuqoridagi izohga qarang). Agar kelajakda
+  # doim-onlayn qurilma (masalan eski Android + Termux) qo'shsangiz, shu
+  # yerga qaytib mobile-mcp'ni qo'shish mumkin bo'ladi:
+  #
+  # mobile:
+  #   command: "npx"
+  #   args: ["-y", "@mobilenext/mobile-mcp@latest"]
+  #   enabled: true
+
+  # --- GitHub: repolarni o'qish/yozish, issue/PR, kod push qilish ---
+  github:
+    command: "npx"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-github"
+    env:
+      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+    enabled: true
+
+  # --- Render: xizmatlarni deploy qilish, loglarni ko'rish, boshqarish ---
+  render:
+    command: "npx"
+    args:
+      - "mcp-remote"
+      - "https://mcp.render.com/mcp"
+      - "--header"
+      - "Authorization: Bearer ${RENDER_API_KEY}"
+    enabled: true
+
+  # --- Supabase: loyihalar, jadvallar, auth, storage, edge functions ---
+  supabase:
+    command: "npx"
+    args:
+      - "-y"
+      - "@supabase/mcp-server-supabase@latest"
+      - "--access-token"
+      - "${SUPABASE_ACCESS_TOKEN}"
+    enabled: true
+
+  # --- Filesystem: faqat "workspace" papkasi bilan cheklangan fayl kirishi ---
+  # (kod loyihalari shu yerda saqlanadi — Obsidian vault'dan ALOHIDA)
+  filesystem:
+    command: "npx"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "${HERMES_HOME}/workspace"
+    enabled: true
+
+  # --- Browser (Playwright): veb-sahifalarni ochish, bosish, skrinshot ---
+  browser:
+    command: "npx"
+    args:
+      - "-y"
+      - "@playwright/mcp@latest"
+      - "--headless"
+    enabled: true
+
+  # --- PostgreSQL: bazaga to'g'ridan-to'g'ri SQL so'rovlar ---
+  postgres:
+    command: "npx"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-postgres"
+      - "${DATABASE_URL}"
+    enabled: true
+
+# ---------------------------------------------------------------------------
+# 2) SPEECH-TO-TEXT (STT) — lokal asosiy (server ichida), pullik zaxira
+# ---------------------------------------------------------------------------
+stt:
+  provider: "local"
+  local:
+    model: "base"   # tiny | base | small | medium | large-v3
+
+# ---------------------------------------------------------------------------
+# 3) TEXT-TO-SPEECH (TTS) — lokal asosiy, pullik zaxira
+# ---------------------------------------------------------------------------
+tts:
+  provider: "piper"
+  piper:
+    voice: "en_US-lessac-medium"
+  speed: 1.0
+
+# Sifatli ovoz kerak bo'lganda (ELEVENLABS_API_KEY .env'da bo'lishi kerak):
+# tts:
+#   provider: "elevenlabs"
+
+# ---------------------------------------------------------------------------
+# 4) LLM PROVIDERLAR — OpenRouter asosiy, Gemini/Mistral/Cerebras zaxira
+# ---------------------------------------------------------------------------
+model:
+  provider: "openrouter"
+  default: "anthropic/claude-sonnet-4.6"   # `hermes model` orqali o'zgartirish mumkin
+  api_mode: "chat_completions"
+
+providers:
+  cerebras:
+    type: "openai"
+    base_url: "https://api.cerebras.ai/v1"
+    key_env: "CEREBRAS_API_KEY"
+  mistral:
+    type: "openai"
+    base_url: "https://api.mistral.ai/v1"
+    key_env: "MISTRAL_API_KEY"
+
+fallback_providers:
+  - provider: "gemini"
+    model: "gemini-3-flash-preview"
+  - provider: "mistral"
+    model: "mistral-large-latest"
+  - provider: "cerebras"
+    model: "llama-3.3-70b"
+
+# ---------------------------------------------------------------------------
+# 5) TERMINAL / KOD YOZISH ("vibe coding")
+# ---------------------------------------------------------------------------
+# Jarvis kodni O'ZINING bulut-konteynerida yozadi va ishga tushiradi
+# (Railway'ning izolyatsiyalangan muhitida) — sizning shaxsiy
+# qurilmangizga hech qanday ta'sir qilmaydi, shuning uchun "local" backend
+# bu yerda xavfsiz (chunki "local" = Jarvisning o'z konteyneri, sizning
+# kompyuteringiz emas).
+terminal:
+  backend: "local"
+  persistent_shell: true
+
+# ---------------------------------------------------------------------------
+# 6) TELEGRAM GATEWAY
+# ---------------------------------------------------------------------------
+gateway:
+  platforms:
+    telegram:
+      home_chat_id: "${TELEGRAM_ALLOWED_USERS}"
+      gateway_restart_notification: true
+      typing_indicator: true
+
+display:
+  tool_progress: "new"   # off | new | all | verbose

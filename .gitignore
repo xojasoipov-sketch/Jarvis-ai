@@ -1,0 +1,29 @@
+# Maxfiy
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Hermes runtime
+.hermes/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+*.log
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Build / temp
+dist/
+build/
+tmp/
+temp/
+files.zip

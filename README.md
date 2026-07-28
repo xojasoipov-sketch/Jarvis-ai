@@ -1,237 +1,138 @@
-# Hermes + Obsidian + Telegram + Ovoz + Kompyuter/Telefon — "Jarvis" loyihasi
+# Jarvis — Hermes + Obsidian + Telegram (Railway'da, kompyutersiz)
 
-To'liq shaxsiy AI-yordamchi:
-
-- **Miya**: Hermes Agent (Claude API orqali)
-- **Xotira**: Obsidian vault (MCP orqali)
-- **Ovoz**: lokal STT/TTS (bepul), pullik xizmatlar zaxira sifatida
-- **Kod yozish**: built-in terminal + fayl tahrirlash (Claude Code/Cursor/Codex kabi)
-- **Kompyuter boshqaruvi**: built-in `computer_use` (macOS/Windows/Linux)
-- **Telefon boshqaruvi**: `mobile-mcp` (Android + iOS)
-- **Interfeys**: Telegram bot
+Bulutda 24/7 ishlaydigan shaxsiy AI-yordamchi. Sizda kompyuter yo'qligi
+sababli hammasi Railway'ning bulut serverida ishlaydi, siz faqat
+Telegram orqali muloqot qilasiz.
 
 ```
-Siz (Telegram / ovozli xabar)
+Siz (Telegram, telefondan)
       │
       ▼
-Hermes Agent (gateway + agent loop)
+Railway bulut serveri
       │
-      ├── MCP: Obsidian        (xotira)
-      ├── MCP: mobile-mcp      (telefon)
-      ├── built-in: computer_use (kompyuter)
-      ├── built-in: terminal/fayl (kod yozish)
-      ├── STT: faster-whisper (lokal) → Groq/OpenAI (zaxira)
-      ├── TTS: Piper (lokal) → ElevenLabs (zaxira/sifat)
-      └── LLM: Claude API
+      ├── Hermes Agent (gateway + agent loop)
+      ├── Obsidian-uslubidagi vault (serverning o'z diskida)
+      ├── STT: faster-whisper (lokal, server ichida)
+      ├── TTS: Piper (lokal, server ichida)
+      ├── Terminal/kod yozish (Jarvisning o'z konteynerida)
+      └── LLM: OpenRouter → Gemini → Mistral → Cerebras (zaxira zanjiri)
 ```
 
-> ⚠️ **Xavfsizlik**: `.env` fayli hech qachon GitHub'ga push qilinmaydi
-> (`.gitignore`da bloklangan). Agar biror token allaqachon oshkor bo'lgan
-> bo'lsa (masalan, chatda yozilgan) — uni darhol bekor qilib (`/revoke`),
-> yangisini oling.
->
-> ⚠️ **Bu Jarvis kompyuteringiz va telefoningizni haqiqatan ham boshqaradi.**
-> Faqat o'zingizga ishonch bildirgan Telegram foydalanuvchisiga ruxsat
-> bering (`TELEGRAM_ALLOWED_USERS`), va halokatli amallar (fayl o'chirish,
-> to'lov qilish, xabar yuborish) uchun avval tasdiqlashni so'rashini
-> `AGENTS.md`da belgilang (7-bo'limga qarang).
+**Nima ishlaydi, nima ishlamaydi:**
 
----
-
-## 1. Talablar
-
-- Python 3.10+ va [uv](https://github.com/astral-sh/uv)
-- Node.js 18+ (Obsidian MCP, mobile-mcp `npx` orqali ishga tushadi)
-- `ffmpeg` (ovozli xabarlar uchun)
-- Telegram akkaunt
-- (Telefon boshqaruvi uchun) Android SDK platform-tools yoki go-ios (iOS)
-
-## 2. Hermes Agent'ni o'rnatish
-
-```bash
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-```
-
-Messaging (Telegram) va ovoz uchun qo'shimcha bog'liqliklar:
-
-```bash
-cd ~/.hermes/hermes-agent
-uv pip install -e ".[messaging]"
-pip install faster-whisper piper-tts --break-system-packages
-```
-
-## 3. LLM provayderni ulash
-
-```bash
-hermes setup --portal
-# yoki qo'lda: ~/.hermes/.env fayliga ANTHROPIC_API_KEY qo'shing
-```
-
-## 4. Bu repo fayllarini joylashtirish
-
-**Avtomatik (tavsiya etiladi):**
-
-```bash
-chmod +x setup.sh
-./setup.sh
-```
-
-Skript `config.yaml` va `AGENTS.md`ni joylashtiradi, mavjud sozlamalarni
-zaxiralaydi, `.env` shablonini yaratadi (agar hali bo'lmasa) va kerakli
-dasturlar (`node`, `ffmpeg`, `adb`, `go-ios`) o'rnatilganini tekshiradi.
-Hech qanday tokenni o'zi to'ldirmaydi — buni siz qo'lda qilasiz.
-
-**Qo'lda:**
-
-```bash
-mkdir -p ~/.hermes
-cp config/config.yaml ~/.hermes/config.yaml
-cp config/AGENTS.md ~/.hermes/AGENTS.md
-cp .env.example ~/.hermes/.env
-nano ~/.hermes/.env   # haqiqiy qiymatlarni kiriting
-```
-
-| O'zgaruvchi | Qayerdan olinadi |
+| Funksiya | Holat |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | Telegram `@BotFather` → `/newbot` |
-| `TELEGRAM_ALLOWED_USERS` | Telegram `@userinfobot` → sizning raqamli ID'ingiz |
-| `OBSIDIAN_VAULT_PATH` | Obsidian vault to'liq yo'li |
-| `ANTHROPIC_API_KEY` | Claude API kaliti (console.anthropic.com) |
-| `GROQ_API_KEY` (ixtiyoriy) | STT zaxira, groq.com — bepul tarif |
-| `ELEVENLABS_API_KEY` (ixtiyoriy) | Sifatli TTS, elevenlabs.io |
+| Telegram orqali suhbat | ✅ |
+| Obsidian-uslubidagi xotira (vault) | ✅ (serverda saqlanadi) |
+| Kod yozish/ishga tushirish | ✅ (Jarvisning o'z konteynerida) |
+| GitHub (repo, push, PR, issue) | ✅ |
+| Render (deploy, loglar, boshqaruv) | ✅ |
+| Supabase (baza, auth, storage) | ✅ |
+| PostgreSQL (to'g'ridan-to'g'ri SQL) | ✅ |
+| Brauzer (Playwright — sahifa ochish, test) | ✅ |
+| Ovozli xabar (STT/TTS) | ✅ |
+| Sizning shaxsiy kompyuteringizni boshqarish | ❌ (kompyuter yo'q) |
+| Sizning telefoningizni masofadan boshqarish | ❌ (texnik jihatdan bulutdan imkonsiz — pastga qarang) |
 
-## 5. Ovoz (STT/TTS) — lokal, keyin pullik zaxira
-
-Hech narsa sozlamasangiz ham ishlaydi ("zero config"):
-
-- **STT**: `faster-whisper` o'rnatilgan bo'lsa, avtomatik lokal ishlaydi
-  (birinchi ishlatishda ~150MB model yuklab olinadi). Agar lokal xato
-  bersa yoki o'chirilgan bo'lsa, `.env`dagi `GROQ_API_KEY` orqali bulutga
-  o'tadi.
-- **TTS**: `config.yaml`da `tts.provider: piper` — to'liq offline. Sifatli
-  ovoz kerak bo'lsa (`ELEVENLABS_API_KEY` borligiga ishonch hosil qilib)
-  `tts.provider: elevenlabs`ga o'zgartiring.
-
-Tekshirish:
-
-```bash
-hermes --tui
-# mikrofon tugmasini bosib gapiring, Jarvis lokal ovoz bilan javob beradi
-```
-
-## 6. Kompyuterni boshqarish (Claude Code/Cursor/Codex kabi + computer_use)
-
-**Kod yozish** — hech narsa o'rnatish shart emas, built-in:
-
-```
-Jarvis, /home/user/projects/myapp papkasida yangi FastAPI loyiha yarat,
-testlarni yoz va ishga tushir.
-```
-
-**Ekranni ko'rish va sichqoncha/klaviatura boshqaruvi** yoqish:
-
-```bash
-hermes tools
-# → Computer Use → Enable
-```
-
-- **macOS**: Tizim sozlamalari → Maxfiylik → Accessibility + Screen
-  Recording ruxsatlarini bering.
-- **Windows/Linux**: qo'shimcha ruxsat so'ralmaydi, lekin birinchi
-  ishga tushirishda `cua-driver` avtomatik o'rnatiladi.
-
-Sinash:
-
-```
-Jarvis, brauzerni och va "OpenAI" saytiga kirib, bosh sahifa skrinshotini
-menga yubor.
-```
-
-> Bu vositalar sizning **haqiqiy** kursoringizni siljitmaydi — orqa fonda
-> alohida "virtual kursor" bilan ishlaydi, shuning uchun siz shu paytda
-> boshqa ish qilishingiz mumkin.
-
-## 7. Telefonni boshqarish (Android + iOS)
-
-`config.yaml`da `mobile` MCP allaqachon qo'shilgan. Faqat quyidagilarni
-sozlang:
-
-**Android:**
-```bash
-# Android SDK platform-tools o'rnating, keyin:
-adb devices   # telefon "device" holatida ko'rinishi kerak
-# Telefonda: Sozlamalar → Dasturchi uchun → USB debugging — yoqing
-```
-
-**iOS (jismoniy qurilma):**
-```bash
-# go-ios o'rnating: https://github.com/danielpaulus/go-ios
-npm install -g go-ios
-ios list   # qurilma ko'rinishi kerak
-```
-
-Sinash:
-
-```
-Jarvis, telefonimda Telegram ilovasini och va oxirgi xabarni o'qib ber.
-```
-
-## 8. Xotira (Obsidian) va coding'ni birlashtirib ishlatish
-
-```
-Jarvis, "auth-loyiha" nomli qaydimni Obsidian'dan o'qi, undagi
-talablarga asosan kod yoz va natijani xuddi shu qaydga qo'sh.
-```
-
-## 9. Telegram gateway'ni ishga tushirish
-
-```bash
-hermes gateway setup      # Telegram tanlang
-hermes gateway start
-```
-
-## 10. AGENTS.md — Jarvisga rol berish (tavsiya etiladi)
-
-`config/AGENTS.md` fayli repo ichida allaqachon tayyor — Jarvisga xotira,
-kompyuter/telefon boshqaruvi, kod yozish va xavfsizlik bo'yicha rol beradi
-(masalan, halokatli amallar oldidan tasdiqlash so'rash). `setup.sh` uni
-avtomatik `~/.hermes/AGENTS.md`ga joylashtiradi. O'zingizga mos ravishda
-tahrirlashdan tortinmang.
-
-## 11. GitHub'ga push qilishdan oldin tekshirish ro'yxati
-
-- [ ] `.env` fayli repo ichida emas (faqat `.env.example` bor)
-- [ ] `git status` da `.env` ko'rinmayapti
-- [ ] Kod ichida hech qanday token qattiq yozilmagan
-- [ ] Token birov ko'rgan bo'lsa — BotFather'da `/revoke` qilingan
-
-```bash
-git init
-git add .
-git status   # .env yo'qligiga ishonch hosil qiling
-git commit -m "Hermes Jarvis: Obsidian + Telegram + ovoz + kompyuter/telefon"
-git remote add origin https://github.com/<username>/<repo>.git
-git push -u origin main
-```
-
-## 12. Boshqa qurilmada GitHub URL orqali ishlatish
-
-```bash
-git clone https://github.com/<username>/<repo>.git
-cd <repo>
-cp .env.example ~/.hermes/.env   # qiymatlarni to'ldiring
-cp config/config.yaml ~/.hermes/config.yaml
-hermes gateway start
-```
+> Telefonni masofadan boshqarish (ilova ochish, tugma bosish) uchun
+> boshqaruvchi dastur **jismonan** telefon bilan bir tarmoqda yoki unga
+> USB orqali ulangan bo'lishi kerak. Bulutdagi server buni qila olmaydi.
+> Agar kelajakda doim-onlayn turadigan qo'shimcha Android qurilma
+> (hatto eski telefon) topsangiz, shu funksiyani qo'shib berish mumkin.
 
 ---
+
+## Sizga qolgan yagona ishlar (men bajara olmaydigan qismlar)
+
+Men kodni, konfiguratsiyani va hujjatlarni to'liq tayyorlab qo'ydim.
+Qolgan ishlar — barchasi **hisob yaratish / tugma bosish** turidagi
+amallar, ularni faqat siz bajara olasiz (na tashqi tarmoqqa ulanishim,
+na sizning hisoblaringizga kirish huquqim bor):
+
+### A. Kalitlarni olish (har biri bepul ro'yxatdan o'tish talab qiladi)
+- [ ] Telegram bot: `@BotFather` → `/newbot` → tokenni saqlang
+- [ ] Telegram user ID: `@userinfobot`ga yozing → raqamni saqlang
+- [ ] OpenRouter kalit: https://openrouter.ai/keys
+- [ ] Gemini kalit: https://aistudio.google.com/apikey
+- [ ] Mistral kalit: https://console.mistral.ai
+- [ ] Cerebras kalit: https://cloud.cerebras.ai
+- [ ] GitHub token: Settings → Developer settings → Personal access tokens
+      → Fine-grained token → kerakli repo(lar)ga yozish huquqi bilan
+- [ ] Render kalit: dashboard.render.com → Account Settings → API Keys
+- [ ] Supabase token: supabase.com/dashboard/account/tokens
+- [ ] PostgreSQL ulanish satri: `DATABASE_URL` (Supabase/Render loyihangizdan
+      olinadi — "Connection string" bo'limida)
+
+> Oxirgi to'rttasi (GitHub/Render/Supabase/Postgres) ixtiyoriy — agar hozircha
+> kerak bo'lmasa, `.env`da bo'sh qoldirsangiz ham bo'ladi, Jarvis shunchaki
+> o'sha vositalarsiz ishlayveradi. Keyin xohlagan payt qo'shishingiz mumkin.
+
+### B. GitHub'ga joylashtirish
+- [ ] `Jarvis-ai` repo'ingizga shu papkadagi barcha fayllarni yuklang
+      (GitHub sahifasida "Add file → Upload files" — telefon brauzeridan
+      ham bo'ladi, terminal shart emas)
+
+### C. Railway'da ishga tushirish
+- [ ] https://railway.com — GitHub akkauntingiz bilan ro'yxatdan o'ting
+- [ ] "New Project" → "Deploy from GitHub repo" → `Jarvis-ai`ni tanlang
+- [ ] "Variables" bo'limiga A-qadamdagi barcha kalitlarni kiriting
+      (`.env.example` faylida ro'yxati bor)
+- [ ] "Deploy" bosing
+
+Shu uchta blok — atigi hisob ochish va kalit/token nusxalash. Boshqa
+hech narsa (kod, konfiguratsiya, terminal buyruqlari) kerak emas.
+
+---
+
+## Fayllar tuzilishi
+
+```
+Jarvis-ai/
+├── README.md          — shu fayl
+├── .env.example        — Railway "Variables"ga kiritiladigan kalitlar ro'yxati
+├── .gitignore           — maxfiy fayllarni himoya qiladi
+├── setup.sh             — lokal o'rnatish uchun (ixtiyoriy)
+└── config/
+    ├── config.yaml      — Obsidian, STT/TTS, LLM providerlar, terminal, Telegram + MCP
+    └── AGENTS.md         — Jarvisning rol va xavfsizlik qoidalari
+```
+
+## Tekshirish
+
+Deploy tugagach, Telegram'da botingizga yozing:
+
+```
+Salom! O'zingni tanishtir va nima qila olishingni ayt.
+```
+
+```
+Vault'imga "Birinchi qayd" nomli yangi fayl yarat va unga "Jarvis ishga
+tushdi" deb yoz.
+```
+
+Agar bot javob bermasa — Railway dashboard'idagi "Deployments" →
+"View Logs" bo'limidan xato matnini nusxalab shu yerga tashlang, birga
+tuzatamiz.
+
+## Xavfsizlik eslatmasi
+
+- `.env` fayli hech qachon GitHub'ga push qilinmaydi — barcha kalitlar
+  faqat Railway "Variables" bo'limida saqlanadi.
+- `TELEGRAM_ALLOWED_USERS`ga faqat o'zingizning ID'ingizni qoldiring —
+  aks holda botga istalgan kim yozib, buyruq bera oladi.
+- Agar biror token oshkor bo'lib qolgan bo'lsa (masalan chatda yozilgan),
+  darhol shu xizmatning saytida uni bekor qilib (`revoke`), yangisini
+  oling.
+- ⚠️ **GitHub/Render/Supabase/PostgreSQL kalitlari kuchli huquqlarga ega**
+  — Jarvis endi repo o'chira, xizmatni to'xtata, bazadan yozuv o'chira
+  oladi. `config/AGENTS.md`da halokatli amallar oldidan tasdiqlash
+  so'rash qoidasi yozilgan, lekin baribir GitHub'da fine-grained token
+  yaratganda faqat KERAKLI repo(lar)ga cheklangan huquq bering (barcha
+  repolaringizga emas), va imkon qadar production emas, alohida
+  test/staging Supabase loyihasini ulang.
 
 ## Foydali havolalar
 
 - Hermes hujjatlari: https://hermes-agent.nousresearch.com/docs/
-- Hermes GitHub: https://github.com/NousResearch/hermes-agent
+- Railway Hermes shabloni: https://railway.com/deploy/hermes-agent-1
 - Obsidian MCP: https://github.com/StevenStavrakis/obsidian-mcp
-- Computer Use (built-in): https://hermes-agent.nousresearch.com/docs/user-guide/features/computer-use
-- Voice/TTS: https://hermes-agent.nousresearch.com/docs/user-guide/features/voice-mode
-- Mobile MCP: https://github.com/mobile-next/mobile-mcp
-- Telegram sozlash: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/telegram/
