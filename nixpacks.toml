@@ -1,0 +1,5 @@
+[phases.install]
+cmds = ["npm cache clean --force", "npm install"]
+
+[phases.build]
+cmds = ["npm run build"]
