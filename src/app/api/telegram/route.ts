@@ -1,8 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   TgUpdate, sendMessage, sendChatAction, answerCallbackQuery,
-  cleanMarkdown, AGENT_KEYBOARD, MAIN_KEYBOARD,
+  cleanMarkdown, AGENT_KEYBOARD,
 } from "@/lib/telegram";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-production.up.railway.app";
+
+const MAIN_KEYBOARD = {
+  inline_keyboard: [
+    [
+      { text: "💬 Chat", callback_data: "menu:chat" },
+      { text: "🤖 Agentlar", callback_data: "menu:agents" },
+    ],
+    [
+      { text: "📋 Vazifalar", callback_data: "menu:tasks" },
+      { text: "📁 Loyihalar", callback_data: "menu:projects" },
+    ],
+    [{ text: "🚀 Pari AI ilovasini ochish", web_app: { url: APP_URL } }],
+  ],
+};
 import { getSession, updateSession, addToHistory, clearHistory } from "@/lib/session-store";
 
 const AGENT_NAMES: Record<string, string> = {
@@ -55,6 +71,13 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
       `Nima qilishimni xohlaysiz?`,
       MAIN_KEYBOARD
     );
+    return;
+  }
+
+  if (cmd === "/app") {
+    await sendMessage(chatId, `🚀 *Pari AI* — to'liq ilovani oching:`, {
+      inline_keyboard: [[{ text: "🚀 Pari AI ni ochish", web_app: { url: APP_URL } }]],
+    });
     return;
   }
 

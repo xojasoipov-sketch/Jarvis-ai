@@ -20,9 +20,15 @@ export default function SettingsPage() {
         body: JSON.stringify({ action: "info" }),
       });
       const data = await res.json();
+      if (data.tokenMissing) {
+        setStatus("⚠️ TELEGRAM_BOT_TOKEN Railway Variables'ga qo'shilmagan");
+        setLoading(false); return;
+      }
+      if (data.error) { setStatus(`❌ ${data.error}`); setLoading(false); return; }
       setBotInfo(data.bot);
       setWebhookInfo(data.webhook);
-    } catch { setStatus("❌ Ma'lumot olishda xato"); }
+      setStatus("");
+    } catch { setStatus("❌ Server bilan bog'lanishda xato"); }
     setLoading(false);
   }
 
@@ -36,11 +42,16 @@ export default function SettingsPage() {
         body: JSON.stringify({ action: "set", appUrl }),
       });
       const data = await res.json();
+      if (data.tokenMissing) {
+        setStatus("⚠️ TELEGRAM_BOT_TOKEN Railway Variables'ga qo'shilmagan. Qo'shib qayta deploy qiling.");
+        setLoading(false); return;
+      }
+      if (data.error) { setStatus(`❌ ${data.error}`); setLoading(false); return; }
       if (data.webhook?.ok) {
-        setStatus("✅ Webhook muvaffaqiyatli o'rnatildi!");
+        setStatus("✅ Webhook o'rnatildi! Mini App ham ulandi. Bot tayyor!");
         fetchInfo();
       } else {
-        setStatus(`❌ Xato: ${data.webhook?.description || "Noma'lum"}`);
+        setStatus(`❌ Telegram xato: ${data.webhook?.description || JSON.stringify(data.webhook)}`);
       }
     } catch { setStatus("❌ Webhook o'rnatishda xato"); }
     setLoading(false);
