@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutGrid, MessageSquare, Bot, CheckSquare, FolderKanban, BookOpen,
+  LayoutGrid, MessageSquare, Bot, CheckSquare, FolderKanban, BookOpen, Brain,
   Zap, Calendar, FolderOpen, BarChart3, Code2, Database, Plug,
   Wrench, Settings, ShieldCheck, CreditCard, ScrollText, type LucideIcon,
 } from "lucide-react";
@@ -16,6 +16,7 @@ const nav: NavEntry[] = [
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
   { label: "Projects", href: "/projects", icon: FolderKanban },
   { label: "Knowledge Hub", href: "/knowledge", icon: BookOpen },
+  { label: "Skill Tree", href: "/skilltree", icon: Brain },
   { label: "Automation", href: "/automation", icon: Zap },
   { label: "Calendar", href: "/calendar", icon: Calendar },
   { label: "Files", href: "/files", icon: FolderOpen },
