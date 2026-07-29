@@ -1,6 +1,3 @@
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-
 export type TgUpdate = {
   update_id: number;
   message?: TgMessage;
@@ -22,7 +19,22 @@ export type TgCallbackQuery = {
   data: string;
 };
 
-export type InlineKeyboard = { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
+export type InlineButton = {
+  text: string;
+  callback_data?: string;
+  web_app?: { url: string };
+};
+
+export type InlineKeyboard = {
+  inline_keyboard: InlineButton[][];
+};
+
+// Token har safar runtime'da o'qiladi (build vaqtida emas)
+function getApi() {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) throw new Error("TELEGRAM_BOT_TOKEN topilmadi");
+  return `https://api.telegram.org/bot${token}`;
+}
 
 export async function sendMessage(chatId: number, text: string, keyboard?: InlineKeyboard) {
   const body: Record<string, unknown> = {
@@ -32,7 +44,7 @@ export async function sendMessage(chatId: number, text: string, keyboard?: Inlin
   };
   if (keyboard) body.reply_markup = keyboard;
 
-  await fetch(`${API}/sendMessage`, {
+  await fetch(`${getApi()}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -40,7 +52,7 @@ export async function sendMessage(chatId: number, text: string, keyboard?: Inlin
 }
 
 export async function sendChatAction(chatId: number, action = "typing") {
-  await fetch(`${API}/sendChatAction`, {
+  await fetch(`${getApi()}/sendChatAction`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, action }),
@@ -48,7 +60,7 @@ export async function sendChatAction(chatId: number, action = "typing") {
 }
 
 export async function answerCallbackQuery(callbackId: string, text?: string) {
-  await fetch(`${API}/answerCallbackQuery`, {
+  await fetch(`${getApi()}/answerCallbackQuery`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ callback_query_id: callbackId, text }),
@@ -56,30 +68,24 @@ export async function answerCallbackQuery(callbackId: string, text?: string) {
 }
 
 export async function setWebhook(url: string) {
-  const res = await fetch(`${API}/setWebhook`, {
+  const res = await fetch(`${getApi()}/setWebhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, allowed_updates: ["message", "callback_query"] }),
+    body: JSON.stringify({ url, allowed_updates: ["message", "callback_query"], drop_pending_updates: true }),
   });
   return res.json();
 }
 
-export async function deleteWebhook() {
-  const res = await fetch(`${API}/deleteWebhook`, { method: "POST" });
-  return res.json();
-}
-
 export async function getWebhookInfo() {
-  const res = await fetch(`${API}/getWebhookInfo`);
+  const res = await fetch(`${getApi()}/getWebhookInfo`);
   return res.json();
 }
 
 export async function getMe() {
-  const res = await fetch(`${API}/getMe`);
+  const res = await fetch(`${getApi()}/getMe`);
   return res.json();
 }
 
-// Markdown ni Telegram uchun tozalash
 export function cleanMarkdown(text: string): string {
   return text
     .replace(/```[\w]*\n?([\s\S]*?)```/g, "```\n$1\n```")
@@ -104,19 +110,5 @@ export const AGENT_KEYBOARD: InlineKeyboard = {
       { text: "⚙️ DevOps", callback_data: "agent:devops" },
       { text: "🎯 Assistant", callback_data: "agent:assistant" },
     ],
-  ],
-};
-
-export const MAIN_KEYBOARD: InlineKeyboard = {
-  inline_keyboard: [
-    [
-      { text: "💬 Chat", callback_data: "menu:chat" },
-      { text: "🤖 Agentlar", callback_data: "menu:agents" },
-    ],
-    [
-      { text: "📋 Vazifalar", callback_data: "menu:tasks" },
-      { text: "📁 Loyihalar", callback_data: "menu:projects" },
-    ],
-    [{ text: "ℹ️ Yordam", callback_data: "menu:help" }],
   ],
 };
