@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Check, X, Bot, CheckCircle2 } from "lucide-react";
 
 type Task = {
   id: number;
@@ -21,7 +22,7 @@ const INIT_TASKS: Task[] = [
 
 const PRIORITY_COLORS = { high: "text-red-600 bg-red-50", medium: "text-yellow-600 bg-yellow-50", low: "text-green-600 bg-green-50" };
 const STATUS_LABELS = { todo: "Kutmoqda", progress: "Jarayonda", done: "Bajarildi" };
-const STATUS_COLORS = { todo: "bg-gray-100 text-gray-600", progress: "bg-blue-100 text-blue-600", done: "bg-green-100 text-green-600" };
+const STATUS_COLORS = { todo: "bg-[#1e1d21] text-[#a39d92]", progress: "bg-blue-100 text-blue-600", done: "bg-green-100 text-green-600" };
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>(INIT_TASKS);
@@ -55,10 +56,10 @@ export default function TasksPage() {
     <div className="fade-in max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Barcha vazifalar va ularning holati</p>
+          <h1 className="text-2xl font-bold text-[#f5f1ea]">Tasks</h1>
+          <p className="text-sm text-[#7d7870] mt-0.5">Barcha vazifalar va ularning holati</p>
         </div>
-        <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-all">
+        <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2 bg-[#ff6a1a] hover:bg-[#e85a0f] text-white text-sm font-medium rounded-xl transition-all">
           <span>+</span> Yangi vazifa
         </button>
       </div>
@@ -67,32 +68,32 @@ export default function TasksPage() {
       <div className="grid grid-cols-4 gap-3">
         {(["all", "todo", "progress", "done"] as const).map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            className={`p-4 rounded-2xl border-2 text-left transition-all ${filter === s ? "border-indigo-500 bg-indigo-50" : "border-gray-100 bg-white hover:border-gray-200"}`}>
-            <p className="text-2xl font-bold text-gray-900">{counts[s]}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{s === "all" ? "Hammasi" : STATUS_LABELS[s]}</p>
+            className={`p-4 rounded-2xl border-2 text-left transition-all ${filter === s ? "border-indigo-500 bg-[#ff6a1a]/10" : "border-white/[0.08] bg-[#141316] hover:border-white/[0.12]"}`}>
+            <p className="text-2xl font-bold text-[#f5f1ea]">{counts[s]}</p>
+            <p className="text-xs text-[#7d7870] mt-0.5">{s === "all" ? "Hammasi" : STATUS_LABELS[s]}</p>
           </button>
         ))}
       </div>
 
       {/* New task form */}
       {showNew && (
-        <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm p-5 space-y-3">
-          <p className="text-sm font-semibold text-gray-900">Yangi vazifa</p>
+        <div className="bg-[#141316] rounded-2xl border border-[#ff6a1a]/30 shadow-sm p-5 space-y-3">
+          <p className="text-sm font-semibold text-[#f5f1ea]">Yangi vazifa</p>
           <input value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))}
-            placeholder="Vazifa nomi..." className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            placeholder="Vazifa nomi..." className="w-full px-4 py-2.5 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30" />
           <textarea value={newTask.desc} onChange={e => setNewTask(p => ({ ...p, desc: e.target.value }))}
             placeholder="Tavsif (ixtiyoriy)..." rows={2}
-            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            className="w-full px-4 py-2.5 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30" />
           <div className="flex items-center gap-3">
             <select value={newTask.priority} onChange={e => setNewTask(p => ({ ...p, priority: e.target.value as Task["priority"] }))}
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
+              className="px-3 py-2 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none">
               <option value="high">Yuqori ustuvorlik</option>
               <option value="medium">O'rta ustuvorlik</option>
               <option value="low">Past ustuvorlik</option>
             </select>
             <div className="flex gap-2 ml-auto">
-              <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl transition-all">Bekor</button>
-              <button onClick={addTask} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl transition-all">Qo'shish</button>
+              <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#a39d92] hover:bg-[#1e1d21] rounded-xl transition-all">Bekor</button>
+              <button onClick={addTask} className="px-4 py-2 bg-[#ff6a1a] hover:bg-[#e85a0f] text-white text-sm rounded-xl transition-all">Qo'shish</button>
             </div>
           </div>
         </div>
@@ -101,37 +102,37 @@ export default function TasksPage() {
       {/* Task list */}
       <div className="space-y-2">
         {filtered.map(task => (
-          <div key={task.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-start gap-4 hover:border-gray-200 transition-all">
+          <div key={task.id} className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-4 flex items-start gap-4 hover:border-white/[0.12] transition-all">
             <button onClick={() => moveTask(task.id, task.status === "done" ? "todo" : "done")}
-              className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 transition-all ${task.status === "done" ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-indigo-400"}`}>
-              {task.status === "done" && <span className="text-white text-xs flex items-center justify-center w-full h-full">✓</span>}
+              className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 transition-all flex items-center justify-center ${task.status === "done" ? "bg-green-500 border-green-500" : "border-[#454239] hover:border-[#ff8a3d]"}`}>
+              {task.status === "done" && <Check size={12} strokeWidth={3} className="text-white" />}
             </button>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className={`text-sm font-medium text-gray-900 ${task.status === "done" ? "line-through text-gray-400" : ""}`}>{task.title}</p>
+                <p className={`text-sm font-medium text-[#f5f1ea] ${task.status === "done" ? "line-through text-[#5c584f]" : ""}`}>{task.title}</p>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[task.status]}`}>{STATUS_LABELS[task.status]}</span>
               </div>
-              {task.desc && <p className="text-xs text-gray-500 mt-1">{task.desc}</p>}
+              {task.desc && <p className="text-xs text-[#7d7870] mt-1">{task.desc}</p>}
               <div className="flex items-center gap-3 mt-2">
-                {task.agent && <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">🤖 {task.agent}</span>}
-                <span className="text-xs text-gray-400">{task.date}</span>
+                {task.agent && <span className="text-xs text-[#ff8a3d] bg-[#ff6a1a]/10 px-2 py-0.5 rounded-full flex items-center gap-1"><Bot size={11} strokeWidth={1.75} /> {task.agent}</span>}
+                <span className="text-xs text-[#5c584f]">{task.date}</span>
               </div>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               {task.status !== "progress" && task.status !== "done" && (
-                <button onClick={() => moveTask(task.id, "progress")} className="p-1.5 text-xs text-blue-600 hover:bg-blue-50 rounded-lg transition-all">▶</button>
+                <button onClick={() => moveTask(task.id, "progress")} className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-all"><CheckCircle2 size={15} strokeWidth={1.75} /></button>
               )}
               {task.status === "progress" && (
-                <button onClick={() => moveTask(task.id, "done")} className="p-1.5 text-xs text-green-600 hover:bg-green-50 rounded-lg transition-all">✓</button>
+                <button onClick={() => moveTask(task.id, "done")} className="p-1.5 text-green-500 hover:bg-green-500/10 rounded-lg transition-all"><Check size={15} strokeWidth={1.75} /></button>
               )}
-              <button onClick={() => deleteTask(task.id)} className="p-1.5 text-xs text-red-400 hover:bg-red-50 rounded-lg transition-all">✕</button>
+              <button onClick={() => deleteTask(task.id)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"><X size={15} strokeWidth={1.75} /></button>
             </div>
           </div>
         ))}
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-4xl mb-3">✓</p>
+          <div className="text-center py-12 text-[#5c584f]">
+            <CheckCircle2 size={36} strokeWidth={1.25} className="mx-auto mb-3" />
             <p className="text-sm">Vazifalar yo'q</p>
           </div>
         )}

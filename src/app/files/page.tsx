@@ -1,11 +1,15 @@
 "use client";
 import { useState, useRef } from "react";
+import {
+  Upload, FileText, FileCode2, FileJson, FileSpreadsheet, Image as ImageIcon,
+  Film, Sparkles, Trash2, FolderOpen, type LucideIcon,
+} from "lucide-react";
 
 type File = { id: number; name: string; type: string; size: string; date: string; content?: string };
 
-const EXT_ICONS: Record<string, string> = {
-  pdf: "📄", txt: "📝", md: "📝", js: "📦", ts: "📦", tsx: "📦",
-  py: "🐍", json: "📋", csv: "📊", png: "🖼️", jpg: "🖼️", mp4: "🎬",
+const EXT_ICONS: Record<string, LucideIcon> = {
+  pdf: FileText, txt: FileText, md: FileText, js: FileCode2, ts: FileCode2, tsx: FileCode2,
+  py: FileCode2, json: FileJson, csv: FileSpreadsheet, png: ImageIcon, jpg: ImageIcon, mp4: Film,
 };
 
 const INIT_FILES: File[] = [
@@ -68,12 +72,12 @@ export default function FilesPage() {
     <div className="fade-in max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Files</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{files.length} ta fayl — AI bilan tahlil qilish mumkin</p>
+          <h1 className="text-2xl font-bold text-[#f5f1ea]">Files</h1>
+          <p className="text-sm text-[#7d7870] mt-0.5">{files.length} ta fayl — AI bilan tahlil qilish mumkin</p>
         </div>
         <button onClick={() => inputRef.current?.click()}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-all">
-          <span>↑</span> Yuklash
+          className="flex items-center gap-2 px-4 py-2 bg-[#ff6a1a] hover:bg-[#e85a0f] text-white text-sm font-medium rounded-xl transition-all">
+          <Upload size={15} strokeWidth={1.75} /> Yuklash
         </button>
         <input ref={inputRef} type="file" multiple className="hidden" onChange={handleUpload} />
       </div>
@@ -82,20 +86,20 @@ export default function FilesPage() {
         {/* File list */}
         <div className="col-span-1 space-y-3">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Qidirish..."
-            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            className="w-full px-3 py-2.5 bg-[#141316] border border-white/[0.12] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30" />
 
           <div className="space-y-1.5">
             {filtered.map(f => {
               const ext = f.type || "txt";
-              const icon = EXT_ICONS[ext] || "📄";
+              const Icon = EXT_ICONS[ext] || FileText;
               return (
                 <button key={f.id} onClick={() => { setSelected(f); setAiAnswer(""); setAiQuery(""); }}
-                  className={`w-full text-left p-3 rounded-xl border transition-all ${selected?.id === f.id ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-white hover:border-gray-200"}`}>
+                  className={`w-full text-left p-3 rounded-xl border transition-all ${selected?.id === f.id ? "border-[#ff6a1a]/40 bg-[#ff6a1a]/10" : "border-white/[0.08] bg-[#141316] hover:border-white/[0.12]"}`}>
                   <div className="flex items-center gap-3">
-                    <span className="text-xl">{icon}</span>
+                    <Icon size={18} strokeWidth={1.5} className="text-[#a39d92] flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{f.name}</p>
-                      <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
+                      <p className="text-sm font-medium text-[#f5f1ea] truncate">{f.name}</p>
+                      <div className="flex gap-2 text-xs text-[#5c584f] mt-0.5">
                         <span>{f.size}</span><span>·</span><span>{f.date}</span>
                       </div>
                     </div>
@@ -104,7 +108,7 @@ export default function FilesPage() {
               );
             })}
             {filtered.length === 0 && (
-              <div className="text-center py-8 text-gray-400 text-sm">Fayl topilmadi</div>
+              <div className="text-center py-8 text-[#5c584f] text-sm">Fayl topilmadi</div>
             )}
           </div>
         </div>
@@ -113,38 +117,38 @@ export default function FilesPage() {
         <div className="col-span-2 space-y-4">
           {selected ? (
             <>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
-                  <span className="text-3xl">{EXT_ICONS[selected.type] || "📄"}</span>
+              <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
+                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/[0.08]">
+                  {(() => { const Icon = EXT_ICONS[selected.type] || FileText; return <Icon size={26} strokeWidth={1.5} className="text-[#a39d92]" />; })()}
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-gray-900">{selected.name}</p>
-                    <p className="text-xs text-gray-500">{selected.size} · {selected.date}</p>
+                    <p className="text-sm font-semibold text-[#f5f1ea]">{selected.name}</p>
+                    <p className="text-xs text-[#7d7870]">{selected.size} · {selected.date}</p>
                   </div>
                   <button onClick={() => setFiles(p => p.filter(f => f.id !== selected.id))}
-                    className="p-2 text-red-400 hover:bg-red-50 rounded-lg text-xs transition-all">🗑</button>
+                    className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"><Trash2 size={15} strokeWidth={1.75} /></button>
                 </div>
                 {selected.content ? (
-                  <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono bg-gray-50 rounded-xl p-4 max-h-40 overflow-y-auto">{selected.content}</pre>
+                  <pre className="text-xs text-[#cfc9bd] whitespace-pre-wrap font-mono bg-[#0a0a0c] rounded-xl p-4 max-h-40 overflow-y-auto">{selected.content}</pre>
                 ) : (
-                  <p className="text-sm text-gray-400 text-center py-6">Fayl ko'rib chiqish uchun kontent yo'q</p>
+                  <p className="text-sm text-[#5c584f] text-center py-6">Fayl ko'rib chiqish uchun kontent yo'q</p>
                 )}
               </div>
 
               {selected.content && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                  <p className="text-sm font-semibold text-gray-900 mb-3">🤖 AI bilan tahlil</p>
+                <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
+                  <p className="text-sm font-semibold text-[#f5f1ea] mb-3 flex items-center gap-2"><Sparkles size={15} strokeWidth={1.75} className="text-[#ff8a3d]" /> AI bilan tahlil</p>
                   <div className="flex gap-2">
                     <input value={aiQuery} onChange={e => setAiQuery(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && analyzeWithAI()}
                       placeholder="Bu fayl haqida savol bering..."
-                      className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                      className="flex-1 px-3 py-2.5 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30" />
                     <button onClick={analyzeWithAI} disabled={aiLoading || !aiQuery.trim()}
-                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm rounded-xl transition-all">
+                      className="px-4 py-2.5 bg-[#ff6a1a] hover:bg-[#e85a0f] disabled:opacity-40 text-white text-sm rounded-xl transition-all">
                       {aiLoading ? "..." : "So'rash"}
                     </button>
                   </div>
                   {aiAnswer && (
-                    <div className="mt-3 p-4 bg-gray-50 rounded-xl text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                    <div className="mt-3 p-4 bg-[#0a0a0c] rounded-xl text-sm text-[#cfc9bd] leading-relaxed whitespace-pre-wrap">
                       {aiAnswer}
                     </div>
                   )}
@@ -152,11 +156,11 @@ export default function FilesPage() {
               )}
             </>
           ) : (
-            <div className="bg-white rounded-2xl border border-dashed border-gray-200 h-64 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-indigo-300 transition-all"
+            <div className="bg-[#141316] rounded-2xl border border-dashed border-white/[0.12] h-64 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-[#ff6a1a]/40 transition-all"
               onClick={() => inputRef.current?.click()}>
-              <span className="text-4xl">🗂</span>
-              <p className="text-sm text-gray-500">Fayl tanlang yoki bu yerga tashlang</p>
-              <p className="text-xs text-gray-400">AI bilan tahlil qilish uchun faylni tanlang</p>
+              <FolderOpen size={36} strokeWidth={1.25} className="text-[#5c584f]" />
+              <p className="text-sm text-[#7d7870]">Fayl tanlang yoki bu yerga tashlang</p>
+              <p className="text-xs text-[#5c584f]">AI bilan tahlil qilish uchun faylni tanlang</p>
             </div>
           )}
         </div>

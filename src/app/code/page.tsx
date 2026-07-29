@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Sparkles, Loader2, Lightbulb, Search, Copy } from "lucide-react";
 
 const TEMPLATES = [
   { name: "Python script", lang: "python", code: `# Python skript\nimport os\n\ndef main():\n    print("Salom, Pari AI!")\n\nif __name__ == "__main__":\n    main()\n` },
@@ -11,7 +12,7 @@ const TEMPLATES = [
 const LANG_COLORS: Record<string, string> = {
   python: "text-yellow-400", typescript: "text-blue-400",
   javascript: "text-yellow-300", sql: "text-green-400",
-  bash: "text-gray-300", json: "text-orange-400",
+  bash: "text-[#454239]", json: "text-orange-400",
 };
 
 export default function CodeEditorPage() {
@@ -82,34 +83,34 @@ export default function CodeEditorPage() {
     <div className="fade-in max-w-6xl space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Code Editor</h1>
-          <p className="text-sm text-gray-500 mt-0.5">AI yordamida kod yozish, tushuntirish va tekshirish</p>
+          <h1 className="text-2xl font-bold text-[#f5f1ea]">Code Editor</h1>
+          <p className="text-sm text-[#7d7870] mt-0.5">AI yordamida kod yozish, tushuntirish va tekshirish</p>
         </div>
       </div>
 
       {/* AI prompt */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-4">
         <div className="flex gap-2">
           <input value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
             onKeyDown={e => e.key === "Enter" && generateCode()}
             placeholder="AI dan kod yozdiring... (masalan: 'FastAPI bilan REST API yoz')"
-            className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            className="flex-1 px-4 py-2.5 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30" />
           <select value={lang} onChange={e => setLang(e.target.value)}
-            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
+            className="px-3 py-2 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none">
             {["python","typescript","javascript","sql","bash","json"].map(l => <option key={l} value={l}>{l}</option>)}
           </select>
           <button onClick={generateCode} disabled={aiLoading || !aiPrompt.trim()}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-all">
-            {aiLoading ? "⏳" : "✨ Yoz"}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#ff6a1a] hover:bg-[#e85a0f] disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-all">
+            {aiLoading ? <Loader2 size={14} strokeWidth={2} className="animate-spin" /> : <Sparkles size={14} strokeWidth={1.75} />} Yoz
           </button>
         </div>
 
         {/* Templates */}
         <div className="flex gap-2 mt-3">
-          <span className="text-xs text-gray-400 self-center">Shablon:</span>
+          <span className="text-xs text-[#5c584f] self-center">Shablon:</span>
           {TEMPLATES.map(t => (
             <button key={t.name} onClick={() => { setCode(t.code); setLang(t.lang); }}
-              className="text-xs px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-all">
+              className="text-xs px-2.5 py-1 bg-[#1e1d21] hover:bg-[#2a292d] text-[#a39d92] rounded-lg transition-all">
               {t.name}
             </button>
           ))}
@@ -126,16 +127,16 @@ export default function CodeEditorPage() {
               <span className="w-3 h-3 rounded-full bg-yellow-500" />
               <span className="w-3 h-3 rounded-full bg-green-500" />
             </div>
-            <span className={`text-xs font-mono font-semibold ${LANG_COLORS[lang] || "text-gray-400"}`}>{lang}</span>
+            <span className={`text-xs font-mono font-semibold ${LANG_COLORS[lang] || "text-[#5c584f]"}`}>{lang}</span>
           </div>
           <div className="flex gap-2">
             <div className="flex bg-gray-800 rounded-lg p-0.5">
-              <button onClick={() => setTab("editor")} className={`px-3 py-1 text-xs rounded-md transition-all ${tab === "editor" ? "bg-gray-700 text-white" : "text-gray-400"}`}>Editor</button>
-              <button onClick={() => setTab("output")} className={`px-3 py-1 text-xs rounded-md transition-all ${tab === "output" ? "bg-gray-700 text-white" : "text-gray-400"}`}>Output</button>
+              <button onClick={() => setTab("editor")} className={`px-3 py-1 text-xs rounded-md transition-all ${tab === "editor" ? "bg-gray-700 text-white" : "text-[#5c584f]"}`}>Editor</button>
+              <button onClick={() => setTab("output")} className={`px-3 py-1 text-xs rounded-md transition-all ${tab === "output" ? "bg-gray-700 text-white" : "text-[#5c584f]"}`}>Output</button>
             </div>
-            <button onClick={explainCode} disabled={aiLoading} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-all">💡 Tushuntir</button>
-            <button onClick={reviewCode} disabled={aiLoading} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-all">🔍 Review</button>
-            <button onClick={copyCode} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-all">📋 Nusxa</button>
+            <button onClick={explainCode} disabled={aiLoading} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-[#454239] text-xs rounded-lg transition-all"><Lightbulb size={13} strokeWidth={1.75} /> Tushuntir</button>
+            <button onClick={reviewCode} disabled={aiLoading} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-[#454239] text-xs rounded-lg transition-all"><Search size={13} strokeWidth={1.75} /> Review</button>
+            <button onClick={copyCode} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-[#454239] text-xs rounded-lg transition-all"><Copy size={13} strokeWidth={1.75} /> Nusxa</button>
           </div>
         </div>
 
@@ -143,7 +144,7 @@ export default function CodeEditorPage() {
         {tab === "editor" ? (
           <div className="flex">
             {/* Line numbers */}
-            <div className="px-4 py-4 text-gray-600 text-xs font-mono select-none border-r border-gray-800 min-w-12 text-right">
+            <div className="px-4 py-4 text-[#a39d92] text-xs font-mono select-none border-r border-gray-800 min-w-12 text-right">
               {code.split("\n").map((_, i) => <div key={i}>{i + 1}</div>)}
             </div>
             <textarea
@@ -155,9 +156,9 @@ export default function CodeEditorPage() {
             />
           </div>
         ) : (
-          <div className="p-5 text-sm text-gray-300 leading-relaxed whitespace-pre-wrap min-h-80 font-mono">
+          <div className="p-5 text-sm text-[#454239] leading-relaxed whitespace-pre-wrap min-h-80 font-mono">
             {aiLoading ? (
-              <div className="flex items-center gap-2 text-gray-500">
+              <div className="flex items-center gap-2 text-[#7d7870]">
                 <span className="w-4 h-4 border-2 border-gray-500 border-t-green-400 rounded-full animate-spin" />
                 AI ishlayapti...
               </div>
