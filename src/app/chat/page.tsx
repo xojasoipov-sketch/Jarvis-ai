@@ -1,7 +1,8 @@
 "use client";
-import { useState, useRef, useEffect, Suspense } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Bot, Sparkles, Paperclip, Mic, Send, History } from "lucide-react";
+import { Bot, Sparkles, Paperclip, Mic, Send, History, Volume2, VolumeX } from "lucide-react";
+import { useVoiceInput, useVoiceOutput } from "@/hooks/useVoice";
 
 type Message = { role: "user" | "assistant"; content: string; ts?: number };
 
@@ -49,6 +50,12 @@ function ChatInner() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const initialized = useRef(false);
+
+  const onVoiceResult = useCallback((text: string) => {
+    setInput((prev) => (prev ? `${prev} ${text}` : text));
+  }, []);
+  const voiceIn = useVoiceInput(onVoiceResult);
+  const voiceOut = useVoiceOutput();
 
   // Load conversation from URL param
   useEffect(() => {
@@ -109,6 +116,7 @@ function ChatInner() {
       const finalMessages: Message[] = [...newMessages, { role: "assistant", content: full, ts: Date.now() }];
       setMessages(finalMessages);
       setStreaming("");
+      voiceOut.speak(full);
 
       // Auto-save conversation
       const savedId = await saveConversation(convId, finalMessages);
@@ -147,6 +155,15 @@ function ChatInner() {
         <div className="flex items-center gap-2">
           {convId && (
             <span className="text-xs text-gray-400 font-mono hidden sm:block truncate max-w-[120px]">{convId}</span>
+          )}
+          {voiceOut.supported && (
+            <button
+              onClick={() => { if (voiceOut.enabled) voiceOut.stop(); voiceOut.setEnabled(!voiceOut.enabled); }}
+              title={voiceOut.enabled ? "Ovozli javob: yoqilgan" : "Ovozli javob: o'chirilgan"}
+              className={`p-2 rounded-xl border transition-all ${voiceOut.enabled ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600"}`}
+            >
+              {voiceOut.enabled ? <Volume2 size={14} strokeWidth={1.75} /> : <VolumeX size={14} strokeWidth={1.75} />}
+            </button>
           )}
           <button onClick={newChat} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 px-3 py-1.5 rounded-xl transition-all">
             <History size={13} strokeWidth={1.75} />
@@ -237,7 +254,15 @@ function ChatInner() {
           />
           <div className="flex items-center gap-2 flex-shrink-0">
             <button className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"><Paperclip size={15} strokeWidth={1.75} /></button>
-            <button className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"><Mic size={15} strokeWidth={1.75} /></button>
+            {voiceIn.supported && (
+              <button
+                onClick={voiceIn.toggle}
+                title={voiceIn.listening ? "Yozib olishni to'xtatish" : "Ovoz bilan yozish"}
+                className={`p-1.5 rounded-lg transition-colors ${voiceIn.listening ? "text-red-500 animate-pulse" : "text-gray-400 hover:text-gray-600"}`}
+              >
+                <Mic size={15} strokeWidth={1.75} />
+              </button>
+            )}
             <button onClick={() => sendMessage()} disabled={!input.trim() || loading}
               className="w-9 h-9 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center">
               <Send size={14} strokeWidth={2} />
