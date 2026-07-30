@@ -14,20 +14,20 @@ const TYPE_LABEL: Record<MemoryNode["type"], string> = {
 };
 
 const STATE_LABEL: Record<string, string> = {
-  asleep: "Meni chaqiring — “Pari” deng, yoki pastdan gapiring",
+  asleep: "Bosing va gapiring",
   waking: "Eshityapman...",
   listening: "Tinglayapman...",
   thinking: "O'ylayapman...",
   speaking: "Javob beryapman...",
 };
 
-async function askPari(text: string): Promise<string> {
+async function askPariText(text: string): Promise<string> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages: [{ role: "user", content: text }] }),
   });
-  if (!res.ok) return "Kechirasiz, javob olishda xato yuz berdi.";
+  if (!res.ok) return "Kechirasiz, xato yuz berdi.";
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let full = "";
@@ -42,7 +42,7 @@ async function askPari(text: string): Promise<string> {
 export default function PariPage() {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
-  const [manualAnswer, setManualAnswer] = useState("");
+  const [textAnswer, setTextAnswer] = useState("");
   const [nodes, setNodes] = useState<MemoryNode[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
 
@@ -53,17 +53,16 @@ export default function PariPage() {
       .catch(() => {});
   }, []);
 
-  const onCommand = useCallback(async (text: string) => askPari(text), []);
-  const jarvis = useJarvisVoice(onCommand);
+  const jarvis = useJarvisVoice();
 
   async function sendTyped() {
     const msg = typed.trim();
     if (!msg || busy) return;
     setTyped("");
     setBusy(true);
-    setManualAnswer("");
-    const answer = await askPari(msg);
-    setManualAnswer(answer);
+    setTextAnswer("");
+    const answer = await askPariText(msg);
+    setTextAnswer(answer);
     setBusy(false);
   }
 
@@ -78,9 +77,10 @@ export default function PariPage() {
       >
         <div className="relative z-10 px-6 pt-10 pb-8 sm:px-10 text-center">
           <p className="text-sm text-[#a99bf5]">{greeting}, Sadi</p>
-          <h1 className="text-2xl font-bold text-white mt-1">Pari bilan gaplashing</h1>
+          <h1 className="text-2xl font-bold text-white mt-1">Pari</h1>
 
-          <div className="my-2 mx-auto" style={{ width: "min(100%, 420px)", height: "min(100vw, 420px)" }}>
+          {/* Butterfly — click to speak, click again to stop */}
+          <div className="my-4 mx-auto" style={{ width: "min(100%, 380px)", height: "min(80vw, 380px)" }}>
             <button
               onClick={jarvis.state === "asleep" ? jarvis.wake : jarvis.stopListening}
               disabled={!jarvis.supported || jarvis.state === "thinking" || jarvis.state === "speaking"}
@@ -91,49 +91,52 @@ export default function PariPage() {
             </button>
           </div>
 
-          <p className="text-sm text-[#c7bdf7] min-h-[20px]">{STATE_LABEL[jarvis.state]}</p>
+          {/* State label */}
+          <p className="text-sm text-[#c7bdf7] min-h-[20px] transition-all">
+            {STATE_LABEL[jarvis.state]}
+          </p>
 
+          {/* Node count */}
           {nodes.length > 0 && (
-            <p className="text-xs text-white/40 mt-1">
-              {nodes.length} ta xotira nuqtasi — {Object.entries(counts).map(([type, n]) => `${n} ${TYPE_LABEL[type as MemoryNode["type"]]}`).join(", ")}
+            <p className="text-xs text-white/30 mt-1">
+              {nodes.length} ta xotira —{" "}
+              {Object.entries(counts)
+                .map(([type, n]) => `${n} ${TYPE_LABEL[type as MemoryNode["type"]]}`)
+                .join(", ")}
             </p>
           )}
 
-          {jarvis.transcript && (
-            <p className="mt-3 text-sm text-white/70 italic">&quot;{jarvis.transcript}&quot;</p>
-          )}
-          {jarvis.reply && (
-            <p className="mt-2 text-sm text-white max-w-lg mx-auto leading-relaxed">{jarvis.reply}</p>
-          )}
-
+          {/* Always-on toggle */}
           {jarvis.supported && (
             <button
               onClick={jarvis.toggleAlwaysOn}
-              className={`mt-6 inline-flex items-center gap-2 text-xs font-medium px-4 py-2 rounded-full border transition-all ${
+              className={`mt-5 inline-flex items-center gap-2 text-xs font-medium px-4 py-2 rounded-full border transition-all ${
                 jarvis.alwaysOn
                   ? "bg-[#8b7bf0]/20 border-[#8b7bf0] text-[#c7bdf7]"
-                  : "bg-white/5 border-white/15 text-white/60 hover:text-white/80"
+                  : "bg-white/5 border-white/15 text-white/50 hover:text-white/70"
               }`}
             >
-              <Radio size={13} strokeWidth={2} className={jarvis.alwaysOn ? "animate-pulse" : ""} />
-              {jarvis.alwaysOn ? "Doim tinglayapman (“Pari” deng)" : "Doim tinglashni yoqish"}
+              <Radio size={12} strokeWidth={2} className={jarvis.alwaysOn ? "animate-pulse" : ""} />
+              {jarvis.alwaysOn ? "Doim tinglayapman" : "Doim tinglash"}
             </button>
           )}
 
           {!jarvis.supported && (
-            <p className="mt-4 text-xs text-white/40">Mikrofon ruxsati berilmagan — pastdan yozing.</p>
+            <p className="mt-4 text-xs text-white/40">
+              Mikrofon ruxsati yo&apos;q — pastdan yozing.
+            </p>
           )}
         </div>
 
-        {/* Typed fallback — same brain, no mic needed */}
+        {/* Text input — shows text reply (voice shows no text) */}
         <div className="relative z-10 border-t border-white/10 bg-black/20 px-5 py-4">
           <div className="flex items-center gap-2 max-w-xl mx-auto">
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendTyped()}
-              placeholder="Yoki shu yerga yozing..."
-              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#8b7bf0]/60"
+              placeholder="Yozib ham so'rashingiz mumkin..."
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#8b7bf0]/50"
             />
             <button
               onClick={sendTyped}
@@ -143,8 +146,10 @@ export default function PariPage() {
               {busy ? <Mic size={14} className="animate-pulse" /> : <Send size={14} strokeWidth={2} />}
             </button>
           </div>
-          {manualAnswer && (
-            <p className="max-w-xl mx-auto mt-3 text-sm text-white/85 leading-relaxed">{manualAnswer}</p>
+          {textAnswer && (
+            <p className="max-w-xl mx-auto mt-3 text-sm text-white/80 leading-relaxed">
+              {textAnswer}
+            </p>
           )}
         </div>
       </div>
