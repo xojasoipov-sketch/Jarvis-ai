@@ -82,22 +82,22 @@ export default function SettingsPage() {
   return (
     <div className="fade-in max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#f5f1ea]">Settings</h1>
-        <p className="text-sm text-[#7d7870] mt-0.5">Tizim sozlamalari va integratsiyalar</p>
+        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Tizim sozlamalari va integratsiyalar</p>
       </div>
 
       {/* Telegram Integration */}
-      <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-white/[0.08] flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff8a3d] to-[#ff5a1f] flex items-center justify-center">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
             <Send size={18} strokeWidth={1.75} className="text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-[#f5f1ea]">Telegram Bot</p>
-            <p className="text-xs text-[#7d7870]">Telegram orqali Pari AI bilan muloqot</p>
+            <p className="text-sm font-semibold text-gray-900">Telegram Bot</p>
+            <p className="text-xs text-gray-500">Telegram orqali Pari AI bilan muloqot</p>
           </div>
           <div className={`ml-auto flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-            isConnected ? "bg-green-50 text-green-600" : "bg-[#1e1d21] text-[#7d7870]"
+            isConnected ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-green-500" : "bg-gray-400"}`} />
             {loading ? "Tekshirilmoqda..." : isConnected ? "Ulangan" : "Ulanmagan"}
@@ -112,13 +112,13 @@ export default function SettingsPage() {
                 {bot.first_name?.[0] || "P"}
               </div>
               <div>
-                <p className="text-sm font-semibold text-[#f5f1ea]">{bot.first_name}</p>
+                <p className="text-sm font-semibold text-gray-900">{bot.first_name}</p>
                 <a href={`https://t.me/${bot.username}`} target="_blank" rel="noreferrer"
                   className="text-xs text-blue-600 hover:underline">@{bot.username}</a>
               </div>
               <div className="ml-auto text-right">
-                <p className="text-xs text-[#7d7870]">Bot ID</p>
-                <p className="text-sm font-mono text-[#cfc9bd]">{bot.id}</p>
+                <p className="text-xs text-gray-500">Bot ID</p>
+                <p className="text-sm font-mono text-gray-700">{bot.id}</p>
               </div>
             </div>
           )}
@@ -126,15 +126,15 @@ export default function SettingsPage() {
           {/* Webhook info */}
           {webhook && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-[#cfc9bd]">Webhook holati</p>
-              <div className="p-3 bg-[#0a0a0c] rounded-xl space-y-1.5">
+              <p className="text-xs font-medium text-gray-700">Webhook holati</p>
+              <div className="p-3 bg-gray-50 rounded-xl space-y-1.5">
                 <div className="flex justify-between text-xs">
-                  <span className="text-[#7d7870]">URL</span>
-                  <span className="font-mono text-[#cfc9bd] truncate max-w-48">{webhook.url || "O'rnatilmagan"}</span>
+                  <span className="text-gray-500">URL</span>
+                  <span className="font-mono text-gray-700 truncate max-w-48">{webhook.url || "O'rnatilmagan"}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-[#7d7870]">Kutayotgan xabarlar</span>
-                  <span className="text-[#cfc9bd]">{webhook.pending_update_count || 0}</span>
+                  <span className="text-gray-500">Kutayotgan xabarlar</span>
+                  <span className="text-gray-700">{webhook.pending_update_count || 0}</span>
                 </div>
                 {webhook.last_error_message && (
                   <div className="flex justify-between text-xs">
@@ -148,10 +148,10 @@ export default function SettingsPage() {
 
           {/* App URL */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-[#cfc9bd]">Ilova URL manzili</label>
+            <label className="text-xs font-medium text-gray-700">Ilova URL manzili</label>
             <input value={appUrl} onChange={e => setAppUrl(e.target.value)}
-              className="w-full px-4 py-2.5 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-200" />
-            <p className="text-xs text-[#5c584f]">Webhook shu URL ga o'rnatiladi: {appUrl}/api/telegram</p>
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            <p className="text-xs text-gray-400">Webhook shu URL ga o'rnatiladi: {appUrl}/api/telegram</p>
           </div>
 
           {/* Status */}
@@ -174,7 +174,7 @@ export default function SettingsPage() {
               {loading ? "Yuklanmoqda..." : <><Link2 size={15} strokeWidth={1.75} /> Webhook o'rnatish</>}
             </button>
             <button onClick={fetchInfo} disabled={loading}
-              className="px-4 py-2.5 bg-[#1e1d21] hover:bg-[#2a292d] text-[#cfc9bd] text-sm font-medium rounded-xl transition-all">
+              className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-all">
               <RefreshCw size={15} strokeWidth={1.75} />
             </button>
             {isConnected && (
@@ -187,10 +187,10 @@ export default function SettingsPage() {
 
           {/* Quick link */}
           {bot?.username && (
-            <div className="flex items-center gap-3 p-4 border border-dashed border-[#ff6a1a]/30 rounded-xl">
-              <Smartphone size={24} strokeWidth={1.5} className="text-[#ff8a3d]" />
+            <div className="flex items-center gap-3 p-4 border border-dashed border-blue-200 rounded-xl">
+              <Smartphone size={24} strokeWidth={1.5} className="text-indigo-600" />
               <div>
-                <p className="text-sm font-medium text-[#f5f1ea]">Bot bilan ishlash</p>
+                <p className="text-sm font-medium text-gray-900">Bot bilan ishlash</p>
                 <a href={`https://t.me/${bot.username}`} target="_blank" rel="noreferrer"
                   className="text-xs text-blue-600 hover:underline">t.me/{bot.username} → ochish</a>
               </div>
@@ -204,8 +204,8 @@ export default function SettingsPage() {
       </div>
 
       {/* Bot commands guide */}
-      <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-6">
-        <p className="text-sm font-semibold text-[#f5f1ea] mb-4">Bot buyruqlari</p>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <p className="text-sm font-semibold text-gray-900 mb-4">Bot buyruqlari</p>
         <div className="space-y-2">
           {[
             { cmd: "/start", desc: "Botni ishga tushirish va bosh menyu" },
@@ -216,16 +216,16 @@ export default function SettingsPage() {
             { cmd: "/help", desc: "Barcha buyruqlar ro'yxati" },
           ].map(({ cmd, desc }) => (
             <div key={cmd} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-              <code className="text-xs bg-[#1e1d21] text-[#ff8a3d] px-2 py-1 rounded font-mono">{cmd}</code>
-              <span className="text-xs text-[#a39d92]">{desc}</span>
+              <code className="text-xs bg-gray-100 text-indigo-600 px-2 py-1 rounded font-mono">{cmd}</code>
+              <span className="text-xs text-gray-600">{desc}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* API Keys status */}
-      <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-6">
-        <p className="text-sm font-semibold text-[#f5f1ea] mb-4">AI Provayderlar</p>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <p className="text-sm font-semibold text-gray-900 mb-4">AI Provayderlar</p>
         <div className="space-y-2">
           {[
             { name: "OpenRouter", env: "OPENROUTER_API_KEY", model: "Gemini 2.0 Flash" },
@@ -235,8 +235,8 @@ export default function SettingsPage() {
           ].map(p => (
             <div key={p.name} className="flex items-center gap-3 py-2">
               <div className="w-2 h-2 rounded-full bg-green-400" />
-              <span className="text-sm text-[#f5f1ea] flex-1">{p.name}</span>
-              <span className="text-xs text-[#7d7870]">{p.model}</span>
+              <span className="text-sm text-gray-900 flex-1">{p.name}</span>
+              <span className="text-xs text-gray-500">{p.model}</span>
             </div>
           ))}
         </div>

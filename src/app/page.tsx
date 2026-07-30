@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   MessageSquare, CheckCircle2, Paperclip, Search, Code2, FileText,
-  Mic, Bot, Lightbulb, Send, type LucideIcon,
+  Mic, Bot, Lightbulb, Send, Sparkles, ChevronDown, Brain, ArrowRight, type LucideIcon,
 } from "lucide-react";
 
 const stats = [
@@ -101,9 +101,9 @@ function DonutChart() {
         {usageData.map(d => (
           <div key={d.label} className="flex items-center gap-2 text-xs">
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: d.color }} />
-            <span className="text-[#a39d92] flex-1">{d.label}</span>
-            <span className="font-medium text-[#f5f1ea]">{d.hours}</span>
-            <span className="text-[#5c584f] w-8 text-right">{d.pct}%</span>
+            <span className="text-gray-600 flex-1">{d.label}</span>
+            <span className="font-medium text-gray-900">{d.hours}</span>
+            <span className="text-gray-400 w-8 text-right">{d.pct}%</span>
           </div>
         ))}
       </div>
@@ -122,35 +122,40 @@ export default function Dashboard() {
   return (
     <div className="fade-in space-y-5 max-w-[1400px]">
       <div>
-        <h1 className="text-2xl font-bold text-[#f5f1ea]">Good morning, Sadi</h1>
-        <p className="text-sm text-[#7d7870] mt-0.5">Pari AI is ready to help you accomplish anything.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Good morning, Sadi</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Pari AI is ready to help you accomplish anything.</p>
       </div>
 
       {/* Input card */}
-      <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
-        <p className="text-sm font-medium text-[#cfc9bd] mb-3">What would you like Pari AI to do?</p>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-medium text-gray-700">What would you like Pari AI to do?</p>
+          <button className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all">
+            <Sparkles size={13} strokeWidth={1.75} /> Smart Mode <ChevronDown size={13} strokeWidth={1.75} />
+          </button>
+        </div>
         <textarea
           value={task}
           onChange={e => setTask(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), go())}
           placeholder="Describe your task in natural language..."
           rows={3}
-          className="w-full p-4 text-sm bg-[#0a0a0c] border border-white/[0.12] rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30 focus:border-[#ff6a1a]/50 transition-all"
+          className="w-full p-4 text-sm bg-gray-50 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all"
         />
         <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
           <div className="flex gap-2 flex-wrap">
             {["Analyze Data","Web Research","Create Content","Automate","Code"].map(q => (
               <button key={q} onClick={() => setTask(q)}
-                className="text-xs px-3 py-1.5 bg-[#1e1d21] hover:bg-[#ff6a1a]/10 hover:text-[#ff8a3d] text-[#a39d92] rounded-lg transition-all">
+                className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-lg transition-all">
                 {q}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <button className="p-2 text-[#5c584f] hover:text-[#a39d92]"><Paperclip size={16} strokeWidth={1.75} /></button>
-            <button className="p-2 text-[#5c584f] hover:text-[#a39d92]"><Mic size={16} strokeWidth={1.75} /></button>
+            <button className="p-2 text-gray-400 hover:text-gray-600"><Paperclip size={16} strokeWidth={1.75} /></button>
+            <button className="p-2 text-gray-400 hover:text-gray-600"><Mic size={16} strokeWidth={1.75} /></button>
             <button onClick={go} disabled={!task.trim()}
-              className="w-10 h-10 bg-[#ff6a1a] hover:bg-[#e85a0f] disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center">
+              className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center">
               <Send size={16} strokeWidth={2} />
             </button>
           </div>
@@ -160,9 +165,9 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(s => (
-          <div key={s.label} className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-4">
-            <p className="text-xs text-[#7d7870] mb-1">{s.label}</p>
-            <p className="text-2xl font-bold text-[#f5f1ea]">{s.value}</p>
+          <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p className="text-xs text-gray-500 mb-1">{s.label}</p>
+            <p className="text-2xl font-bold text-gray-900">{s.value}</p>
             <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-green-600">{s.change}</p>
               <MiniSparkline color={s.color} />
@@ -173,43 +178,43 @@ export default function Dashboard() {
 
       {/* Middle */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-[#f5f1ea]">Recent Tasks</h2>
-            <Link href="/tasks" className="text-xs text-[#ff8a3d] hover:underline">View all</Link>
+            <h2 className="text-sm font-semibold text-gray-900">Recent Tasks</h2>
+            <Link href="/tasks" className="text-xs text-indigo-600 hover:underline">View all</Link>
           </div>
           <div className="space-y-3">
             {recentTasks.map(t => (
               <div key={t.name} className="flex items-start gap-3">
-                <FileText size={15} strokeWidth={1.75} className="text-[#454239] mt-0.5 flex-shrink-0" />
+                <FileText size={15} strokeWidth={1.75} className="text-gray-300 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-[#f5f1ea] truncate">{t.name}</p>
-                  <p className="text-xs text-[#5c584f]">{t.agent}</p>
+                  <p className="text-xs font-medium text-gray-900 truncate">{t.name}</p>
+                  <p className="text-xs text-gray-400">{t.agent}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${t.status==="Completed"?"bg-green-50 text-green-600":"bg-blue-50 text-blue-600"}`}>{t.status}</span>
-                  <p className="text-xs text-[#5c584f] mt-0.5">{t.time}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.time}</p>
                 </div>
               </div>
             ))}
           </div>
-          <Link href="/tasks" className="block mt-4 text-xs text-[#ff8a3d] hover:underline">View all tasks →</Link>
+          <Link href="/tasks" className="block mt-4 text-xs text-indigo-600 hover:underline">View all tasks →</Link>
         </div>
 
-        <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-[#f5f1ea]">Active Agents</h2>
-            <Link href="/agents" className="text-xs text-[#ff8a3d] hover:underline">View all</Link>
+            <h2 className="text-sm font-semibold text-gray-900">Active Agents</h2>
+            <Link href="/agents" className="text-xs text-indigo-600 hover:underline">View all</Link>
           </div>
           <div className="space-y-3">
             {activeAgents.map(a => (
               <div key={a.name} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ff6a1a]/20 to-[#ff6a1a]/10 flex items-center justify-center"><Bot size={16} strokeWidth={1.75} className="text-[#ff8a3d]" /></div>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center"><Bot size={16} strokeWidth={1.75} className="text-indigo-600" /></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-[#f5f1ea] truncate">{a.name}</p>
-                  <p className="text-xs text-[#5c584f] truncate">{a.desc}</p>
+                  <p className="text-xs font-medium text-gray-900 truncate">{a.name}</p>
+                  <p className="text-xs text-gray-400 truncate">{a.desc}</p>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${a.status==="Running"?"bg-green-50 text-green-600":"bg-[#1e1d21] text-[#7d7870]"}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${a.status==="Running"?"bg-green-50 text-green-600":"bg-gray-100 text-gray-500"}`}>
                   {a.status}
                 </span>
               </div>
@@ -218,8 +223,8 @@ export default function Dashboard() {
         </div>
 
         <div className="space-y-4">
-          <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-[#f5f1ea] mb-2">System Status</h2>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-gray-900 mb-2">System Status</h2>
             <div className="flex items-center gap-1.5 mb-3">
               <span className="pulse-dot" />
               <span className="text-xs text-green-600 font-medium">All systems operational</span>
@@ -227,76 +232,98 @@ export default function Dashboard() {
             <div className="space-y-2">
               {systemStatus.map(s => (
                 <div key={s} className="flex items-center justify-between">
-                  <span className="text-xs text-[#a39d92]">{s}</span>
+                  <span className="text-xs text-gray-600">{s}</span>
                   <span className="text-xs text-green-600 font-medium">Operational</span>
                 </div>
               ))}
             </div>
           </div>
-          <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-[#f5f1ea]">Today&apos;s Schedule</h2>
-              <Link href="/calendar" className="text-xs text-[#ff8a3d] hover:underline">View calendar</Link>
+              <h2 className="text-sm font-semibold text-gray-900">Today&apos;s Schedule</h2>
+              <Link href="/calendar" className="text-xs text-indigo-600 hover:underline">View calendar</Link>
             </div>
             <div className="space-y-2.5">
               {schedule.map(s => (
-                <div key={s.time} className="flex items-center gap-3 border-l-2 border-[#ff6a1a]/30 pl-3">
+                <div key={s.time} className="flex items-center gap-3 border-l-2 border-indigo-200 pl-3">
                   <div className="flex-1">
-                    <p className="text-xs font-medium text-[#f5f1ea]">{s.time}</p>
-                    <p className="text-xs text-[#7d7870]">{s.title}</p>
+                    <p className="text-xs font-medium text-gray-900">{s.time}</p>
+                    <p className="text-xs text-gray-500">{s.title}</p>
                   </div>
-                  <span className="text-xs text-[#5c584f]">{s.rel}</span>
+                  <span className="text-xs text-gray-400">{s.rel}</span>
                 </div>
               ))}
             </div>
           </div>
+
+          <Link href="/skilltree" className="block p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm hover:opacity-95 transition-opacity">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                <Brain size={18} strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Second Brain Project</p>
+                <span className="text-xs text-indigo-100 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Active</span>
+              </div>
+            </div>
+            <p className="text-xs text-indigo-100 mb-3">Next generation platform for AI-powered business automation and analytics.</p>
+            <div className="flex items-center justify-between text-xs text-indigo-100 mb-1.5">
+              <span>Progress</span><span className="font-medium text-white">65%</span>
+            </div>
+            <div className="h-1.5 bg-white/20 rounded-full overflow-hidden mb-3">
+              <div className="h-full bg-white rounded-full" style={{ width: "65%" }} />
+            </div>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg transition-all">
+              Open Project <ArrowRight size={12} strokeWidth={2} />
+            </span>
+          </Link>
         </div>
       </div>
 
       {/* Bottom */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-[#f5f1ea]">Projects</h2>
-            <Link href="/projects" className="text-xs text-[#ff8a3d] hover:underline">View all</Link>
+            <h2 className="text-sm font-semibold text-gray-900">Projects</h2>
+            <Link href="/projects" className="text-xs text-indigo-600 hover:underline">View all</Link>
           </div>
           <div className="space-y-4">
             {projects.map(p => (
               <div key={p.name}>
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-xs font-medium text-[#f5f1ea]">{p.name}</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${p.status==="In Progress"?"bg-blue-50 text-blue-600":"bg-[#1e1d21] text-[#7d7870]"}`}>{p.status}</span>
+                  <p className="text-xs font-medium text-gray-900">{p.name}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${p.status==="In Progress"?"bg-blue-50 text-blue-600":"bg-gray-100 text-gray-500"}`}>{p.status}</span>
                 </div>
-                <div className="h-1.5 bg-[#1e1d21] rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-[#ff6a1a] to-[#ff9a4d]" style={{ width: `${p.progress}%` }} />
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{ width: `${p.progress}%` }} />
                 </div>
-                <p className="text-xs text-[#5c584f] mt-0.5">{p.progress}%</p>
+                <p className="text-xs text-gray-400 mt-0.5">{p.progress}%</p>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-[#f5f1ea]">Usage Overview</h2>
-            <span className="text-xs text-[#7d7870]">This Week</span>
+            <h2 className="text-sm font-semibold text-gray-900">Usage Overview</h2>
+            <span className="text-xs text-gray-500">This Week</span>
           </div>
           <DonutChart />
         </div>
 
-        <div className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-[#f5f1ea] mb-4">Quick Actions</h2>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-2">
             {quickActions.map(a => (
-              <button key={a.label} className="flex items-center gap-2 p-3 bg-[#0a0a0c] hover:bg-[#ff6a1a]/10 hover:text-[#ff8a3d] rounded-xl text-xs text-[#a39d92] transition-all">
+              <button key={a.label} className="flex items-center gap-2 p-3 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl text-xs text-gray-600 transition-all">
                 <a.icon size={14} strokeWidth={1.75} /> {a.label}
               </button>
             ))}
           </div>
-          <div className="mt-4 p-3 bg-gradient-to-r from-[#ff6a1a]/10 to-transparent rounded-xl">
-            <p className="text-xs font-semibold text-[#ff9a52] flex items-center gap-1.5"><Lightbulb size={13} strokeWidth={1.75} /> Tips & Suggestions</p>
-            <p className="text-xs text-[#a39d92] mt-1">Automate repetitive tasks to save more time each week.</p>
-            <button className="mt-2 text-xs text-[#ff8a3d] font-medium hover:underline">Create Automation →</button>
+          <div className="mt-4 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl">
+            <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1.5"><Lightbulb size={13} strokeWidth={1.75} /> Tips & Suggestions</p>
+            <p className="text-xs text-gray-600 mt-1">Automate repetitive tasks to save more time each week.</p>
+            <button className="mt-2 text-xs text-indigo-600 font-medium hover:underline">Create Automation →</button>
           </div>
         </div>
       </div>

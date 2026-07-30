@@ -80,10 +80,10 @@ export default function AutomationPage() {
     <div className="fade-in max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#f5f1ea]">Automation</h1>
-          <p className="text-sm text-[#7d7870] mt-0.5">Avtomatik ish oqimlari — bir marta sozla, doim ishlaydi</p>
+          <h1 className="text-2xl font-bold text-gray-900">Automation</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Avtomatik ish oqimlari — bir marta sozla, doim ishlaydi</p>
         </div>
-        <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2 bg-[#ff6a1a] hover:bg-[#e85a0f] text-white text-sm font-medium rounded-xl transition-all">
+        <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-all">
           <Plus size={15} strokeWidth={2} /> Yangi flow
         </button>
       </div>
@@ -95,42 +95,42 @@ export default function AutomationPage() {
           { label: "Faol", value: flows.filter(f => f.active).length, icon: CheckCircle2 },
           { label: "Jami ishga tushirildi", value: flows.reduce((a, f) => a + f.runs, 0), icon: Play },
         ].map(s => (
-          <div key={s.label} className="bg-[#141316] rounded-2xl border border-white/[0.08] p-4 flex items-center gap-3">
-            <s.icon size={20} strokeWidth={1.5} className="text-[#ff8a3d]" />
-            <div><p className="text-xl font-bold text-[#f5f1ea]">{s.value}</p><p className="text-xs text-[#7d7870]">{s.label}</p></div>
+          <div key={s.label} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3">
+            <s.icon size={20} strokeWidth={1.5} className="text-indigo-600" />
+            <div><p className="text-xl font-bold text-gray-900">{s.value}</p><p className="text-xs text-gray-500">{s.label}</p></div>
           </div>
         ))}
       </div>
 
       {/* New flow */}
       {showNew && (
-        <div className="bg-[#141316] rounded-2xl border border-[#ff6a1a]/30 shadow-sm p-5 space-y-4">
-          <p className="text-sm font-semibold text-[#f5f1ea]">Yangi automation flow</p>
+        <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm p-5 space-y-4">
+          <p className="text-sm font-semibold text-gray-900">Yangi automation flow</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-[#7d7870] mb-1 block">Nomi</label>
+              <label className="text-xs text-gray-500 mb-1 block">Nomi</label>
               <input value={newFlow.name} onChange={e => setNewFlow(p => ({ ...p, name: e.target.value }))}
-                placeholder="Flow nomi..." className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30" />
+                placeholder="Flow nomi..." className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
             </div>
             <div>
-              <label className="text-xs text-[#7d7870] mb-1 block">Trigger</label>
+              <label className="text-xs text-gray-500 mb-1 block">Trigger</label>
               <select value={newFlow.trigger} onChange={e => setNewFlow(p => ({ ...p, trigger: e.target.value as Trigger }))}
-                className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none">
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
                 <option value="manual">Qo'lda</option>
                 <option value="schedule">Jadval</option>
                 <option value="keyword">Kalit so'z</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-[#7d7870] mb-1 block">Trigger qiymati</label>
+              <label className="text-xs text-gray-500 mb-1 block">Trigger qiymati</label>
               <input value={newFlow.triggerValue} onChange={e => setNewFlow(p => ({ ...p, triggerValue: e.target.value }))}
                 placeholder={newFlow.trigger === "schedule" ? "Har kuni 09:00" : newFlow.trigger === "keyword" ? "kalit so'z..." : "vazifa matni..."}
-                className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30" />
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
             </div>
             <div>
-              <label className="text-xs text-[#7d7870] mb-1 block">Agent</label>
+              <label className="text-xs text-gray-500 mb-1 block">Agent</label>
               <select value={newFlow.actionValue} onChange={e => setNewFlow(p => ({ ...p, actionValue: e.target.value }))}
-                className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none">
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
                 {Object.entries(AGENT_NAMES).map(([id, name]) => (
                   <option key={id} value={id}>{name}</option>
                 ))}
@@ -138,8 +138,8 @@ export default function AutomationPage() {
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#a39d92] hover:bg-[#1e1d21] rounded-xl">Bekor</button>
-            <button onClick={addFlow} className="px-4 py-2 bg-[#ff6a1a] hover:bg-[#e85a0f] text-white text-sm rounded-xl">Yaratish</button>
+            <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Bekor</button>
+            <button onClick={addFlow} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl">Yaratish</button>
           </div>
         </div>
       )}
@@ -147,40 +147,40 @@ export default function AutomationPage() {
       {/* Flows */}
       <div className="space-y-3">
         {flows.map(flow => (
-          <div key={flow.id} className={`bg-[#141316] rounded-2xl border shadow-sm p-5 transition-all ${flow.active ? "border-white/[0.08]" : "border-white/[0.08] opacity-60"}`}>
+          <div key={flow.id} className={`bg-white rounded-2xl border shadow-sm p-5 transition-all ${flow.active ? "border-gray-100" : "border-gray-100 opacity-60"}`}>
             <div className="flex items-start gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
-                  <p className="text-sm font-semibold text-[#f5f1ea]">{flow.name}</p>
+                  <p className="text-sm font-semibold text-gray-900">{flow.name}</p>
                   {flow.active && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
                 </div>
-                <div className="flex items-center gap-4 text-xs text-[#7d7870]">
+                <div className="flex items-center gap-4 text-xs text-gray-500">
                   <span className="flex items-center gap-1.5">
                     {(() => { const Icon = TRIGGER_ICONS[flow.trigger]; return <Icon size={12} strokeWidth={1.75} />; })()} {flow.triggerValue || "Qo'lda"}
                   </span>
-                  <span className="text-[#454239]">→</span>
+                  <span className="text-gray-300">→</span>
                   <span className="flex items-center gap-1.5">
                     {(() => { const Icon = ACTION_ICONS[flow.action]; return <Icon size={12} strokeWidth={1.75} />; })()} {AGENT_NAMES[flow.actionValue] || flow.actionValue}
                   </span>
-                  {flow.lastRun && <span className="text-[#5c584f]">· Oxirgi: {flow.lastRun}</span>}
-                  <span className="text-[#5c584f]">· {flow.runs} marta</span>
+                  {flow.lastRun && <span className="text-gray-400">· Oxirgi: {flow.lastRun}</span>}
+                  <span className="text-gray-400">· {flow.runs} marta</span>
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={() => runFlow(flow)} disabled={running === flow.id}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ff6a1a]/10 hover:bg-[#ff6a1a]/20 text-[#ff8a3d] text-xs font-medium rounded-lg transition-all disabled:opacity-40">
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-medium rounded-lg transition-all disabled:opacity-40">
                   {running === flow.id ? <Loader2 size={13} strokeWidth={2} className="animate-spin" /> : <Play size={12} strokeWidth={1.75} fill="currentColor" />} Ishga tushir
                 </button>
                 <button onClick={() => toggleFlow(flow.id)}
-                  className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${flow.active ? "bg-[#ff6a1a]" : "bg-[#2a292d]"}`}>
-                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-[#141316] shadow transition-all ${flow.active ? "left-5" : "left-1"}`} />
+                  className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${flow.active ? "bg-indigo-600" : "bg-gray-200"}`}>
+                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${flow.active ? "left-5" : "left-1"}`} />
                 </button>
                 <button onClick={() => deleteFlow(flow.id)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"><X size={13} strokeWidth={1.75} /></button>
               </div>
             </div>
 
             {result?.id === flow.id && (
-              <div className="mt-4 p-3 bg-[#0a0a0c] rounded-xl text-xs text-[#cfc9bd] leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+              <div className="mt-4 p-3 bg-gray-50 rounded-xl text-xs text-gray-700 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
                 {result.text}
               </div>
             )}

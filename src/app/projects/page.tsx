@@ -21,7 +21,7 @@ type Project = {
 };
 
 const INIT: Project[] = [
-  { id: 1, name: "Pari AI Platform", desc: "Ko'p agentli AI yordamchi tizim", status: "active", progress: 68, tasks: 24, done: 16, color: "from-[#ff6a1a] to-[#7a1f1f]", icon: Bot, tags: ["Next.js", "AI", "SaaS"], updated: "Bugun" },
+  { id: 1, name: "Pari AI Platform", desc: "Ko'p agentli AI yordamchi tizim", status: "active", progress: 68, tasks: 24, done: 16, color: "from-indigo-500 to-purple-600", icon: Bot, tags: ["Next.js", "AI", "SaaS"], updated: "Bugun" },
   { id: 2, name: "E-commerce Bot", desc: "Telegram orqali savdo avtomatlashtirish", status: "active", progress: 40, tasks: 18, done: 7, color: "from-green-500 to-teal-600", icon: ShoppingCart, tags: ["Telegram", "Python", "Bot"], updated: "Kecha" },
   { id: 3, name: "Analytics Dashboard", desc: "Real-time biznes ko'rsatkichlari", status: "paused", progress: 25, tasks: 12, done: 3, color: "from-orange-500 to-red-600", icon: BarChart3, tags: ["React", "Charts", "SQL"], updated: "3 kun oldin" },
   { id: 4, name: "CRM Tizimi", desc: "Mijozlarni boshqarish platformasi", status: "done", progress: 100, tasks: 30, done: 30, color: "from-blue-500 to-cyan-600", icon: Users, tags: ["CRM", "SaaS", "B2B"], updated: "1 hafta oldin" },
@@ -56,15 +56,15 @@ export default function ProjectsPage() {
     <div className="fade-in max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#f5f1ea]">Projects</h1>
-          <p className="text-sm text-[#7d7870] mt-0.5">{projects.length} ta loyiha — {projects.filter(p => p.status === "active").length} ta faol</p>
+          <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{projects.length} ta loyiha — {projects.filter(p => p.status === "active").length} ta faol</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex bg-[#1e1d21] rounded-xl p-1">
-            <button onClick={() => setView("grid")} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${view === "grid" ? "bg-[#141316] shadow text-[#f5f1ea]" : "text-[#7d7870]"}`}><LayoutGrid size={13} strokeWidth={1.75} /> Grid</button>
-            <button onClick={() => setView("list")} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${view === "list" ? "bg-[#141316] shadow text-[#f5f1ea]" : "text-[#7d7870]"}`}><List size={13} strokeWidth={1.75} /> List</button>
+          <div className="flex bg-gray-100 rounded-xl p-1">
+            <button onClick={() => setView("grid")} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${view === "grid" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}><LayoutGrid size={13} strokeWidth={1.75} /> Grid</button>
+            <button onClick={() => setView("list")} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${view === "list" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}><List size={13} strokeWidth={1.75} /> List</button>
           </div>
-          <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2 bg-[#ff6a1a] hover:bg-[#e85a0f] text-white text-sm font-medium rounded-xl transition-all">
+          <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-all">
             <Plus size={15} strokeWidth={2} /> Yangi loyiha
           </button>
         </div>
@@ -74,15 +74,15 @@ export default function ProjectsPage() {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Faol loyihalar", value: projects.filter(p => p.status === "active").length, icon: Rocket, color: "text-green-600" },
-          { label: "Umumiy vazifalar", value: projects.reduce((a, p) => a + p.tasks, 0), icon: CheckCircle2, color: "text-[#ff8a3d]" },
+          { label: "Umumiy vazifalar", value: projects.reduce((a, p) => a + p.tasks, 0), icon: CheckCircle2, color: "text-indigo-600" },
           { label: "Yakunlangan", value: projects.reduce((a, p) => a + p.done, 0), icon: Trophy, color: "text-orange-600" },
         ].map(s => (
-          <div key={s.label} className="bg-[#141316] rounded-2xl border border-white/[0.08] p-4">
+          <div key={s.label} className="bg-white rounded-2xl border border-gray-100 p-4">
             <div className="flex items-center gap-3">
               <s.icon size={22} strokeWidth={1.5} className={s.color} />
               <div>
                 <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                <p className="text-xs text-[#7d7870]">{s.label}</p>
+                <p className="text-xs text-gray-500">{s.label}</p>
               </div>
             </div>
           </div>
@@ -91,15 +91,15 @@ export default function ProjectsPage() {
 
       {/* New project */}
       {showNew && (
-        <div className="bg-[#141316] rounded-2xl border border-[#ff6a1a]/30 p-5 space-y-3">
-          <p className="text-sm font-semibold text-[#f5f1ea]">Yangi loyiha</p>
+        <div className="bg-white rounded-2xl border border-indigo-200 p-5 space-y-3">
+          <p className="text-sm font-semibold text-gray-900">Yangi loyiha</p>
           <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Loyiha nomi..."
-            className="w-full px-4 py-2.5 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30" />
+            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
           <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Qisqa tavsif..."
-            className="w-full px-4 py-2.5 bg-[#0a0a0c] border border-white/[0.12] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff6a1a]/30" />
+            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
           <div className="flex justify-end gap-2">
-            <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#a39d92] hover:bg-[#1e1d21] rounded-xl">Bekor</button>
-            <button onClick={addProject} className="px-4 py-2 bg-[#ff6a1a] hover:bg-[#e85a0f] text-white text-sm rounded-xl">Yaratish</button>
+            <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Bekor</button>
+            <button onClick={addProject} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl">Yaratish</button>
           </div>
         </div>
       )}
@@ -108,32 +108,32 @@ export default function ProjectsPage() {
       {view === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {projects.map(p => (
-            <div key={p.id} className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm overflow-hidden hover:border-white/[0.12] transition-all">
+            <div key={p.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:border-gray-200 transition-all">
               <div className={`h-2 bg-gradient-to-r ${p.color}`} style={{ width: `${p.progress}%` }} />
               <div className="p-5">
                 <div className="flex items-start gap-3 mb-4">
                   <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${p.color} flex items-center justify-center flex-shrink-0`}><p.icon size={19} strokeWidth={1.75} className="text-white" /></div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-[#f5f1ea] truncate">{p.name}</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{p.name}</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_CONFIG[p.status].color} flex-shrink-0`}>{STATUS_CONFIG[p.status].label}</span>
                     </div>
-                    <p className="text-xs text-[#7d7870] mt-0.5">{p.desc}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{p.desc}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs text-[#7d7870]">
-                    <span>Progress</span><span className="font-medium text-[#f5f1ea]">{p.progress}%</span>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>Progress</span><span className="font-medium text-gray-900">{p.progress}%</span>
                   </div>
-                  <div className="h-1.5 bg-[#1e1d21] rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                     <div className={`h-full bg-gradient-to-r ${p.color} rounded-full transition-all`} style={{ width: `${p.progress}%` }} />
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-4">
                   <div className="flex gap-1 flex-wrap">
-                    {p.tags.map(t => <span key={t} className="text-xs bg-[#1e1d21] text-[#7d7870] px-2 py-0.5 rounded">{t}</span>)}
+                    {p.tags.map(t => <span key={t} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{t}</span>)}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-[#7d7870]">
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
                     <span>{p.done}/{p.tasks} vazifa</span>
                     <span>{p.updated}</span>
                   </div>
@@ -145,22 +145,22 @@ export default function ProjectsPage() {
       ) : (
         <div className="space-y-2">
           {projects.map(p => (
-            <div key={p.id} className="bg-[#141316] rounded-2xl border border-white/[0.08] shadow-sm p-4 flex items-center gap-4 hover:border-white/[0.12] transition-all">
+            <div key={p.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4 hover:border-gray-200 transition-all">
               <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${p.color} flex items-center justify-center flex-shrink-0`}><p.icon size={16} strokeWidth={1.75} className="text-white" /></div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-[#f5f1ea]">{p.name}</p>
+                  <p className="text-sm font-semibold text-gray-900">{p.name}</p>
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_CONFIG[p.status].color}`}>{STATUS_CONFIG[p.status].label}</span>
                 </div>
-                <p className="text-xs text-[#7d7870]">{p.desc}</p>
+                <p className="text-xs text-gray-500">{p.desc}</p>
               </div>
               <div className="w-32 flex-shrink-0">
-                <div className="flex justify-between text-xs text-[#7d7870] mb-1"><span>{p.progress}%</span><span>{p.done}/{p.tasks}</span></div>
-                <div className="h-1.5 bg-[#1e1d21] rounded-full overflow-hidden">
+                <div className="flex justify-between text-xs text-gray-500 mb-1"><span>{p.progress}%</span><span>{p.done}/{p.tasks}</span></div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div className={`h-full bg-gradient-to-r ${p.color} rounded-full`} style={{ width: `${p.progress}%` }} />
                 </div>
               </div>
-              <span className="text-xs text-[#5c584f] flex-shrink-0">{p.updated}</span>
+              <span className="text-xs text-gray-400 flex-shrink-0">{p.updated}</span>
             </div>
           ))}
         </div>
