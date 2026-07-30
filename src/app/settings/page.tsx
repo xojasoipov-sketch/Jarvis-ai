@@ -51,9 +51,9 @@ export default function SettingsPage() {
     setObsStatus("checking");
     try {
       const r = await fetch("/api/obsidian", { signal: AbortSignal.timeout(5000) });
-      if (r.ok) {
+      const data = await r.json();
+      if (r.ok && data.configured && !data.error) {
         setObsStatus("ok");
-        const data = await r.json();
         setVaultFiles((data.files || []).slice(0, 20).map((f: { path: string }) => f.path));
       } else setObsStatus("error");
     } catch { setObsStatus("error"); }
@@ -63,9 +63,9 @@ export default function SettingsPage() {
     setHermesStatus("checking");
     try {
       const r = await fetch("/api/mcp", { signal: AbortSignal.timeout(5000) });
-      if (r.ok) {
+      const data = await r.json();
+      if (r.ok && data.configured && !data.error) {
         setHermesStatus("ok");
-        const data = await r.json();
         setMcpTools(data.tools || []);
       } else setHermesStatus("error");
     } catch { setHermesStatus("error"); }

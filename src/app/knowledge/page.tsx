@@ -177,8 +177,8 @@ export default function KnowledgePage() {
             {!configured.obsidian ? (
               <div className="p-6 text-center">
                 <AlertCircle size={32} strokeWidth={1.25} className="mx-auto mb-3 text-gray-300" />
-                <p className="text-sm text-gray-500 mb-1">Obsidian ulanmagan</p>
-                <p className="text-xs text-gray-400">Railway'da <code className="bg-gray-100 px-1 rounded">OBSIDIAN_URL</code> o'rnating</p>
+                <p className="text-sm text-gray-500 mb-1">Vault ulanmagan</p>
+                <p className="text-xs text-gray-400">Railway&apos;da <code className="bg-gray-100 px-1 rounded">GITHUB_TOKEN</code> o&apos;rnating</p>
                 <a href="/settings" className="mt-3 inline-block text-xs text-indigo-600 hover:underline">Sozlamalar →</a>
               </div>
             ) : vaultLoading ? (
@@ -247,7 +247,7 @@ export default function KnowledgePage() {
 
           {!configured.obsidian && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-xs text-yellow-700 flex items-center gap-2">
-              <AlertCircle size={14} /> Obsidian ulanmagan — lokal xotiradan qidirish ishlaydi
+              <AlertCircle size={14} /> Vault ulanmagan — lokal xotiradan qidirish ishlaydi
             </div>
           )}
 
@@ -355,8 +355,8 @@ export default function KnowledgePage() {
             {!configured.hermes ? (
               <div className="p-6 text-center">
                 <AlertCircle size={32} strokeWidth={1.25} className="mx-auto mb-3 text-gray-300" />
-                <p className="text-sm text-gray-500 mb-1">Hermes ulanmagan</p>
-                <p className="text-xs text-gray-400">Railway'da <code className="bg-gray-100 px-1 rounded">HERMES_URL</code> o'rnating</p>
+                <p className="text-sm text-gray-500 mb-1">Vositalar mavjud emas</p>
+                <p className="text-xs text-gray-400">Bu odatiy holat emas — server bilan bog&apos;lanishni tekshiring</p>
                 <a href="/settings" className="mt-3 inline-block text-xs text-indigo-600 hover:underline">Sozlamalar →</a>
               </div>
             ) : tools.length === 0 ? (
