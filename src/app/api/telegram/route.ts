@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   TgUpdate, sendMessage, sendChatAction, answerCallbackQuery,
-  cleanMarkdown, AGENT_KEYBOARD,
+  cleanMarkdown, AGENT_KEYBOARD, downloadVoice,
 } from "@/lib/telegram";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-production.up.railway.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
 
 const MAIN_KEYBOARD = {
   inline_keyboard: [
@@ -28,8 +28,19 @@ const AGENT_NAMES: Record<string, string> = {
   devops: "⚙️ DevOps Agent", assistant: "🎯 Personal Assistant",
 };
 
+async function transcribeVoice(fileId: string): Promise<{ transcript: string; reply: string } | null> {
+  const blob = await downloadVoice(fileId);
+  if (!blob) return null;
+  const fd = new FormData();
+  fd.append("audio", blob, "voice.ogg");
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
+  const res = await fetch(`${baseUrl}/api/voice`, { method: "POST", body: fd });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 async function callAI(messages: Array<{ role: string; content: string }>, system?: string): Promise<string> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-production.up.railway.app";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
   const res = await fetch(`${baseUrl}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -48,7 +59,7 @@ async function callAI(messages: Array<{ role: string; content: string }>, system
 }
 
 async function callAgent(agentId: string, task: string): Promise<string> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-production.up.railway.app";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
   const res = await fetch(`${baseUrl}/api/agent`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -189,14 +200,14 @@ async function handleCallback(callbackId: string, chatId: number, data: string, 
 
   if (data === "menu:tasks") {
     await sendMessage(chatId,
-      `📋 *Vazifalar*\n\nVazifalarni web ilovadan boshqaring:\nhttps://pari-ai-production.up.railway.app/tasks`
+      `📋 *Vazifalar*\n\nVazifalarni web ilovadan boshqaring:\nhttps://pari-ai-v2-production.up.railway.app/tasks`
     );
     return;
   }
 
   if (data === "menu:projects") {
     await sendMessage(chatId,
-      `📁 *Loyihalar*\n\nLoyihalarni web ilovadan ko'ring:\nhttps://pari-ai-production.up.railway.app/projects`
+      `📁 *Loyihalar*\n\nLoyihalarni web ilovadan ko'ring:\nhttps://pari-ai-v2-production.up.railway.app/projects`
     );
     return;
   }
@@ -213,8 +224,30 @@ export async function POST(req: NextRequest) {
 
     if (update.message?.text) {
       const { chat, text, from } = update.message;
-      log("info", "telegram", `Xabar qabul qilindi: "${text.slice(0, 60)}" from @${from.first_name}`);
+      log("info", "telegram", `Xabar: "${text.slice(0, 60)}" from @${from.first_name}`);
       await handleMessage(chat.id, text, from.first_name);
+    }
+
+    // Ovoz xabari — Gemini transcribe + javob
+    if (update.message?.voice || update.message?.audio) {
+      const { chat, from } = update.message;
+      const fileId = (update.message.voice || update.message.audio)!.file_id;
+      await sendChatAction(chat.id, "typing");
+      try {
+        const result = await transcribeVoice(fileId);
+        if (result?.transcript) {
+          addToHistory(chat.id, "user", result.transcript);
+          addToHistory(chat.id, "assistant", result.reply);
+          await sendMessage(chat.id,
+            `_"${result.transcript}"_\n\n${cleanMarkdown(result.reply)}`
+          );
+        } else {
+          await sendMessage(chat.id, "Ovozni tushunmadim, qayta yuboring.");
+        }
+      } catch {
+        await sendMessage(chat.id, "Ovoz xabarida xato yuz berdi.");
+      }
+      log("info", "telegram", `Ovoz xabari from @${from.first_name}`);
     }
 
     if (update.callback_query) {

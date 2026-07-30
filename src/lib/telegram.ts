@@ -9,6 +9,8 @@ export type TgMessage = {
   from: { id: number; first_name: string; username?: string };
   chat: { id: number; type: string };
   text?: string;
+  voice?: { file_id: string; duration: number; mime_type?: string };
+  audio?: { file_id: string; mime_type?: string };
   date: number;
 };
 
@@ -84,6 +86,25 @@ export async function getWebhookInfo() {
 export async function getMe() {
   const res = await fetch(`${getApi()}/getMe`);
   return res.json();
+}
+
+export async function getFileUrl(fileId: string): Promise<string | null> {
+  const api = getApi();
+  const res = await fetch(`${api}/getFile?file_id=${fileId}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const path = data?.result?.file_path;
+  if (!path) return null;
+  const token = process.env.TELEGRAM_BOT_TOKEN!;
+  return `https://api.telegram.org/file/bot${token}/${path}`;
+}
+
+export async function downloadVoice(fileId: string): Promise<Blob | null> {
+  const url = await getFileUrl(fileId);
+  if (!url) return null;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  return res.blob();
 }
 
 export function cleanMarkdown(text: string): string {
