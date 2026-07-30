@@ -91,18 +91,18 @@ export async function deleteVaultFile(notePath: string): Promise<void> {
   if (!res.ok) throw new Error(`GitHub API ${res.status}`);
 }
 
-async function walk(dir: string): Promise<VaultFile[]> {
+export async function walkVault(dir = ""): Promise<VaultFile[]> {
   const entries = await listVault(dir);
   const files: VaultFile[] = [];
   for (const e of entries) {
-    if (e.type === "dir") files.push(...(await walk(e.path)));
+    if (e.type === "dir") files.push(...(await walkVault(e.path)));
     else files.push(e);
   }
   return files;
 }
 
 export async function searchVault(query: string): Promise<{ path: string; matches: string[] }[]> {
-  const files = (await walk("")).filter((f) => f.path.endsWith(".md"));
+  const files = (await walkVault("")).filter((f) => f.path.endsWith(".md"));
   const q = query.toLowerCase();
   const results: { path: string; matches: string[] }[] = [];
   for (const f of files) {

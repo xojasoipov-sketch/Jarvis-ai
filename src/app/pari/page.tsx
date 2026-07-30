@@ -1,8 +1,17 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Mic, Radio, Send } from "lucide-react";
 import NeuralButterfly from "@/components/NeuralButterfly";
 import { useJarvisVoice } from "@/hooks/useJarvisVoice";
+import type { MemoryNode } from "@/app/api/pari/nodes/route";
+
+const TYPE_LABEL: Record<MemoryNode["type"], string> = {
+  vault: "vault fayli",
+  task: "vazifa",
+  project: "loyiha",
+  agent: "agent xotirasi",
+  tool: "vosita",
+};
 
 const STATE_LABEL: Record<string, string> = {
   asleep: "Meni chaqiring — “Pari” deng, yoki pastdan gapiring",
@@ -34,6 +43,15 @@ export default function PariPage() {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [manualAnswer, setManualAnswer] = useState("");
+  const [nodes, setNodes] = useState<MemoryNode[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    fetch("/api/pari/nodes")
+      .then((r) => r.json())
+      .then((d) => { setNodes(d.nodes || []); setCounts(d.counts || {}); })
+      .catch(() => {});
+  }, []);
 
   const onCommand = useCallback(async (text: string) => askPari(text), []);
   const jarvis = useJarvisVoice(onCommand);
@@ -69,11 +87,17 @@ export default function PariPage() {
               className="w-full h-full cursor-pointer disabled:cursor-default"
               aria-label="Pari bilan gaplashish uchun bosing"
             >
-              <NeuralButterfly state={jarvis.state} />
+              <NeuralButterfly state={jarvis.state} nodes={nodes} />
             </button>
           </div>
 
           <p className="text-sm text-[#c7bdf7] min-h-[20px]">{STATE_LABEL[jarvis.state]}</p>
+
+          {nodes.length > 0 && (
+            <p className="text-xs text-white/40 mt-1">
+              {nodes.length} ta xotira nuqtasi — {Object.entries(counts).map(([type, n]) => `${n} ${TYPE_LABEL[type as MemoryNode["type"]]}`).join(", ")}
+            </p>
+          )}
 
           {jarvis.transcript && (
             <p className="mt-3 text-sm text-white/70 italic">&quot;{jarvis.transcript}&quot;</p>
