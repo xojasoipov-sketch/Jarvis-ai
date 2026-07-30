@@ -1,9 +1,13 @@
 // In-memory session store (production'da Redis yoki DB ishlatiladi)
 type Session = {
-  mode: "chat" | "agent";
+  mode: "chat" | "agent" | "smm_post" | "smm_generated";
   agentId?: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
   waitingFor?: "agent_task";
+  // SMM state
+  smmChannelId?: string;
+  smmContent?: string;
+  smmDrafts?: string[];
 };
 
 const sessions = new Map<number, Session>();
