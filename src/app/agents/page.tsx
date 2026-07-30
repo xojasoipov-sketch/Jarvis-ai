@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { History } from "lucide-react";
 import {
   Briefcase, Microscope, Code2, BarChart3, PenLine, Megaphone,
   Settings2, Target, Bot, Play, type LucideIcon,
@@ -17,6 +18,7 @@ const AGENTS: { id: string; name: string; icon: LucideIcon; desc: string; color:
 ];
 
 type Result = { agent: string; icon: string; result: string };
+type RunHistory = { id: number; agent_name: string; task: string; result: string; created_at: string };
 
 export default function AgentsPage() {
   const [selected, setSelected] = useState<typeof AGENTS[0] | null>(null);
@@ -25,6 +27,17 @@ export default function AgentsPage() {
   const [results, setResults] = useState<Result[]>([]);
   const [multiMode, setMultiMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [history, setHistory] = useState<RunHistory[]>([]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const r = await fetch("/api/agent?history=1");
+      const d = await r.json();
+      setHistory(d.runs || []);
+    } catch {}
+  }, []);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
 
   async function runAgent(agentId: string, taskText: string): Promise<Result> {
     const res = await fetch("/api/agent", {
@@ -49,6 +62,7 @@ export default function AgentsPage() {
       setResults([res]);
     }
     setLoading(false);
+    loadHistory();
   }
 
   function toggleId(id: string) {
@@ -174,6 +188,30 @@ export default function AgentsPage() {
               />
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Real run history — Supabase-backed */}
+      {history.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <History size={15} strokeWidth={1.75} className="text-gray-400" />
+            <h2 className="text-sm font-semibold text-gray-900">So&apos;nggi ishga tushirishlar</h2>
+          </div>
+          <div className="space-y-3">
+            {history.slice(0, 6).map((h) => (
+              <div key={h.id} className="flex items-start gap-3 border-b border-gray-50 last:border-0 pb-3 last:pb-0">
+                <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                  <Bot size={13} strokeWidth={1.75} className="text-indigo-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-900">{h.agent_name}</p>
+                  <p className="text-xs text-gray-500 truncate">{h.task}</p>
+                </div>
+                <span className="text-xs text-gray-400 flex-shrink-0">{new Date(h.created_at).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
