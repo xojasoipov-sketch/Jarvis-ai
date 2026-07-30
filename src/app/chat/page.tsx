@@ -1,9 +1,9 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { Bot, Sparkles, Paperclip, Mic, Send } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Bot, Sparkles, Paperclip, Mic, Send, History } from "lucide-react";
 
-type Message = { role: "user" | "assistant"; content: string };
+type Message = { role: "user" | "assistant"; content: string; ts?: number };
 
 const suggestions = [
   "Biznesimni rivojlantirish uchun strategiya ber",
@@ -25,19 +25,46 @@ function formatText(text: string) {
     .replace(/\n/g, "<br />");
 }
 
+async function saveConversation(id: string | null, messages: Message[]): Promise<string | null> {
+  try {
+    const res = await fetch("/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, messages }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.id;
+  } catch { return null; }
+}
+
 function ChatInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState("");
+  const [convId, setConvId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const initialized = useRef(false);
 
+  // Load conversation from URL param
   useEffect(() => {
+    const id = searchParams.get("id");
     const q = searchParams.get("q");
-    if (q && !initialized.current) {
+
+    if (id && !initialized.current) {
+      initialized.current = true;
+      setConvId(id);
+      fetch(`/api/conversations?id=${id}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.messages) setMessages(data.messages);
+        })
+        .catch(() => {});
+    } else if (q && !initialized.current) {
       initialized.current = true;
       sendMessage(q);
     }
@@ -53,7 +80,7 @@ function ChatInner() {
     if (!msg || loading) return;
     setInput("");
 
-    const newMessages: Message[] = [...messages, { role: "user", content: msg }];
+    const newMessages: Message[] = [...messages, { role: "user", content: msg, ts: Date.now() }];
     setMessages(newMessages);
     setLoading(true);
     setStreaming("");
@@ -62,7 +89,7 @@ function ChatInner() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: newMessages.map(({ role, content }) => ({ role, content })) }),
       });
 
       if (!res.ok) throw new Error("API xatosi");
@@ -79,13 +106,28 @@ function ChatInner() {
         setStreaming(full);
       }
 
-      setMessages([...newMessages, { role: "assistant", content: full }]);
+      const finalMessages: Message[] = [...newMessages, { role: "assistant", content: full, ts: Date.now() }];
+      setMessages(finalMessages);
       setStreaming("");
+
+      // Auto-save conversation
+      const savedId = await saveConversation(convId, finalMessages);
+      if (savedId && !convId) {
+        setConvId(savedId);
+        router.replace(`/chat?id=${savedId}`, { scroll: false });
+      }
     } catch {
-      setMessages([...newMessages, { role: "assistant", content: "Kechirasiz, xato yuz berdi. Qayta urinib ko'ring." }]);
+      setMessages([...newMessages, { role: "assistant", content: "Kechirasiz, xato yuz berdi. Qayta urinib ko'ring.", ts: Date.now() }]);
       setStreaming("");
     }
     setLoading(false);
+  }
+
+  function newChat() {
+    setMessages([]);
+    setConvId(null);
+    initialized.current = false;
+    router.replace("/chat", { scroll: false });
   }
 
   return (
@@ -95,12 +137,21 @@ function ChatInner() {
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
           <Bot size={20} strokeWidth={1.75} />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-lg font-bold text-gray-900">Pari AI</h1>
           <div className="flex items-center gap-1.5">
             <span className="pulse-dot w-2 h-2" />
             <span className="text-xs text-green-600">Online — Gemini 2.0 Flash</span>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {convId && (
+            <span className="text-xs text-gray-400 font-mono hidden sm:block truncate max-w-[120px]">{convId}</span>
+          )}
+          <button onClick={newChat} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 px-3 py-1.5 rounded-xl transition-all">
+            <History size={13} strokeWidth={1.75} />
+            <span className="hidden sm:inline">New Chat</span>
+          </button>
         </div>
       </div>
 

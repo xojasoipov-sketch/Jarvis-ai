@@ -44,7 +44,7 @@ async function webSearch(query: string): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
-  const { messages } = await req.json();
+  const { messages, system } = await req.json();
   const list = providers();
   if (!list.length) return NextResponse.json({ error: "API key sozlanmagan" }, { status: 500 });
 
@@ -57,7 +57,8 @@ export async function POST(req: NextRequest) {
     searchContext = await webSearch(query);
   }
 
-  const sysMsg = searchContext ? SYSTEM + `\n\nQo'shimcha kontekst:${searchContext}` : SYSTEM;
+  const baseSystem = system || SYSTEM;
+  const sysMsg = searchContext ? baseSystem + `\n\nQo'shimcha kontekst:${searchContext}` : baseSystem;
 
   const body = {
     model: "",
