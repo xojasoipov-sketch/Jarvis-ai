@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import {
-  Settings, Brain, Zap, Bot, CheckCircle2, XCircle,
+  Settings, Brain, Zap, Bot, CheckCircle2, XCircle, Database, GitPullRequest,
   ExternalLink, RefreshCw, Copy, Eye, EyeOff, Save,
 } from "lucide-react";
 
@@ -28,6 +28,7 @@ export default function SettingsPage() {
   const [obsStatus, setObsStatus] = useState<Status>("idle");
   const [hermesStatus, setHermesStatus] = useState<Status>("idle");
   const [telegramStatus, setTelegramStatus] = useState<Status>("idle");
+  const [dbStatus, setDbStatus] = useState<Status>("idle");
   const [memoryItems, setMemoryItems] = useState<{ title: string; content: string }[]>([]);
   const [mcpTools, setMcpTools] = useState<{ name: string; description?: string }[]>([]);
   const [showVault, setShowVault] = useState(false);
@@ -44,7 +45,17 @@ export default function SettingsPage() {
     checkObsidian();
     checkHermes();
     checkTelegram();
+    checkDb();
     loadMemory();
+  }
+
+  async function checkDb() {
+    setDbStatus("checking");
+    try {
+      const r = await fetch("/api/tasks", { signal: AbortSignal.timeout(5000) });
+      const data = await r.json();
+      setDbStatus(r.ok && data.configured ? "ok" : "error");
+    } catch { setDbStatus("error"); }
   }
 
   async function checkObsidian() {
@@ -256,6 +267,64 @@ export default function SettingsPage() {
               </button>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Database */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+              <Database size={18} strokeWidth={1.75} className="text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Ma&apos;lumotlar bazasi</p>
+              <p className="text-xs text-gray-500">Supabase — Tasks va Projects uchun</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <StatusBadge s={dbStatus} />
+            <button onClick={checkDb} className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors">
+              <RefreshCw size={14} strokeWidth={1.75} />
+            </button>
+          </div>
+        </div>
+        <div className="px-5 py-4 space-y-2 text-xs">
+          <p className="font-semibold text-gray-700">Railway Variables&apos;da o&apos;rnating:</p>
+          <div className="flex items-center gap-2 font-mono text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+            <span className="flex-1 truncate">SUPABASE_URL=https://xxx.supabase.co</span>
+            <CopyBtn text="SUPABASE_URL=https://xxx.supabase.co" />
+          </div>
+          <div className="flex items-center gap-2 font-mono text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+            <span className="flex-1 truncate">SUPABASE_ANON_KEY=eyJ...</span>
+            <CopyBtn text="SUPABASE_ANON_KEY=eyJ..." />
+          </div>
+          <p className="text-gray-500">Tasks/Projects sahifalari <code className="bg-gray-100 px-1 rounded">pari_tasks</code> va <code className="bg-gray-100 px-1 rounded">pari_projects</code> jadvallarida saqlanadi.</p>
+        </div>
+      </div>
+
+      {/* Self-Improvement */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center">
+            <GitPullRequest size={18} strokeWidth={1.75} className="text-violet-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Self-Improvement (o&apos;z-o&apos;zini yangilash)</p>
+            <p className="text-xs text-gray-500">Pari AI kod yozib, Pull Request ochadi</p>
+          </div>
+        </div>
+        <div className="px-5 py-4 space-y-2 text-xs">
+          <p className="text-gray-600">
+            Chat&apos;da &quot;kodni o&apos;zgartir / yangi sahifa qo&apos;sh&quot; kabi so&apos;rasangiz, Pari AI{" "}
+            <code className="bg-gray-100 px-1 rounded">propose_code_change</code> vositasi orqali yangi branch yaratadi,
+            faylni yozadi va GitHub&apos;da PR ochadi. <strong>Hech qachon to&apos;g&apos;ridan-to&apos;g&apos;ri main&apos;ga push qilmaydi</strong> —
+            siz PR&apos;ni ko&apos;rib chiqib, tasdiqlaganingizdan keyingina Railway&apos;ga deploy bo&apos;ladi.
+          </p>
+          <p className="text-gray-500">
+            Ishlashi uchun <code className="bg-gray-100 px-1 rounded">GITHUB_TOKEN</code>da{" "}
+            <strong>Contents: Read/Write</strong> va <strong>Pull requests: Read/Write</strong> ruxsatlari yoqilgan bo&apos;lishi kerak.
+          </p>
         </div>
       </div>
 
