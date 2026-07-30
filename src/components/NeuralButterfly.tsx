@@ -32,15 +32,17 @@ const TYPE_COLOR: Record<MemoryNode["type"], string> = {
 const MIN_PARTICLES = 24;
 const MAX_PARTICLES = 320;
 
-export default function NeuralButterfly({ state, nodes }: { state: JarvisState; nodes: MemoryNode[] }) {
+export default function NeuralButterfly({ state, nodes, level = 0 }: { state: JarvisState; nodes: MemoryNode[]; level?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const positionsRef = useRef<{ x: number; y: number }[]>([]);
   const stateRef = useRef(state);
+  const levelRef = useRef(level);
   const [hover, setHover] = useState<{ label: string; x: number; y: number } | null>(null);
 
   useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => { levelRef.current = level; }, [level]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -103,7 +105,8 @@ export default function NeuralButterfly({ state, nodes }: { state: JarvisState; 
       const s = stateRef.current;
       const stateCol = STATE_COLOR[s];
       const speedMul = s === "asleep" ? 0.5 : s === "listening" ? 1.6 : s === "speaking" ? 2.2 : 1.1;
-      const breathe = 0.85 + 0.15 * Math.sin(t * 0.02 * speedMul);
+      const micBoost = levelRef.current * 0.25; // mic level amplifies breathing
+      const breathe = 0.85 + (0.15 + micBoost) * Math.sin(t * 0.02 * speedMul);
 
       t += 1;
 

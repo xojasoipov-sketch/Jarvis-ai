@@ -82,12 +82,12 @@ export default function PariPage() {
           {/* Butterfly — click to speak, click again to stop */}
           <div className="my-4 mx-auto" style={{ width: "min(100%, 380px)", height: "min(80vw, 380px)" }}>
             <button
-              onClick={jarvis.state === "asleep" ? jarvis.wake : jarvis.stopListening}
+              onClick={jarvis.toggle}
               disabled={!jarvis.supported || jarvis.state === "thinking" || jarvis.state === "speaking"}
               className="w-full h-full cursor-pointer disabled:cursor-default"
-              aria-label={jarvis.state === "asleep" ? "Bosing va gapiring" : "To'xtatish"}
+              aria-label={jarvis.active ? "To'xtatish" : "Bosing va gapiring"}
             >
-              <NeuralButterfly state={jarvis.state} nodes={nodes} />
+              <NeuralButterfly state={jarvis.state} nodes={nodes} level={jarvis.level} />
             </button>
           </div>
 
@@ -106,18 +106,18 @@ export default function PariPage() {
             </p>
           )}
 
-          {/* Always-on toggle */}
+          {/* Conversation toggle status */}
           {jarvis.supported && (
             <button
-              onClick={jarvis.toggleAlwaysOn}
+              onClick={jarvis.toggle}
               className={`mt-5 inline-flex items-center gap-2 text-xs font-medium px-4 py-2 rounded-full border transition-all ${
-                jarvis.alwaysOn
+                jarvis.active
                   ? "bg-[#8b7bf0]/20 border-[#8b7bf0] text-[#c7bdf7]"
                   : "bg-white/5 border-white/15 text-white/50 hover:text-white/70"
               }`}
             >
-              <Radio size={12} strokeWidth={2} className={jarvis.alwaysOn ? "animate-pulse" : ""} />
-              {jarvis.alwaysOn ? "Doim tinglayapman" : "Doim tinglash"}
+              <Radio size={12} strokeWidth={2} className={jarvis.active ? "animate-pulse" : ""} />
+              {jarvis.active ? "Tinglayapman" : "Boshlash"}
             </button>
           )}
 
