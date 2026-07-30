@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { Bot, Sparkles, Paperclip, Mic, Send } from "lucide-react";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -91,8 +92,8 @@ function ChatInner() {
     <div className="flex flex-col h-full max-w-4xl mx-auto" style={{ height: "calc(100vh - 8rem)" }}>
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl">
-          🤖
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
+          <Bot size={20} strokeWidth={1.75} />
         </div>
         <div>
           <h1 className="text-lg font-bold text-gray-900">Pari AI</h1>
@@ -107,7 +108,7 @@ function ChatInner() {
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">
         {messages.length === 0 && !streaming && (
           <div className="fade-in text-center py-12">
-            <div className="text-6xl mb-4">✨</div>
+            <Sparkles size={48} strokeWidth={1.25} className="mx-auto mb-4 text-indigo-600" />
             <h2 className="text-xl font-bold text-gray-900 mb-2">Pari AI ga xush kelibsiz!</h2>
             <p className="text-gray-500 text-sm mb-8 max-w-md mx-auto">
               Men sizning shaxsiy AI yordamchingizman. Biznes, kod, tadqiqot, avtomatlashtirish — hamma narsada yordam beraman.
@@ -133,7 +134,7 @@ function ChatInner() {
             <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
               m.role === "user"
                 ? "bg-indigo-600 text-white rounded-tr-sm"
-                : "bg-white border border-gray-100 shadow-sm text-gray-800 rounded-tl-sm"
+                : "bg-white border border-gray-100 shadow-sm text-gray-700 rounded-tl-sm"
             }`}>
               {m.role === "assistant" ? (
                 <div dangerouslySetInnerHTML={{ __html: formatText(m.content) }} />
@@ -147,9 +148,9 @@ function ChatInner() {
         {streaming && (
           <div className="fade-in flex gap-3">
             <div className="w-8 h-8 rounded-full flex-shrink-0 bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-sm font-bold text-indigo-600">P</div>
-            <div className="max-w-[80%] bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-gray-800 leading-relaxed">
+            <div className="max-w-[80%] bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-gray-700 leading-relaxed">
               <div dangerouslySetInnerHTML={{ __html: formatText(streaming) }} />
-              <span className="inline-block w-1.5 h-4 bg-indigo-500 ml-0.5 animate-pulse rounded" />
+              <span className="inline-block w-1.5 h-4 bg-indigo-600 ml-0.5 animate-pulse rounded" />
             </div>
           </div>
         )}
@@ -160,7 +161,7 @@ function ChatInner() {
             <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3">
               <div className="flex gap-1.5 items-center h-5">
                 {[0,1,2].map(i => (
-                  <span key={i} className="w-2 h-2 rounded-full bg-indigo-400" style={{ animation: `pulse-dot 1.2s ease infinite ${i*0.2}s` }} />
+                  <span key={i} className="w-2 h-2 rounded-full bg-indigo-600" style={{ animation: `pulse-dot 1.2s ease infinite ${i*0.2}s` }} />
                 ))}
               </div>
             </div>
@@ -184,11 +185,11 @@ function ChatInner() {
             style={{ minHeight: "24px" }}
           />
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors">📎</button>
-            <button className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors">🎤</button>
+            <button className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"><Paperclip size={15} strokeWidth={1.75} /></button>
+            <button className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"><Mic size={15} strokeWidth={1.75} /></button>
             <button onClick={() => sendMessage()} disabled={!input.trim() || loading}
-              className="w-9 h-9 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center text-lg font-bold">
-              ›
+              className="w-9 h-9 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center">
+              <Send size={14} strokeWidth={2} />
             </button>
           </div>
         </div>

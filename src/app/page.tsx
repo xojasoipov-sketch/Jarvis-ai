@@ -2,6 +2,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  MessageSquare, CheckCircle2, Paperclip, Search, Code2, FileText,
+  Mic, Bot, Lightbulb, Send, Sparkles, ChevronDown, Brain, ArrowRight, type LucideIcon,
+} from "lucide-react";
 
 const stats = [
   { label: "Tasks Completed", value: "128", change: "+18.6% this week", color: "#6366f1" },
@@ -52,13 +56,13 @@ const systemStatus = [
   "AI Models", "Web Search", "Automation", "Database", "Integrations",
 ];
 
-const quickActions = [
-  { label: "New Chat", icon: "💬" },
-  { label: "Create Task", icon: "✓" },
-  { label: "Upload File", icon: "📎" },
-  { label: "Web Search", icon: "🔍" },
-  { label: "Write Code", icon: "<>" },
-  { label: "Create Report", icon: "📄" },
+const quickActions: { label: string; icon: LucideIcon }[] = [
+  { label: "New Chat", icon: MessageSquare },
+  { label: "Create Task", icon: CheckCircle2 },
+  { label: "Upload File", icon: Paperclip },
+  { label: "Web Search", icon: Search },
+  { label: "Write Code", icon: Code2 },
+  { label: "Create Report", icon: FileText },
 ];
 
 function MiniSparkline({ color }: { color: string }) {
@@ -118,13 +122,18 @@ export default function Dashboard() {
   return (
     <div className="fade-in space-y-5 max-w-[1400px]">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Good morning, Sadi 👋</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Good morning, Sadi</h1>
         <p className="text-sm text-gray-500 mt-0.5">Pari AI is ready to help you accomplish anything.</p>
       </div>
 
       {/* Input card */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <p className="text-sm font-medium text-gray-700 mb-3">What would you like Pari AI to do?</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-medium text-gray-700">What would you like Pari AI to do?</p>
+          <button className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all">
+            <Sparkles size={13} strokeWidth={1.75} /> Smart Mode <ChevronDown size={13} strokeWidth={1.75} />
+          </button>
+        </div>
         <textarea
           value={task}
           onChange={e => setTask(e.target.value)}
@@ -143,11 +152,11 @@ export default function Dashboard() {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <button className="p-2 text-gray-400 hover:text-gray-600">📎</button>
-            <button className="p-2 text-gray-400 hover:text-gray-600">🎤</button>
+            <button className="p-2 text-gray-400 hover:text-gray-600"><Paperclip size={16} strokeWidth={1.75} /></button>
+            <button className="p-2 text-gray-400 hover:text-gray-600"><Mic size={16} strokeWidth={1.75} /></button>
             <button onClick={go} disabled={!task.trim()}
-              className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center text-xl font-bold">
-              ›
+              className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center">
+              <Send size={16} strokeWidth={2} />
             </button>
           </div>
         </div>
@@ -177,7 +186,7 @@ export default function Dashboard() {
           <div className="space-y-3">
             {recentTasks.map(t => (
               <div key={t.name} className="flex items-start gap-3">
-                <span className="text-gray-300 mt-0.5 text-base">📄</span>
+                <FileText size={15} strokeWidth={1.75} className="text-gray-300 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-gray-900 truncate">{t.name}</p>
                   <p className="text-xs text-gray-400">{t.agent}</p>
@@ -200,7 +209,7 @@ export default function Dashboard() {
           <div className="space-y-3">
             {activeAgents.map(a => (
               <div key={a.name} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">🤖</div>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center"><Bot size={16} strokeWidth={1.75} className="text-indigo-600" /></div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-gray-900 truncate">{a.name}</p>
                   <p className="text-xs text-gray-400 truncate">{a.desc}</p>
@@ -246,6 +255,28 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+
+          <Link href="/skilltree" className="block p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-sm hover:opacity-95 transition-opacity">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                <Brain size={18} strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Second Brain Project</p>
+                <span className="text-xs text-indigo-100 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Active</span>
+              </div>
+            </div>
+            <p className="text-xs text-indigo-100 mb-3">Next generation platform for AI-powered business automation and analytics.</p>
+            <div className="flex items-center justify-between text-xs text-indigo-100 mb-1.5">
+              <span>Progress</span><span className="font-medium text-white">65%</span>
+            </div>
+            <div className="h-1.5 bg-white/20 rounded-full overflow-hidden mb-3">
+              <div className="h-full bg-white rounded-full" style={{ width: "65%" }} />
+            </div>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg transition-all">
+              Open Project <ArrowRight size={12} strokeWidth={2} />
+            </span>
+          </Link>
         </div>
       </div>
 
@@ -285,12 +316,12 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-2">
             {quickActions.map(a => (
               <button key={a.label} className="flex items-center gap-2 p-3 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl text-xs text-gray-600 transition-all">
-                <span>{a.icon}</span> {a.label}
+                <a.icon size={14} strokeWidth={1.75} /> {a.label}
               </button>
             ))}
           </div>
           <div className="mt-4 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl">
-            <p className="text-xs font-semibold text-indigo-700">💡 Tips & Suggestions</p>
+            <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1.5"><Lightbulb size={13} strokeWidth={1.75} /> Tips & Suggestions</p>
             <p className="text-xs text-gray-600 mt-1">Automate repetitive tasks to save more time each week.</p>
             <button className="mt-2 text-xs text-indigo-600 font-medium hover:underline">Create Automation →</button>
           </div>

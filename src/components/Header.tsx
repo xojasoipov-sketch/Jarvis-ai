@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Search, Plus, Bell, ChevronDown } from "lucide-react";
 
 export default function Header() {
   const [search, setSearch] = useState("");
@@ -8,7 +9,7 @@ export default function Header() {
     <header className="h-14 bg-white border-b border-gray-100 flex items-center px-6 gap-4 flex-shrink-0">
       {/* Search */}
       <div className="flex-1 max-w-xl relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+        <Search size={15} strokeWidth={1.75} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -20,21 +21,22 @@ export default function Header() {
 
       <div className="ml-auto flex items-center gap-3">
         <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-all">
-          <span>+</span> New Task
+          <Plus size={15} strokeWidth={2} /> New Task
         </button>
         <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-xl">
-          🔔
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+          <Bell size={17} strokeWidth={1.75} />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
         </button>
-        <div className="flex items-center gap-2">
+        <button className="flex items-center gap-2 hover:bg-gray-50 rounded-xl px-1.5 py-1 transition-all">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
             S
           </div>
-          <div className="hidden sm:block">
+          <div className="hidden sm:block text-left">
             <p className="text-xs font-semibold text-gray-900">Sadi Prime</p>
-            <p className="text-xs text-gray-500">Elite Plan</p>
+            <p className="text-xs text-gray-500">Pro Plan</p>
           </div>
-        </div>
+          <ChevronDown size={14} strokeWidth={1.75} className="text-gray-400" />
+        </button>
       </div>
     </header>
   );
