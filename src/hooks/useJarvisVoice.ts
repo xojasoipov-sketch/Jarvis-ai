@@ -1,33 +1,57 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-interface SpeechRecognitionResult {
-  0: { transcript: string };
-  isFinal: boolean;
-}
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: { length: number; [i: number]: SpeechRecognitionResult };
-}
-interface SpeechRecognitionLike extends EventTarget {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((e: SpeechRecognitionEvent) => void) | null;
-  onerror: ((e: Event) => void) | null;
-  onend: (() => void) | null;
-}
-type SpeechWindow = Window & {
-  SpeechRecognition?: new () => SpeechRecognitionLike;
-  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-};
-
 export type JarvisState = "asleep" | "waking" | "listening" | "thinking" | "speaking";
 
-const WAKE_WORDS = ["pari", "пари", "hey pari", "salom pari"];
+const WAKE_WORDS = ["pari", "пари", "hey pari", "salom pari", "hello pari"];
+
+// Server-side Groq Whisper transcription — works on iOS, Android, desktop
+async function transcribe(blob: Blob): Promise<string> {
+  const fd = new FormData();
+  fd.append("audio", blob, "audio.webm");
+  try {
+    const res = await fetch("/api/transcribe", { method: "POST", body: fd });
+    if (!res.ok) return "";
+    const d = await res.json();
+    return (d.text || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function speak(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!("speechSynthesis" in window)) return resolve();
+    window.speechSynthesis.cancel();
+    const plain = text.replace(/```[\s\S]*?```/g, " kod bloki ").replace(/[*_#`]/g, "");
+    const utter = new SpeechSynthesisUtterance(plain.slice(0, 2000));
+    // Pick a voice: prefer Uzbek, fallback to Russian, then default
+    const voices = window.speechSynthesis.getVoices();
+    const voice = voices.find((v) => v.lang.startsWith("uz")) ||
+      voices.find((v) => v.lang.startsWith("ru")) ||
+      null;
+    if (voice) utter.voice = voice;
+    utter.lang = voice?.lang || "ru-RU";
+    utter.rate = 1.0;
+    utter.onend = () => resolve();
+    utter.onerror = () => resolve();
+    window.speechSynthesis.speak(utter);
+  });
+}
+
+function getBestMimeType(): string {
+  const types = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+    "audio/wav",
+  ];
+  for (const t of types) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return "";
+}
 
 export function useJarvisVoice(onCommand: (text: string) => Promise<string>) {
   const [state, setState] = useState<JarvisState>("asleep");
@@ -35,133 +59,133 @@ export function useJarvisVoice(onCommand: (text: string) => Promise<string>) {
   const [supported, setSupported] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [reply, setReply] = useState("");
-  const recRef = useRef<SpeechRecognitionLike | null>(null);
+
   const stateRef = useRef<JarvisState>("asleep");
   const alwaysOnRef = useRef(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const wakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { alwaysOnRef.current = alwaysOn; }, [alwaysOn]);
 
   useEffect(() => {
-    const w = window as SpeechWindow;
-    setSupported(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition));
+    setSupported(typeof MediaRecorder !== "undefined" && !!navigator.mediaDevices?.getUserMedia);
   }, []);
 
-  const speak = useCallback((text: string): Promise<void> => {
-    return new Promise((resolve) => {
-      if (!("speechSynthesis" in window)) return resolve();
-      window.speechSynthesis.cancel();
-      const plain = text.replace(/```[\s\S]*?```/g, " kod bloki ").replace(/[*_#`]/g, "");
-      const utter = new SpeechSynthesisUtterance(plain.slice(0, 2000));
-      utter.lang = "uz-UZ";
-      utter.onend = () => resolve();
-      utter.onerror = () => resolve();
-      window.speechSynthesis.speak(utter);
-    });
-  }, []);
-
-  // Browser speech recognition language — uz-UZ is rarely supported; use ru-RU as closest
-  // available Cyrillic locale, or empty string (browser default) as ultimate fallback.
-  const speechLang = useRef("");
-  useEffect(() => {
-    const supported_langs = ["uz-UZ", "ru-RU", ""];
-    const w = window as SpeechWindow;
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) return;
-    // Pick first lang that doesn't immediately error
-    let idx = 0;
-    function tryLang() {
-      if (idx >= supported_langs.length) return;
-      const r = new Ctor!();
-      r.lang = supported_langs[idx];
-      r.continuous = false;
-      r.interimResults = false;
-      r.onresult = () => { speechLang.current = supported_langs[idx]; r.abort(); };
-      r.onerror = () => { idx++; tryLang(); };
-      r.onend = () => {};
-      try { r.start(); } catch { idx++; tryLang(); }
+  const stopRecorder = useCallback(() => {
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop();
     }
-    tryLang();
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
   }, []);
 
-  const startWakeListening = useCallback(() => {
-    const w = window as SpeechWindow;
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) return;
-    const rec = new Ctor();
-    rec.lang = speechLang.current;
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.onresult = (e) => {
-      const last = e.results[e.results.length - 1];
-      const text = last[0].transcript.toLowerCase();
-      if (WAKE_WORDS.some((w) => text.includes(w))) {
-        rec.stop();
-        wake();
-      }
-    };
-    rec.onend = () => {
-      if (alwaysOnRef.current && stateRef.current === "asleep") {
-        try { rec.start(); } catch {}
-      }
-    };
-    rec.onerror = () => {
-      if (alwaysOnRef.current && stateRef.current === "asleep") {
-        setTimeout(() => { try { rec.start(); } catch {} }, 1000);
-      }
-    };
-    recRef.current = rec;
-    try { rec.start(); } catch {}
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const captureCommand = useCallback(async () => {
+    setState("listening");
+    const chunks: BlobPart[] = [];
 
-  const captureCommand = useCallback(() => {
-    const w = window as SpeechWindow;
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) return;
-    const rec = new Ctor();
-    rec.lang = speechLang.current;
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onresult = async (e) => {
-      const text = Array.from({ length: e.results.length }, (_, i) => e.results[i][0].transcript).join(" ");
-      setTranscript(text);
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setState("asleep");
+      return;
+    }
+    streamRef.current = stream;
+
+    const mimeType = getBestMimeType();
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    recorderRef.current = recorder;
+
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      if (stateRef.current === "asleep") return; // user cancelled
+
+      const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
       setState("thinking");
+
+      const text = await transcribe(blob);
+      if (!text) { setState("asleep"); if (alwaysOnRef.current) startAlwaysOnCycle(); return; }
+
+      setTranscript(text);
       const answer = await onCommand(text);
       setReply(answer);
       setState("speaking");
       await speak(answer);
       setState("asleep");
-      if (alwaysOnRef.current) startWakeListening();
+      if (alwaysOnRef.current) startAlwaysOnCycle();
     };
-    rec.onerror = () => {
-      setState("asleep");
-      if (alwaysOnRef.current) startWakeListening();
+
+    recorder.start();
+    // Auto-stop after 8 seconds max
+    wakeTimerRef.current = setTimeout(() => {
+      if (recorder.state === "recording") recorder.stop();
+    }, 8000);
+  }, [onCommand]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Always-on: record 3s chunks, check for wake word, loop
+  const startAlwaysOnCycle = useCallback(async () => {
+    if (!alwaysOnRef.current || stateRef.current !== "asleep") return;
+    const chunks: BlobPart[] = [];
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch { return; }
+    streamRef.current = stream;
+
+    const mimeType = getBestMimeType();
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    recorderRef.current = recorder;
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      if (!alwaysOnRef.current || stateRef.current !== "asleep") return;
+
+      const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
+      const text = await transcribe(blob);
+      if (text && WAKE_WORDS.some((w) => text.toLowerCase().includes(w))) {
+        wake();
+      } else {
+        startAlwaysOnCycle(); // loop
+      }
     };
-    rec.onend = () => {};
-    recRef.current = rec;
-    try { rec.start(); } catch {}
-  }, [onCommand, speak, startWakeListening]);
+
+    recorder.start();
+    setTimeout(() => { if (recorder.state === "recording") recorder.stop(); }, 3000);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const wake = useCallback(() => {
+    stopRecorder();
     setState("waking");
     setTranscript("");
     setReply("");
-    setTimeout(() => {
-      setState("listening");
-      captureCommand();
-    }, 300);
-  }, [captureCommand]);
+    setTimeout(() => captureCommand(), 300);
+  }, [captureCommand, stopRecorder]);
+
+  const stopListening = useCallback(() => {
+    if (wakeTimerRef.current) clearTimeout(wakeTimerRef.current);
+    stopRecorder();
+    setState("asleep");
+  }, [stopRecorder]);
 
   const toggleAlwaysOn = useCallback(() => {
     setAlwaysOn((prev) => {
       const next = !prev;
-      if (next) startWakeListening();
-      else recRef.current?.stop();
+      alwaysOnRef.current = next;
+      if (next) startAlwaysOnCycle();
+      else stopListening();
       return next;
     });
-  }, [startWakeListening]);
+  }, [startAlwaysOnCycle, stopListening]);
 
-  useEffect(() => () => { recRef.current?.stop(); }, []);
+  useEffect(() => () => { stopRecorder(); }, [stopRecorder]);
 
-  return { state, alwaysOn, supported, transcript, reply, toggleAlwaysOn, wake };
+  return { state, alwaysOn, supported, transcript, reply, toggleAlwaysOn, wake, stopListening };
 }

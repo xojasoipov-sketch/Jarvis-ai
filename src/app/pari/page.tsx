@@ -82,10 +82,10 @@ export default function PariPage() {
 
           <div className="my-2 mx-auto" style={{ width: "min(100%, 420px)", height: "min(100vw, 420px)" }}>
             <button
-              onClick={jarvis.wake}
-              disabled={!jarvis.supported || jarvis.state !== "asleep"}
+              onClick={jarvis.state === "asleep" ? jarvis.wake : jarvis.stopListening}
+              disabled={!jarvis.supported || jarvis.state === "thinking" || jarvis.state === "speaking"}
               className="w-full h-full cursor-pointer disabled:cursor-default"
-              aria-label="Pari bilan gaplashish uchun bosing"
+              aria-label={jarvis.state === "asleep" ? "Bosing va gapiring" : "To'xtatish"}
             >
               <NeuralButterfly state={jarvis.state} nodes={nodes} />
             </button>
@@ -121,7 +121,7 @@ export default function PariPage() {
           )}
 
           {!jarvis.supported && (
-            <p className="mt-4 text-xs text-white/40">Bu brauzer ovozli kirishni qo&apos;llab-quvvatlamaydi — pastdan yozing.</p>
+            <p className="mt-4 text-xs text-white/40">Mikrofon ruxsati berilmagan — pastdan yozing.</p>
           )}
         </div>
 
