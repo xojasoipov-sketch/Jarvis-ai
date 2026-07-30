@@ -56,13 +56,13 @@ const systemStatus = [
   "AI Models", "Web Search", "Automation", "Database", "Integrations",
 ];
 
-const quickActions: { label: string; icon: LucideIcon }[] = [
-  { label: "New Chat", icon: MessageSquare },
-  { label: "Create Task", icon: CheckCircle2 },
-  { label: "Upload File", icon: Paperclip },
-  { label: "Web Search", icon: Search },
-  { label: "Write Code", icon: Code2 },
-  { label: "Create Report", icon: FileText },
+const quickActions: { label: string; icon: LucideIcon; href: string }[] = [
+  { label: "New Chat", icon: MessageSquare, href: "/chat" },
+  { label: "Create Task", icon: CheckCircle2, href: "/tasks" },
+  { label: "Upload File", icon: Paperclip, href: "/files" },
+  { label: "Web Search", icon: Search, href: "/chat?q=web+search" },
+  { label: "Write Code", icon: Code2, href: "/code" },
+  { label: "Create Report", icon: FileText, href: "/agents" },
 ];
 
 function MiniSparkline({ color }: { color: string }) {
@@ -119,18 +119,32 @@ export default function Dashboard() {
     if (task.trim()) router.push(`/chat?q=${encodeURIComponent(task)}`);
   };
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
   return (
-    <div className="fade-in space-y-5 max-w-[1400px]">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Good morning, Sadi</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Pari AI is ready to help you accomplish anything.</p>
+    <div className="fade-in space-y-4 max-w-[1400px]">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{greeting}, Sadi</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Pari AI is ready to help you accomplish anything.</p>
+        </div>
+        {/* Mobile quick nav */}
+        <div className="flex lg:hidden items-center gap-2">
+          <Link href="/chat" className="p-2.5 bg-indigo-600 text-white rounded-xl">
+            <MessageSquare size={16} strokeWidth={1.75} />
+          </Link>
+          <Link href="/tasks" className="p-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl">
+            <CheckCircle2 size={16} strokeWidth={1.75} />
+          </Link>
+        </div>
       </div>
 
       {/* Input card */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 lg:p-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-gray-700">What would you like Pari AI to do?</p>
-          <button className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all">
+          <button className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all">
             <Sparkles size={13} strokeWidth={1.75} /> Smart Mode <ChevronDown size={13} strokeWidth={1.75} />
           </button>
         </div>
@@ -139,26 +153,22 @@ export default function Dashboard() {
           onChange={e => setTask(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), go())}
           placeholder="Describe your task in natural language..."
-          rows={3}
-          className="w-full p-4 text-sm bg-gray-50 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all"
+          rows={2}
+          className="w-full p-3 lg:p-4 text-sm bg-gray-50 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all"
         />
-        <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
-          <div className="flex gap-2 flex-wrap">
-            {["Analyze Data","Web Research","Create Content","Automate","Code"].map(q => (
+        <div className="flex items-center justify-between mt-3 gap-2">
+          <div className="flex gap-1.5 flex-wrap">
+            {["Analyze Data","Web Research","Create Content","Code"].map(q => (
               <button key={q} onClick={() => setTask(q)}
-                className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-lg transition-all">
+                className="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 rounded-lg transition-all">
                 {q}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <button className="p-2 text-gray-400 hover:text-gray-600"><Paperclip size={16} strokeWidth={1.75} /></button>
-            <button className="p-2 text-gray-400 hover:text-gray-600"><Mic size={16} strokeWidth={1.75} /></button>
-            <button onClick={go} disabled={!task.trim()}
-              className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center">
-              <Send size={16} strokeWidth={2} />
-            </button>
-          </div>
+          <button onClick={go} disabled={!task.trim()}
+            className="w-9 h-9 flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center">
+            <Send size={15} strokeWidth={2} />
+          </button>
         </div>
       </div>
 
@@ -315,17 +325,36 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-2">
             {quickActions.map(a => (
-              <button key={a.label} className="flex items-center gap-2 p-3 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl text-xs text-gray-600 transition-all">
+              <Link key={a.label} href={a.href} className="flex items-center gap-2 p-3 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl text-xs text-gray-600 transition-all">
                 <a.icon size={14} strokeWidth={1.75} /> {a.label}
-              </button>
+              </Link>
             ))}
           </div>
           <div className="mt-4 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl">
             <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1.5"><Lightbulb size={13} strokeWidth={1.75} /> Tips & Suggestions</p>
             <p className="text-xs text-gray-600 mt-1">Automate repetitive tasks to save more time each week.</p>
-            <button className="mt-2 text-xs text-indigo-600 font-medium hover:underline">Create Automation →</button>
+            <Link href="/automation" className="mt-2 inline-block text-xs text-indigo-600 font-medium hover:underline">Create Automation →</Link>
           </div>
         </div>
+      </div>
+
+      {/* Architecture status row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "Obsidian Memory", desc: "Vault sync", href: "/knowledge", dot: "bg-yellow-400", status: "Setup needed" },
+          { label: "Hermes MCP", desc: "Tool gateway", href: "/devtools", dot: "bg-yellow-400", status: "Setup needed" },
+          { label: "Telegram Bot", desc: "@sadi_jarvis_bot", href: "/settings", dot: "bg-green-500", status: "Connected" },
+          { label: "AI Providers", desc: "4 providers", href: "/apis", dot: "bg-green-500", status: "Active" },
+        ].map(s => (
+          <Link key={s.label} href={s.href} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:border-gray-200 transition-all">
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
+              <p className="text-xs font-semibold text-gray-900 truncate">{s.label}</p>
+            </div>
+            <p className="text-xs text-gray-500">{s.desc}</p>
+            <p className={`text-xs mt-1 font-medium ${s.status === "Connected" || s.status === "Active" ? "text-green-600" : "text-yellow-600"}`}>{s.status}</p>
+          </Link>
+        ))}
       </div>
     </div>
   );

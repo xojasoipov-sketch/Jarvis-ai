@@ -1,9 +1,16 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Search, Plus, Bell, ChevronDown, Menu } from "lucide-react";
 
 export default function Header({ onMenu }: { onMenu?: () => void }) {
   const [search, setSearch] = useState("");
+  const router = useRouter();
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (search.trim()) router.push(`/chat?q=${encodeURIComponent(search.trim())}`);
+  }
   return (
     <header className="h-14 bg-white border-b border-gray-100 flex items-center px-4 lg:px-6 gap-3 flex-shrink-0">
       <button
@@ -13,19 +20,19 @@ export default function Header({ onMenu }: { onMenu?: () => void }) {
         <Menu size={18} strokeWidth={1.75} />
       </button>
 
-      <div className="flex-1 max-w-xl relative">
+      <form onSubmit={handleSearch} className="flex-1 max-w-xl relative">
         <Search size={15} strokeWidth={1.75} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search anything..."
+          placeholder="Search or ask AI anything..."
           className="w-full pl-9 pr-16 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all"
         />
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 bg-white border border-gray-200 rounded px-1.5 py-0.5 hidden sm:block">⌘K</span>
-      </div>
+      </form>
 
       <div className="ml-auto flex items-center gap-2">
-        <button className="hidden sm:flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-all">
+        <button onClick={() => router.push("/tasks")} className="hidden sm:flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-all">
           <Plus size={15} strokeWidth={2} /> New Task
         </button>
         <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-xl">

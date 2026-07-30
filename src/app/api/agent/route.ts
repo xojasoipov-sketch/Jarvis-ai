@@ -57,6 +57,7 @@ Jadval tuzish, eslatmalar, ish oqimini optimallashtirish kabi ishlarni bajarasan
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || "";
 const MISTRAL_KEY = process.env.MISTRAL_API_KEY || "";
 const GROQ_KEY = process.env.GROQ_API_KEY || "";
+const CEREBRAS_KEY = process.env.CEREBRAS_API_KEY || "";
 
 async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
   const providers = [
@@ -75,6 +76,11 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
       url: "https://api.groq.com/openai/v1/chat/completions",
       key: GROQ_KEY,
       model: "llama-3.3-70b-versatile",
+    },
+    CEREBRAS_KEY && {
+      url: "https://api.cerebras.ai/v1/chat/completions",
+      key: CEREBRAS_KEY,
+      model: "llama-3.3-70b",
     },
   ].filter(Boolean) as Array<{ url: string; key: string; model: string; extra?: Record<string, string> }>;
 
@@ -97,12 +103,31 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
   return "Kechirasiz, javob olishda xato yuz berdi.";
 }
 
+async function fetchMemoryContext(task: string): Promise<string> {
+  try {
+    const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const res = await fetch(`${base}/api/memory?q=${encodeURIComponent(task.slice(0, 100))}`);
+    if (!res.ok) return "";
+    const data = await res.json();
+    const items = data.items || data.results || [];
+    if (!items.length) return "";
+    return items.slice(0, 3).map((m: { title: string; content: string }) =>
+      `[Xotira: ${m.title}] ${m.content.slice(0, 200)}`
+    ).join("\n");
+  } catch { return ""; }
+}
+
 export async function POST(req: NextRequest) {
-  const { agentId, task, context } = await req.json();
+  const { agentId, task, context, useMemory } = await req.json();
   const agent = AGENTS[agentId as keyof typeof AGENTS];
   if (!agent) return NextResponse.json({ error: "Agent topilmadi" }, { status: 400 });
 
-  const userMsg = context ? `Kontekst: ${context}\n\nVazifa: ${task}` : task;
+  let memCtx = context || "";
+  if (!memCtx && useMemory !== false) {
+    memCtx = await fetchMemoryContext(task);
+  }
+
+  const userMsg = memCtx ? `Kontekst:\n${memCtx}\n\nVazifa: ${task}` : task;
   const result = await callAI(agent.prompt, userMsg);
 
   return NextResponse.json({ agent: agent.name, icon: agent.icon, result, agentId });
