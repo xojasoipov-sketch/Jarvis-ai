@@ -3,13 +3,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutGrid, MessageSquare, History, Bot, CheckSquare, FolderKanban, BookOpen, Brain,
-  Zap, Calendar, FolderOpen, BarChart3, Code2, Database, Plug,
+  Zap, Calendar, FolderOpen, BarChart3, Code2, Database, Plug, Sparkles,
   Wrench, Settings, ShieldCheck, CreditCard, ScrollText, ChevronDown, X, type LucideIcon,
 } from "lucide-react";
 
 type NavEntry = { label: string; href: string; icon: LucideIcon };
 
 const nav: NavEntry[] = [
+  { label: "Pari", href: "/pari", icon: Sparkles },
   { label: "Dashboard", href: "/", icon: LayoutGrid },
   { label: "Chat with AI", href: "/chat", icon: MessageSquare },
   { label: "History", href: "/history", icon: History },
