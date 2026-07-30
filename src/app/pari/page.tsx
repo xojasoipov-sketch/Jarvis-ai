@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Mic, Radio, Send } from "lucide-react";
+import { Mic, Radio, Send, AlertCircle } from "lucide-react";
 import NeuralButterfly from "@/components/NeuralButterfly";
 import { useJarvisVoice } from "@/hooks/useJarvisVoice";
 import type { MemoryNode } from "@/app/api/pari/nodes/route";
@@ -14,11 +14,11 @@ const TYPE_LABEL: Record<MemoryNode["type"], string> = {
 };
 
 const STATE_LABEL: Record<string, string> = {
-  asleep: "Bosing va gapiring",
-  waking: "Eshityapman...",
+  asleep:    "Bosing va gapiring",
+  waking:    "Eshityapman...",
   listening: "Tinglayapman...",
-  thinking: "O'ylayapman...",
-  speaking: "Javob beryapman...",
+  thinking:  "O'ylayapman...",
+  speaking:  "Javob beryapman...",
 };
 
 async function askPariText(text: string): Promise<string> {
@@ -34,7 +34,7 @@ async function askPariText(text: string): Promise<string> {
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    full += decoder.decode(value);
+    full += decoder.decode(value, { stream: true });
   }
   return full.trim() || "Javob bo'sh qaytdi.";
 }
@@ -55,7 +55,14 @@ export default function PariPage() {
 
   const jarvis = useJarvisVoice();
 
-  async function sendTyped() {
+  // Clear error after 4 seconds
+  useEffect(() => {
+    if (!jarvis.error) return;
+    const t = setTimeout(() => {}, 4000);
+    return () => clearTimeout(t);
+  }, [jarvis.error]);
+
+  const sendTyped = useCallback(async () => {
     const msg = typed.trim();
     if (!msg || busy) return;
     setTyped("");
@@ -64,10 +71,13 @@ export default function PariPage() {
     const answer = await askPariText(msg);
     setTextAnswer(answer);
     setBusy(false);
-  }
+  }, [typed, busy]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Xayrli tong" : hour < 17 ? "Xayrli kun" : "Xayrli kech";
+
+  const isActive = jarvis.active;
+  const isDisabled = !jarvis.supported || jarvis.state === "thinking" || jarvis.state === "speaking";
 
   return (
     <div className="fade-in max-w-4xl mx-auto">
@@ -79,13 +89,13 @@ export default function PariPage() {
           <p className="text-sm text-[#a99bf5]">{greeting}, Sadi</p>
           <h1 className="text-2xl font-bold text-white mt-1">Pari</h1>
 
-          {/* Butterfly — click to speak, click again to stop */}
-          <div className="my-4 mx-auto" style={{ width: "min(100%, 380px)", height: "min(80vw, 380px)" }}>
+          {/* Butterfly */}
+          <div className="my-4 mx-auto" style={{ width: "min(100%, 360px)", height: "min(80vw, 360px)" }}>
             <button
               onClick={jarvis.toggle}
-              disabled={!jarvis.supported || jarvis.state === "thinking" || jarvis.state === "speaking"}
-              className="w-full h-full cursor-pointer disabled:cursor-default"
-              aria-label={jarvis.active ? "To'xtatish" : "Bosing va gapiring"}
+              disabled={isDisabled}
+              className="w-full h-full cursor-pointer disabled:cursor-default focus:outline-none"
+              aria-label={isActive ? "To'xtatish" : "Bosing va gapiring"}
             >
               <NeuralButterfly state={jarvis.state} nodes={nodes} level={jarvis.level} />
             </button>
@@ -96,9 +106,17 @@ export default function PariPage() {
             {STATE_LABEL[jarvis.state]}
           </p>
 
+          {/* Error message */}
+          {jarvis.error && (
+            <div className="mt-2 flex items-center justify-center gap-1.5 text-xs text-red-400">
+              <AlertCircle size={13} strokeWidth={2} />
+              {jarvis.error}
+            </div>
+          )}
+
           {/* Node count */}
           {nodes.length > 0 && (
-            <p className="text-xs text-white/30 mt-1">
+            <p className="text-xs text-white/30 mt-1.5">
               {nodes.length} ta xotira —{" "}
               {Object.entries(counts)
                 .map(([type, n]) => `${n} ${TYPE_LABEL[type as MemoryNode["type"]]}`)
@@ -106,36 +124,43 @@ export default function PariPage() {
             </p>
           )}
 
-          {/* Conversation toggle status */}
-          {jarvis.supported && (
+          {/* Toggle button */}
+          {jarvis.supported ? (
             <button
               onClick={jarvis.toggle}
-              className={`mt-5 inline-flex items-center gap-2 text-xs font-medium px-4 py-2 rounded-full border transition-all ${
-                jarvis.active
+              disabled={isDisabled}
+              className={`mt-5 inline-flex items-center gap-2 text-xs font-medium px-5 py-2.5 rounded-full border transition-all disabled:opacity-40 ${
+                isActive
                   ? "bg-[#8b7bf0]/20 border-[#8b7bf0] text-[#c7bdf7]"
-                  : "bg-white/5 border-white/15 text-white/50 hover:text-white/70"
+                  : "bg-white/5 border-white/15 text-white/50 hover:text-white/70 hover:border-white/30"
               }`}
             >
-              <Radio size={12} strokeWidth={2} className={jarvis.active ? "animate-pulse" : ""} />
-              {jarvis.active ? "Tinglayapman" : "Boshlash"}
+              <Radio
+                size={12}
+                strokeWidth={2}
+                className={isActive && jarvis.state === "listening" ? "animate-pulse" : ""}
+              />
+              {isActive
+                ? jarvis.state === "thinking" ? "O'ylayapman..."
+                  : jarvis.state === "speaking" ? "Javob beryapman..."
+                  : "Tinglayapman — to'xtatish uchun bos"
+                : "Ovoz bilan gapirish"}
             </button>
-          )}
-
-          {!jarvis.supported && (
+          ) : (
             <p className="mt-4 text-xs text-white/40">
               Mikrofon ruxsati yo&apos;q — pastdan yozing.
             </p>
           )}
         </div>
 
-        {/* Text input — shows text reply (voice shows no text) */}
+        {/* Text input */}
         <div className="relative z-10 border-t border-white/10 bg-black/20 px-5 py-4">
           <div className="flex items-center gap-2 max-w-xl mx-auto">
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendTyped()}
-              placeholder="Yozib ham so'rashingiz mumkin..."
+              placeholder="Yoki shu yerga yozing..."
               className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#8b7bf0]/50"
             />
             <button
