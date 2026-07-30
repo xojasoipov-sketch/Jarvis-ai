@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -111,9 +111,27 @@ function DonutChart() {
   );
 }
 
+type LiveStatus = { vault: boolean; hermes: boolean; telegram: boolean };
+
 export default function Dashboard() {
   const [task, setTask] = useState("");
   const router = useRouter();
+  const [live, setLive] = useState<LiveStatus | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const [obs, mcp, tg] = await Promise.all([
+        fetch("/api/obsidian").then(r => r.json()).catch(() => ({ configured: false })),
+        fetch("/api/mcp").then(r => r.json()).catch(() => ({ configured: false })),
+        fetch("/api/telegram/debug").then(r => r.ok).catch(() => false),
+      ]);
+      setLive({
+        vault: Boolean(obs.configured && !obs.error),
+        hermes: Boolean(mcp.configured),
+        telegram: Boolean(tg),
+      });
+    })();
+  }, []);
 
   const go = () => {
     if (task.trim()) router.push(`/chat?q=${encodeURIComponent(task)}`);
@@ -338,21 +356,30 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Architecture status row */}
+      {/* Architecture status row — live, not hardcoded */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Obsidian Memory", desc: "Vault sync", href: "/knowledge", dot: "bg-yellow-400", status: "Setup needed" },
-          { label: "Hermes MCP", desc: "Tool gateway", href: "/devtools", dot: "bg-yellow-400", status: "Setup needed" },
-          { label: "Telegram Bot", desc: "@sadi_jarvis_bot", href: "/settings", dot: "bg-green-500", status: "Connected" },
-          { label: "AI Providers", desc: "4 providers", href: "/apis", dot: "bg-green-500", status: "Active" },
+          {
+            label: "Obsidian Vault", desc: "GitHub-asosli xotira", href: "/knowledge",
+            connected: live?.vault, status: live === null ? "Tekshirilmoqda..." : live.vault ? "Ulangan" : "Sozlanmagan",
+          },
+          {
+            label: "Hermes Vositalar", desc: "Built-in MCP tools", href: "/knowledge",
+            connected: live?.hermes, status: live === null ? "Tekshirilmoqda..." : live.hermes ? "Faol" : "O'chirilgan",
+          },
+          {
+            label: "Telegram Bot", desc: "Mobil kirish kanali", href: "/settings",
+            connected: live?.telegram, status: live === null ? "Tekshirilmoqda..." : live.telegram ? "Ulangan" : "Sozlanmagan",
+          },
+          { label: "AI Providers", desc: "4 provayder", href: "/apis", connected: true, status: "Faol" },
         ].map(s => (
           <Link key={s.label} href={s.href} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:border-gray-200 transition-all">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.connected === true ? "bg-green-500" : s.connected === false ? "bg-yellow-400" : "bg-gray-300 animate-pulse"}`} />
               <p className="text-xs font-semibold text-gray-900 truncate">{s.label}</p>
             </div>
             <p className="text-xs text-gray-500">{s.desc}</p>
-            <p className={`text-xs mt-1 font-medium ${s.status === "Connected" || s.status === "Active" ? "text-green-600" : "text-yellow-600"}`}>{s.status}</p>
+            <p className={`text-xs mt-1 font-medium ${s.connected === true ? "text-green-600" : s.connected === false ? "text-yellow-600" : "text-gray-400"}`}>{s.status}</p>
           </Link>
         ))}
       </div>
