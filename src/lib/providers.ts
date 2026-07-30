@@ -35,7 +35,7 @@ export function getProviders(): Provider[] {
   // 4. Gemini via OpenRouter's free tier
   if (process.env.OPENROUTER_API_KEY) {
     list.push({
-      name: "openrouter-gemini",
+      name: "openrouter",
       url: "https://openrouter.ai/api/v1/chat/completions",
       key: process.env.OPENROUTER_API_KEY,
       model: "google/gemini-2.0-flash-exp:free",

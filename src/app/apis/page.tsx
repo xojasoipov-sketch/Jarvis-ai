@@ -19,16 +19,32 @@ const APIS = [
   { id: "supabase", name: "Supabase", desc: "Tasks/Projects ma'lumotlar bazasi", envKey: "SUPABASE_URL", url: "https://supabase.com", cat: "Database" },
 ];
 
+const AI_IDS = new Set(APIS.filter((a) => a.cat === "AI").map((a) => a.id));
+
 export default function ApisPage() {
   const [statuses, setStatuses] = useState<Record<string, Status>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  async function testApi(id: string, endpoint: string) {
+  async function testApi(id: string) {
     setStatuses((s) => ({ ...s, [id]: "checking" }));
+    setErrors((e) => ({ ...e, [id]: "" }));
     try {
-      const res = await fetch(endpoint, { signal: AbortSignal.timeout(4000) });
-      setStatuses((s) => ({ ...s, [id]: res.ok ? "ok" : "error" }));
-    } catch {
+      if (AI_IDS.has(id)) {
+        const r = await fetch(`/api/providers/test?name=${id}`, { signal: AbortSignal.timeout(12000) });
+        const d = await r.json();
+        setStatuses((s) => ({ ...s, [id]: d.ok ? "ok" : "error" }));
+        if (!d.ok) setErrors((e) => ({ ...e, [id]: d.error || "Key sozlanmagan" }));
+        return;
+      }
+      const endpoint = endpoints[id] || "";
+      const r = await fetch(endpoint, { signal: AbortSignal.timeout(5000) });
+      const d = await r.json().catch(() => ({}));
+      const ok = r.ok && d.configured !== false && !d.error;
+      setStatuses((s) => ({ ...s, [id]: ok ? "ok" : "error" }));
+      if (!ok) setErrors((e) => ({ ...e, [id]: d.error || "Sozlanmagan" }));
+    } catch (err) {
       setStatuses((s) => ({ ...s, [id]: "error" }));
+      setErrors((e) => ({ ...e, [id]: (err as Error).message }));
     }
   }
 
@@ -36,6 +52,7 @@ export default function ApisPage() {
     obsidian: "/api/obsidian",
     hermes: "/api/mcp",
     telegram: "/api/telegram/debug",
+    supabase: "/api/tasks",
   };
 
   const cats = [...new Set(APIS.map((a) => a.cat))];
@@ -71,13 +88,16 @@ export default function ApisPage() {
                     {api.envKey && (
                       <code className="text-xs text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded mt-1 inline-block">{api.envKey}</code>
                     )}
+                    {errors[api.id] && (
+                      <p className="text-xs text-red-500 mt-1 truncate">{errors[api.id]}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {st === "ok" && <CheckCircle2 size={16} strokeWidth={1.75} className="text-green-500" />}
                     {st === "error" && <XCircle size={16} strokeWidth={1.75} className="text-red-400" />}
                     {st === "checking" && <RefreshCw size={16} strokeWidth={1.75} className="text-indigo-400 animate-spin" />}
                     <button
-                      onClick={() => testApi(api.id, endpoints[api.id] || "/api/chat")}
+                      onClick={() => testApi(api.id)}
                       disabled={st === "checking"}
                       className="text-xs px-3 py-1.5 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600 text-gray-600 rounded-lg transition-all"
                     >

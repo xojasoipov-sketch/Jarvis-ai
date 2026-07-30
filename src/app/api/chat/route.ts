@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { toolsAsOpenAIFunctions, runTool } from "@/lib/tools";
 import { getProviders, type Provider } from "@/lib/providers";
+import { log } from "@/lib/logger";
 
 const SYSTEM = `Sen Pari AI — Sadining shaxsiy AI yordamchisissan. Arxitektura:
 - Ko'p agentli tizim (CEO, Researcher, Coder, Analyst, Writer, Marketing, DevOps, Assistant)
@@ -82,9 +83,13 @@ function textStream(text: string): Response {
 }
 
 export async function POST(req: NextRequest) {
+  const start = Date.now();
   const { messages, system } = await req.json();
   const list = getProviders();
-  if (!list.length) return NextResponse.json({ error: "API key sozlanmagan" }, { status: 500 });
+  if (!list.length) {
+    log("error", "chat-api", "POST /api/chat — 500 — hech qanday provider key sozlanmagan");
+    return NextResponse.json({ error: "API key sozlanmagan" }, { status: 500 });
+  }
 
   const baseSystem = system || SYSTEM;
 
@@ -94,9 +99,10 @@ export async function POST(req: NextRequest) {
     try {
       const convo: ChatMessage[] = [{ role: "system", content: baseSystem }, ...messages];
       const finalText = await runToolLoop(toolProvider, convo);
+      log("info", "chat-api", `POST /api/chat — 200 OK (${((Date.now() - start) / 1000).toFixed(1)}s) — ${toolProvider.name}/${toolProvider.model}`);
       return textStream(finalText);
     } catch {
-      // fall through to plain streaming providers below
+      log("warn", "chat-api", `${toolProvider.name} tool-loop xato berdi, boshqa providerga o'tildi`);
     }
   }
 
@@ -118,6 +124,7 @@ export async function POST(req: NextRequest) {
       });
       if (!res.ok) continue;
 
+      log("info", "chat-api", `POST /api/chat — 200 OK (${((Date.now() - start) / 1000).toFixed(1)}s) — ${p.name}/${p.model}`);
       const enc = new TextEncoder();
       return new Response(new ReadableStream({
         async start(ctrl) {
@@ -140,5 +147,6 @@ export async function POST(req: NextRequest) {
       }), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
     } catch { continue; }
   }
+  log("error", "chat-api", "POST /api/chat — 500 — barcha provayderlar ishlamadi");
   return NextResponse.json({ error: "Barcha provayderlar ishlamadi" }, { status: 500 });
 }

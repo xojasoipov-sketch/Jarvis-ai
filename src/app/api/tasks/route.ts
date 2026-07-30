@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, dbConfigured } from "@/lib/supabase";
+import { log } from "@/lib/logger";
 
 export async function GET() {
   if (!dbConfigured) return NextResponse.json({ tasks: [], configured: false });
@@ -14,7 +15,8 @@ export async function POST(req: NextRequest) {
   const { title, description = "", priority = "medium", agent } = body;
   if (!title) return NextResponse.json({ error: "title kerak" }, { status: 400 });
   const { data, error } = await supabase!.from("pari_tasks").insert({ title, description, priority, agent }).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { log("error", "tasks", `Vazifa yaratilmadi: ${error.message}`); return NextResponse.json({ error: error.message }, { status: 500 }); }
+  log("info", "tasks", `Yangi vazifa yaratildi: "${title}"`);
   return NextResponse.json({ task: data });
 }
 

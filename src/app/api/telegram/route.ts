@@ -20,6 +20,7 @@ const MAIN_KEYBOARD = {
   ],
 };
 import { getSession, updateSession, addToHistory, clearHistory } from "@/lib/session-store";
+import { log } from "@/lib/logger";
 
 const AGENT_NAMES: Record<string, string> = {
   ceo: "👔 CEO Agent", researcher: "🔬 Research Agent", coder: "💻 Coding Agent",
@@ -212,6 +213,7 @@ export async function POST(req: NextRequest) {
 
     if (update.message?.text) {
       const { chat, text, from } = update.message;
+      log("info", "telegram", `Xabar qabul qilindi: "${text.slice(0, 60)}" from @${from.first_name}`);
       await handleMessage(chat.id, text, from.first_name);
     }
 
@@ -223,6 +225,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("Telegram webhook error:", e);
+    log("error", "telegram", `Webhook xatosi: ${(e as Error).message}`);
     return NextResponse.json({ ok: false }, { status: 200 }); // Telegram 200 talab qiladi
   }
 }
