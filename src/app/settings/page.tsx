@@ -115,8 +115,8 @@ export default function SettingsPage() {
               <Brain size={18} strokeWidth={1.75} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-900">Obsidian Vault</p>
-              <p className="text-xs text-gray-500">Pari AI xotirasi — bilim bazasi</p>
+              <p className="text-sm font-semibold text-gray-900">Vault (Xotira)</p>
+              <p className="text-xs text-gray-500">Pari AI xotirasi — GitHub-asosli bilim bazasi</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -128,19 +128,19 @@ export default function SettingsPage() {
         </div>
         <div className="px-5 py-4 space-y-4">
           <div className="bg-gray-50 rounded-xl p-4 text-xs space-y-2">
-            <p className="font-semibold text-gray-700">Railway Variables'da o'rnating:</p>
+            <p className="font-semibold text-gray-700">Railway Variables&apos;da o&apos;rnating (bulutli vault, lokal server shart emas):</p>
             <div className="flex items-center gap-2 font-mono text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-100">
-              <span className="flex-1 truncate">OBSIDIAN_URL=http://your-local-ip:27123</span>
-              <CopyBtn text="OBSIDIAN_URL=http://your-local-ip:27123" />
+              <span className="flex-1 truncate">GITHUB_TOKEN=ghp_...</span>
+              <CopyBtn text="GITHUB_TOKEN=ghp_..." />
             </div>
             <div className="flex items-center gap-2 font-mono text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-100">
-              <span className="flex-1 truncate">OBSIDIAN_API_KEY=your-obsidian-rest-key</span>
-              <CopyBtn text="OBSIDIAN_API_KEY=your-obsidian-rest-key" />
+              <span className="flex-1 truncate">GITHUB_VAULT_REPO=owner/repo</span>
+              <CopyBtn text="GITHUB_VAULT_REPO=owner/repo" />
             </div>
-            <p className="text-gray-500">Obsidian → Community Plugins → <strong>Local REST API</strong> o'rnating</p>
-            <a href="https://github.com/coddingtonbear/obsidian-local-rest-api" target="_blank" rel="noreferrer"
+            <p className="text-gray-500">Eslatmalar shu repo&apos;dagi <strong>/vault</strong> papkasida saqlanadi. Obsidian ilovasida ko&apos;rish uchun (ixtiyoriy) <strong>Obsidian Git</strong> plagini bilan sync qiling.</p>
+            <a href="https://github.com/Vinzent03/obsidian-git" target="_blank" rel="noreferrer"
               className="inline-flex items-center gap-1 text-indigo-600 hover:underline">
-              Plugin GitHub <ExternalLink size={11} />
+              Obsidian Git plagini <ExternalLink size={11} />
             </a>
           </div>
           {obsStatus === "ok" && (
@@ -170,8 +170,8 @@ export default function SettingsPage() {
               <Zap size={18} strokeWidth={1.75} className="text-orange-500" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-900">Hermes MCP Gateway</p>
-              <p className="text-xs text-gray-500">Lokal MCP vositalar ko'prigi</p>
+              <p className="text-sm font-semibold text-gray-900">Hermes — MCP Vositalar</p>
+              <p className="text-xs text-gray-500">Built-in vositalar — Railway serverida ishlaydi</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -183,19 +183,17 @@ export default function SettingsPage() {
         </div>
         <div className="px-5 py-4 space-y-4">
           <div className="bg-gray-50 rounded-xl p-4 text-xs space-y-2">
-            <p className="font-semibold text-gray-700">Railway Variables'da o'rnating:</p>
+            <p className="font-semibold text-gray-700">Doim yoqilgan, sozlash shart emas:</p>
+            <p className="text-gray-500">calculator, datetime, web_fetch va vault_read/write/search/list vositalari to&apos;g&apos;ridan-to&apos;g&apos;ri Railway serverida ishlaydi.</p>
+            <p className="font-semibold text-gray-700 pt-1">Ixtiyoriy — tashqi Hermes gateway&apos;ga ulanish:</p>
             <div className="flex items-center gap-2 font-mono text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-100">
-              <span className="flex-1 truncate">HERMES_URL=http://your-local-ip:8080</span>
-              <CopyBtn text="HERMES_URL=http://your-local-ip:8080" />
+              <span className="flex-1 truncate">HERMES_URL=https://your-hermes-host</span>
+              <CopyBtn text="HERMES_URL=https://your-hermes-host" />
             </div>
             <div className="flex items-center gap-2 font-mono text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-100">
               <span className="flex-1 truncate">HERMES_KEY=your-hermes-secret</span>
               <CopyBtn text="HERMES_KEY=your-hermes-secret" />
             </div>
-            <a href="https://github.com/nwiizo/hermes" target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-1 text-indigo-600 hover:underline">
-              Hermes GitHub <ExternalLink size={11} />
-            </a>
           </div>
           {hermesStatus === "ok" && mcpTools.length > 0 && (
             <div>

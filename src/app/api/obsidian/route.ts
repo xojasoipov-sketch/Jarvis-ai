@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { vaultConfigured, listVault, readVaultFile, writeVaultFile, deleteVaultFile, searchVault } from "@/lib/githubVault";
 
-const BASE = (process.env.OBSIDIAN_URL || "").replace(/\/$/, "");
-// Support both OBSIDIAN_KEY and OBSIDIAN_API_KEY
-const KEY = process.env.OBSIDIAN_API_KEY || process.env.OBSIDIAN_KEY || "";
+const LOCAL_BASE = (process.env.OBSIDIAN_URL || "").replace(/\/$/, "");
+const LOCAL_KEY = process.env.OBSIDIAN_API_KEY || process.env.OBSIDIAN_KEY || "";
 
-function headers(extra: Record<string, string> = {}): Record<string, string> {
+function localHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const h: Record<string, string> = { ...extra };
-  if (KEY) h["Authorization"] = `Bearer ${KEY}`;
+  if (LOCAL_KEY) h["Authorization"] = `Bearer ${LOCAL_KEY}`;
   return h;
 }
+
+const configured = Boolean(LOCAL_BASE) || vaultConfigured;
 
 // GET /api/obsidian             — list vault root
 // GET /api/obsidian?path=dir/  — list directory
 // GET /api/obsidian?file=note.md — read file content
 // GET /api/obsidian?search=q   — search vault
 export async function GET(req: NextRequest) {
-  if (!BASE) return NextResponse.json({ error: "OBSIDIAN_URL o'rnatilmagan", configured: false });
+  if (!configured) return NextResponse.json({ error: "Vault sozlanmagan (GITHUB_TOKEN kerak)", configured: false });
 
   const { searchParams } = new URL(req.url);
   const file = searchParams.get("file");
@@ -23,73 +25,88 @@ export async function GET(req: NextRequest) {
   const path = searchParams.get("path") || "/";
 
   try {
-    // Read a specific file
+    if (LOCAL_BASE) {
+      if (file) {
+        const res = await fetch(`${LOCAL_BASE}/vault/${encodeURIComponent(file)}`, {
+          headers: localHeaders({ Accept: "text/markdown" }),
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) return NextResponse.json({ error: res.statusText }, { status: res.status });
+        return NextResponse.json({ content: await res.text(), file, configured: true, backend: "local" });
+      }
+      if (search) {
+        const res = await fetch(
+          `${LOCAL_BASE}/search/simple/?query=${encodeURIComponent(search)}&contextLength=300`,
+          { headers: localHeaders(), signal: AbortSignal.timeout(8000) }
+        );
+        if (!res.ok) return NextResponse.json({ results: [], configured: true, backend: "local" });
+        return NextResponse.json({ results: await res.json(), configured: true, backend: "local" });
+      }
+      const url = path === "/" ? `${LOCAL_BASE}/vault/` : `${LOCAL_BASE}/vault/${path.replace(/^\//, "")}`;
+      const res = await fetch(url, { headers: localHeaders(), signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return NextResponse.json({ error: res.statusText, files: [], configured: true, backend: "local" }, { status: res.status });
+      const data = await res.json();
+      const files = Array.isArray(data) ? data : (data.files || data.vaultFiles || []);
+      return NextResponse.json({ files, configured: true, backend: "local" });
+    }
+
+    // GitHub-backed vault (default, cloud-only, no local server needed)
     if (file) {
-      const res = await fetch(`${BASE}/vault/${encodeURIComponent(file)}`, {
-        headers: headers({ Accept: "text/markdown" }),
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) return NextResponse.json({ error: res.statusText }, { status: res.status });
-      const content = await res.text();
-      return NextResponse.json({ content, file, configured: true });
+      const content = await readVaultFile(file);
+      return NextResponse.json({ content, file, configured: true, backend: "github" });
     }
-
-    // Full-text search
     if (search) {
-      const res = await fetch(
-        `${BASE}/search/simple/?query=${encodeURIComponent(search)}&contextLength=300`,
-        { headers: headers(), signal: AbortSignal.timeout(8000) }
-      );
-      if (!res.ok) return NextResponse.json({ results: [], configured: true });
-      const results = await res.json();
-      return NextResponse.json({ results, configured: true });
+      const results = await searchVault(search);
+      return NextResponse.json({ results, configured: true, backend: "github" });
     }
-
-    // List directory / vault root
-    const url = path === "/" ? `${BASE}/vault/` : `${BASE}/vault/${path.replace(/^\//, "")}`;
-    const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return NextResponse.json({ error: res.statusText, files: [], configured: true }, { status: res.status });
-    const data = await res.json();
-    // Normalize: both { files: [] } and plain array formats
-    const files = Array.isArray(data) ? data : (data.files || data.vaultFiles || []);
-    return NextResponse.json({ files, configured: true });
-  } catch {
-    return NextResponse.json({ error: "Obsidian ulanmadi", configured: true }, { status: 503 });
+    const entries = await listVault(path === "/" ? "" : path);
+    const files = entries.map((e) => ({ path: e.path, type: e.type }));
+    return NextResponse.json({ files, configured: true, backend: "github" });
+  } catch (err) {
+    return NextResponse.json({ error: `Vault ulanmadi: ${(err as Error).message}`, configured: true }, { status: 503 });
   }
 }
 
 // POST /api/obsidian — write note  { path, content }
 export async function POST(req: NextRequest) {
-  if (!BASE) return NextResponse.json({ error: "OBSIDIAN_URL o'rnatilmagan" }, { status: 503 });
+  if (!configured) return NextResponse.json({ error: "Vault sozlanmagan" }, { status: 503 });
   const { path, content } = await req.json();
   if (!path || content === undefined) return NextResponse.json({ error: "path va content kerak" }, { status: 400 });
   try {
-    const res = await fetch(`${BASE}/vault/${encodeURIComponent(path)}`, {
-      method: "PUT",
-      headers: headers({ "Content-Type": "text/markdown" }),
-      body: content,
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return NextResponse.json({ error: res.statusText }, { status: res.status });
-    return NextResponse.json({ ok: true, path });
-  } catch {
-    return NextResponse.json({ error: "Obsidian ulanmadi" }, { status: 503 });
+    if (LOCAL_BASE) {
+      const res = await fetch(`${LOCAL_BASE}/vault/${encodeURIComponent(path)}`, {
+        method: "PUT",
+        headers: localHeaders({ "Content-Type": "text/markdown" }),
+        body: content,
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) return NextResponse.json({ error: res.statusText }, { status: res.status });
+      return NextResponse.json({ ok: true, path, backend: "local" });
+    }
+    await writeVaultFile(path, content);
+    return NextResponse.json({ ok: true, path, backend: "github" });
+  } catch (err) {
+    return NextResponse.json({ error: `Vault ulanmadi: ${(err as Error).message}` }, { status: 503 });
   }
 }
 
 // DELETE /api/obsidian?file=note.md
 export async function DELETE(req: NextRequest) {
-  if (!BASE) return NextResponse.json({ error: "OBSIDIAN_URL o'rnatilmagan" }, { status: 503 });
+  if (!configured) return NextResponse.json({ error: "Vault sozlanmagan" }, { status: 503 });
   const file = new URL(req.url).searchParams.get("file");
   if (!file) return NextResponse.json({ error: "file kerak" }, { status: 400 });
   try {
-    const res = await fetch(`${BASE}/vault/${encodeURIComponent(file)}`, {
-      method: "DELETE",
-      headers: headers(),
-      signal: AbortSignal.timeout(5000),
-    });
-    return NextResponse.json({ ok: res.ok });
-  } catch {
-    return NextResponse.json({ error: "Obsidian ulanmadi" }, { status: 503 });
+    if (LOCAL_BASE) {
+      const res = await fetch(`${LOCAL_BASE}/vault/${encodeURIComponent(file)}`, {
+        method: "DELETE",
+        headers: localHeaders(),
+        signal: AbortSignal.timeout(5000),
+      });
+      return NextResponse.json({ ok: res.ok, backend: "local" });
+    }
+    await deleteVaultFile(file);
+    return NextResponse.json({ ok: true, backend: "github" });
+  } catch (err) {
+    return NextResponse.json({ error: `Vault ulanmadi: ${(err as Error).message}` }, { status: 503 });
   }
 }

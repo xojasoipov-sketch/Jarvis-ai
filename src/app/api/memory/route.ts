@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { vaultConfigured, listVault, searchVault, writeVaultFile } from "@/lib/githubVault";
 
-// In-memory store as fallback when Obsidian isn't connected
+// In-memory store as fallback when the vault isn't connected
 const LOCAL_MEMORY: { id: string; title: string; content: string; tags: string[]; ts: number }[] = [
   { id: "1", title: "Pari AI Arxitektura", content: "Ko'p agentli tizim: CEO, Researcher, Coder, Analyst, Writer, Marketing, DevOps, Assistant agentlari parallel ishlaydi. Railway deploy, Next.js 16, Tailwind CSS v3.", tags: ["arxitektura", "ai", "agents"], ts: Date.now() - 86400000 },
   { id: "2", title: "Bepul AI Provayderlar", content: "OpenRouter (Gemini 2.0 Flash) → Mistral Large → Groq LLaMA 3.3 70B → Cerebras LLaMA 3.3 70B. Fallback chain: birinchisi ishlamasa keyingisi.", tags: ["ai", "providers", "free"], ts: Date.now() - 172800000 },
@@ -10,23 +11,41 @@ const OBSIDIAN_URL = process.env.OBSIDIAN_URL || "";
 const OBSIDIAN_KEY = process.env.OBSIDIAN_API_KEY || "";
 
 async function obsidianGet(path: string) {
-  if (!OBSIDIAN_URL) return null;
-  const res = await fetch(`${OBSIDIAN_URL}/vault${path}`, {
-    headers: { Authorization: `Bearer ${OBSIDIAN_KEY}` },
-  }).catch(() => null);
-  if (!res?.ok) return null;
-  return res.json().catch(() => null);
+  if (OBSIDIAN_URL) {
+    const res = await fetch(`${OBSIDIAN_URL}/vault${path}`, {
+      headers: { Authorization: `Bearer ${OBSIDIAN_KEY}` },
+    }).catch(() => null);
+    if (res?.ok) return res.json().catch(() => null);
+    return null;
+  }
+  if (vaultConfigured) {
+    try {
+      return await listVault(path === "/" ? "" : path.replace(/^\//, ""));
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 async function obsidianSearch(query: string) {
-  if (!OBSIDIAN_URL) return null;
-  const res = await fetch(`${OBSIDIAN_URL}/search/simple/?query=${encodeURIComponent(query)}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${OBSIDIAN_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  }).catch(() => null);
-  if (!res?.ok) return null;
-  return res.json().catch(() => null);
+  if (OBSIDIAN_URL) {
+    const res = await fetch(`${OBSIDIAN_URL}/search/simple/?query=${encodeURIComponent(query)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OBSIDIAN_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    }).catch(() => null);
+    if (res?.ok) return res.json().catch(() => null);
+    return null;
+  }
+  if (vaultConfigured) {
+    try {
+      return await searchVault(query);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 // GET /api/memory — list or search
@@ -36,7 +55,7 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get("q");
   const id = searchParams.get("id");
 
-  const obsidianConnected = !!OBSIDIAN_URL;
+  const obsidianConnected = !!OBSIDIAN_URL || vaultConfigured;
 
   // Search
   if (q) {
@@ -76,10 +95,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "title and content required" }, { status: 400 });
   }
 
-  // Try to save to Obsidian
+  // Try to save to the vault (local REST API, then GitHub-backed vault)
+  const safeTitle = title.replace(/[^a-zA-Z0-9Ѐ-ӿ\s-]/g, "");
+  const note = `# ${title}\n\nTags: ${tags.join(", ")}\n\n${content}`;
   if (OBSIDIAN_URL) {
-    const path = `/vault/${title.replace(/[^a-zA-Z0-9Ѐ-ӿ\s-]/g, "")}.md`;
-    const note = `# ${title}\n\nTags: ${tags.join(", ")}\n\n${content}`;
+    const path = `/vault/${safeTitle}.md`;
     const res = await fetch(`${OBSIDIAN_URL}${path}`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${OBSIDIAN_KEY}`, "Content-Type": "text/markdown" },
@@ -87,6 +107,14 @@ export async function POST(req: NextRequest) {
     }).catch(() => null);
     if (res?.ok) {
       return NextResponse.json({ saved: true, source: "obsidian", path });
+    }
+  } else if (vaultConfigured) {
+    try {
+      const path = `${safeTitle}.md`;
+      await writeVaultFile(path, note);
+      return NextResponse.json({ saved: true, source: "github-vault", path });
+    } catch {
+      // fall through to local memory
     }
   }
 
