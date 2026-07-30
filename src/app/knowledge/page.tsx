@@ -1,283 +1,406 @@
 "use client";
-import { useState } from "react";
-import { Plus, Sparkles, StickyNote, Globe, FileText, BookOpen, FolderOpen, Search, RefreshCw } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  Brain, Search, RefreshCw, FileText, FolderOpen, ChevronRight,
+  Plus, Send, X, AlertCircle, Zap, BookOpen, Clock,
+} from "lucide-react";
 
-type Doc = { id: number; title: string; type: "note" | "web" | "file"; content: string; tags: string[]; date: string };
-type VaultFile = { path: string };
-type VaultResult = { filename: string; score: number; context: string };
+type VaultFile = { path: string; stat?: { mtime: number; ctime: number; size: number } };
+type SearchResult = { filename: string; score: number; context?: string };
+type MemoryItem = { id?: string; title: string; content: string; createdAt?: number };
 
-const TYPE_ICONS = { note: StickyNote, web: Globe, file: FileText };
+type Tab = "vault" | "search" | "memory" | "hermes";
 
-const INIT_DOCS: Doc[] = [
-  { id: 1, title: "Pari AI Arxitektura", type: "note", content: "Ko'p agentli tizim: CEO, Researcher, Coder, Analyst, Writer, Marketing, DevOps, Assistant agentlari parallel ishlaydi. Multi-provider fallback: OpenRouter → Mistral → Groq → Cerebras.", tags: ["AI", "Arxitektura"], date: "2026-07-29" },
-  { id: 2, title: "Business Model Canvas", type: "note", content: "Value Proposition: Bitta AI platformasi barcha biznes vazifalarini bajaradi. Mijozlar: Kichik va o'rta bizneslar. Daromad: Subscription + API qo'ng'iroqlari.", tags: ["Biznes", "Model"], date: "2026-07-28" },
-  { id: 3, title: "Railway Deploy Qo'llanma", type: "web", content: "Railway.app — Node.js loyihalar uchun eng oson deploy platformasi. NIXPACKS builder ishlatiladi. Env vars dashboard orqali o'rnatiladi.", tags: ["DevOps", "Railway"], date: "2026-07-27" },
-];
+export default function KnowledgePage() {
+  const [tab, setTab] = useState<Tab>("vault");
+  const [configured, setConfigured] = useState<{ obsidian: boolean; hermes: boolean }>({ obsidian: false, hermes: false });
 
-function LocalNotes() {
-  const [docs, setDocs] = useState<Doc[]>(INIT_DOCS);
-  const [search, setSearch] = useState("");
-  const [showNew, setShowNew] = useState(false);
-  const [newDoc, setNewDoc] = useState({ title: "", content: "", tags: "" });
-  const [selected, setSelected] = useState<Doc | null>(null);
-  const [aiQuery, setAiQuery] = useState("");
-  const [aiAnswer, setAiAnswer] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-
-  const filtered = docs.filter((d) =>
-    d.title.toLowerCase().includes(search.toLowerCase()) ||
-    d.content.toLowerCase().includes(search.toLowerCase()) ||
-    d.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  function addDoc() {
-    if (!newDoc.title.trim()) return;
-    setDocs((prev) => [...prev, { id: Date.now(), title: newDoc.title, type: "note", content: newDoc.content, tags: newDoc.tags.split(",").map((t) => t.trim()).filter(Boolean), date: new Date().toISOString().slice(0, 10) }]);
-    setNewDoc({ title: "", content: "", tags: "" });
-    setShowNew(false);
-  }
-
-  async function askAI() {
-    if (!aiQuery.trim()) return;
-    setAiLoading(true);
-    setAiAnswer("");
-    const context = docs.map((d) => `[${d.title}]: ${d.content}`).join("\n\n");
-    try {
-      const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: `Knowledge base:\n${context}\n\nSavol: ${aiQuery}` }] }) });
-      const reader = res.body!.getReader();
-      const dec = new TextDecoder();
-      let text = "";
-      while (true) { const { done, value } = await reader.read(); if (done) break; text += dec.decode(value); setAiAnswer(text); }
-    } catch { setAiAnswer("Xato yuz berdi."); }
-    setAiLoading(false);
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 p-5">
-        <p className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><Sparkles size={15} strokeWidth={1.75} className="text-indigo-600" /> Knowledge base'dan so'rash</p>
-        <div className="flex gap-2">
-          <input value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && askAI()}
-            placeholder="Savol bering..."
-            className="flex-1 px-4 py-2.5 bg-white border border-indigo-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-          <button onClick={askAI} disabled={aiLoading || !aiQuery.trim()}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-all">
-            {aiLoading ? "..." : "So'rash"}
-          </button>
-        </div>
-        {aiAnswer && <div className="mt-4 p-4 bg-white rounded-xl border border-indigo-100 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{aiAnswer}</div>}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="col-span-1 space-y-3">
-          <div className="flex gap-2">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Qidirish..."
-              className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-            <button onClick={() => setShowNew(true)} className="px-3 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl transition-all">
-              <Plus size={15} strokeWidth={2} />
-            </button>
-          </div>
-          {showNew && (
-            <div className="bg-white rounded-2xl border border-indigo-200 p-4 space-y-2">
-              <input value={newDoc.title} onChange={(e) => setNewDoc((p) => ({ ...p, title: e.target.value }))} placeholder="Sarlavha..." className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none" />
-              <textarea value={newDoc.content} onChange={(e) => setNewDoc((p) => ({ ...p, content: e.target.value }))} placeholder="Mazmun..." rows={3} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none" />
-              <input value={newDoc.tags} onChange={(e) => setNewDoc((p) => ({ ...p, tags: e.target.value }))} placeholder="Teglar (vergul bilan)..." className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none" />
-              <div className="flex gap-2">
-                <button onClick={() => setShowNew(false)} className="flex-1 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg">Bekor</button>
-                <button onClick={addDoc} className="flex-1 py-2 bg-indigo-600 text-white text-xs rounded-lg">Saqlash</button>
-              </div>
-            </div>
-          )}
-          <div className="space-y-2">
-            {filtered.map((doc) => {
-              const Icon = TYPE_ICONS[doc.type];
-              return (
-                <button key={doc.id} onClick={() => setSelected(doc)}
-                  className={`w-full text-left p-3 rounded-xl border transition-all ${selected?.id === doc.id ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-white hover:border-gray-200"}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Icon size={13} strokeWidth={1.75} className="text-gray-500" />
-                    <p className="text-sm font-medium text-gray-900 truncate">{doc.title}</p>
-                  </div>
-                  <p className="text-xs text-gray-500 line-clamp-2">{doc.content}</p>
-                  <div className="flex gap-1 mt-2 flex-wrap">
-                    {doc.tags.map((t) => <span key={t} className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{t}</span>)}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="col-span-1 md:col-span-2">
-          {selected ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-full">
-              <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
-                {(() => { const Icon = TYPE_ICONS[selected.type]; return <Icon size={26} strokeWidth={1.5} className="text-indigo-600" />; })()}
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">{selected.title}</h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-500">{selected.date}</span>
-                    {selected.tags.map((t) => <span key={t} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">{t}</span>)}
-                  </div>
-                </div>
-              </div>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{selected.content}</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 h-64 flex items-center justify-center">
-              <div className="text-center text-gray-400">
-                <BookOpen size={36} strokeWidth={1.25} className="mx-auto mb-3" />
-                <p className="text-sm">Yozuvni tanlang yoki yangi qo'shing</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ObsidianVault() {
+  // Vault
   const [files, setFiles] = useState<VaultFile[]>([]);
-  const [content, setContent] = useState("");
-  const [activeFile, setActiveFile] = useState("");
-  const [searchQ, setSearchQ] = useState("");
-  const [searchRes, setSearchRes] = useState<VaultResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [openFile, setOpenFile] = useState<{ path: string; content: string } | null>(null);
+  const [vaultLoading, setVaultLoading] = useState(true);
+  const [path, setPath] = useState("/");
 
-  async function loadFiles() {
-    setLoading(true);
-    setError("");
+  // Search
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  // Memory
+  const [memItems, setMemItems] = useState<MemoryItem[]>([]);
+  const [memQuery, setMemQuery] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [newContent, setNewContent] = useState("");
+  const [memLoading, setMemLoading] = useState(false);
+  const [showNewMem, setShowNewMem] = useState(false);
+
+  // Hermes
+  const [tools, setTools] = useState<{ name: string; description?: string }[]>([]);
+  const [toolName, setToolName] = useState("");
+  const [toolArgs, setToolArgs] = useState("{}");
+  const [toolResult, setToolResult] = useState("");
+  const [toolRunning, setToolRunning] = useState(false);
+
+  const loadVault = useCallback(async (dir = "/") => {
+    setVaultLoading(true);
     try {
-      const res = await fetch("/api/obsidian?path=/");
-      const data = await res.json();
-      if (data.configured === false) { setConfigured(false); setError(data.error); }
-      else { setConfigured(true); setFiles((data.files || []).map((f: string) => ({ path: f }))); }
-    } catch { setError("Server xatosi"); }
-    setLoading(false);
-  }
+      const r = await fetch(`/api/obsidian?path=${encodeURIComponent(dir)}`);
+      const d = await r.json();
+      setConfigured(c => ({ ...c, obsidian: d.configured !== false }));
+      const raw: (string | VaultFile)[] = d.files || [];
+      setFiles(raw.map(f => (typeof f === "string" ? { path: f } : f)));
+    } finally {
+      setVaultLoading(false);
+    }
+  }, []);
 
-  async function openFile(path: string) {
-    setActiveFile(path);
-    const res = await fetch(`/api/obsidian?path=/${encodeURIComponent(path)}`);
-    const data = await res.json();
-    setContent(data.content || data.error || "");
+  const loadMemory = useCallback(async (q = "") => {
+    setMemLoading(true);
+    try {
+      const url = q ? `/api/memory?q=${encodeURIComponent(q)}` : "/api/memory";
+      const r = await fetch(url);
+      const d = await r.json();
+      setMemItems(d.items || d.results || []);
+    } finally {
+      setMemLoading(false);
+    }
+  }, []);
+
+  const loadHermes = useCallback(async () => {
+    try {
+      const r = await fetch("/api/mcp");
+      const d = await r.json();
+      setConfigured(c => ({ ...c, hermes: d.configured !== false }));
+      setTools(d.tools || []);
+    } catch {}
+  }, []);
+
+  useEffect(() => { loadVault(); loadMemory(); loadHermes(); }, [loadVault, loadMemory, loadHermes]);
+
+  async function openVaultFile(filePath: string) {
+    if (filePath.endsWith("/")) { setPath(filePath); loadVault(filePath); return; }
+    const r = await fetch(`/api/obsidian?file=${encodeURIComponent(filePath)}`);
+    const d = await r.json();
+    if (d.content !== undefined) setOpenFile({ path: filePath, content: d.content });
   }
 
   async function doSearch() {
-    if (!searchQ.trim()) return;
-    setLoading(true);
-    const res = await fetch("/api/obsidian", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: searchQ }) });
-    const data = await res.json();
-    setSearchRes(data.results || []);
-    setLoading(false);
+    if (!query.trim()) return;
+    setSearching(true);
+    setResults([]);
+    const r = await fetch(`/api/obsidian?search=${encodeURIComponent(query)}`);
+    const d = await r.json();
+    setResults(d.results || []);
+    setSearching(false);
   }
 
-  if (configured === false) {
-    return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
-        <FolderOpen size={40} strokeWidth={1.25} className="mx-auto mb-4 text-gray-300" />
-        <p className="text-sm font-semibold text-gray-900 mb-2">Obsidian ulangan emas</p>
-        <p className="text-sm text-gray-500 mb-4 max-w-sm mx-auto">{error}</p>
-        <div className="text-left bg-gray-50 rounded-xl p-4 text-xs text-gray-600 space-y-2 max-w-md mx-auto">
-          <p className="font-semibold text-gray-900">Ulash uchun:</p>
-          <p>1. Obsidian → Community Plugins → <strong>Local REST API</strong> o'rnating</p>
-          <p>2. Plugin sozlamalaridan API kalitni oling</p>
-          <p>3. Vault ni internet orqali expose qiling (ngrok yoki Cloudflare Tunnel)</p>
-          <p>4. Railway Variables'ga qo'shing: <code className="bg-white px-1 rounded">OBSIDIAN_URL</code> va <code className="bg-white px-1 rounded">OBSIDIAN_KEY</code></p>
-        </div>
-      </div>
-    );
+  async function saveMem() {
+    if (!newTitle.trim() || !newContent.trim()) return;
+    await fetch("/api/memory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newTitle, content: newContent }),
+    });
+    setNewTitle(""); setNewContent(""); setShowNewMem(false);
+    loadMemory();
   }
 
-  if (configured === null) {
-    return (
-      <div className="text-center py-16">
-        <button onClick={loadFiles} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-all mx-auto">
-          <FolderOpen size={16} strokeWidth={1.75} /> Obsidian Vault yuklash
-        </button>
-      </div>
-    );
+  async function runTool() {
+    if (!toolName) return;
+    setToolRunning(true); setToolResult("");
+    try {
+      const r = await fetch("/api/mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: toolName, args: JSON.parse(toolArgs || "{}") }),
+      });
+      const d = await r.json();
+      setToolResult(JSON.stringify(d, null, 2));
+    } catch (e) {
+      setToolResult(String(e));
+    }
+    setToolRunning(false);
   }
+
+  const tabs: { id: Tab; label: string; icon: typeof Brain }[] = [
+    { id: "vault", label: "Vault", icon: FolderOpen },
+    { id: "search", label: "Qidiruv", icon: Search },
+    { id: "memory", label: "Xotira", icon: Brain },
+    { id: "hermes", label: "Hermes", icon: Zap },
+  ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="space-y-3">
-        <div className="flex gap-2">
-          <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && doSearch()}
-            placeholder="Vault'da qidirish..." className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-          <button onClick={doSearch} disabled={loading} className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all">
-            {loading ? <RefreshCw size={15} className="animate-spin" /> : <Search size={15} strokeWidth={1.75} />}
-          </button>
-        </div>
-        {searchRes.length > 0 ? (
-          <div className="space-y-1">
-            {searchRes.map((r) => (
-              <button key={r.filename} onClick={() => openFile(r.filename)}
-                className="w-full text-left p-3 rounded-xl border border-gray-100 bg-white hover:border-indigo-200 transition-all">
-                <p className="text-sm font-medium text-gray-900 truncate">{r.filename}</p>
-                <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{r.context}</p>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {files.map((f) => (
-              <button key={f.path} onClick={() => openFile(f.path)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all text-sm ${
-                  activeFile === f.path ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-gray-100 bg-white hover:border-gray-200 text-gray-700"
-                }`}>
-                {f.path}
-              </button>
-            ))}
-            {files.length === 0 && !loading && (
-              <div className="text-center py-8 text-gray-400 text-sm">Fayllar yo'q</div>
-            )}
-          </div>
-        )}
-      </div>
-      <div className="md:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 min-h-64">
-        {activeFile ? (
-          <>
-            <p className="text-xs font-mono text-indigo-600 mb-4 pb-3 border-b border-gray-100">{activeFile}</p>
-            <pre className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-sans">{content}</pre>
-          </>
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-400">
-            <p className="text-sm">Faylni tanlang</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default function KnowledgePage() {
-  const [tab, setTab] = useState<"local" | "obsidian">("local");
-
-  return (
-    <div className="fade-in max-w-6xl space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="fade-in max-w-5xl space-y-5">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Knowledge Hub</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Bilimlar bazasi — AI dan so'rash va qidirish mumkin</p>
+          <p className="text-sm text-gray-500 mt-0.5">Obsidian vault · Xotira · Hermes MCP</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border ${configured.obsidian ? "border-purple-200 bg-purple-50 text-purple-700" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
+            <Brain size={11} /> Obsidian {configured.obsidian ? "●" : "○"}
+          </span>
+          <span className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border ${configured.hermes ? "border-orange-200 bg-orange-50 text-orange-700" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
+            <Zap size={11} /> Hermes {configured.hermes ? "●" : "○"}
+          </span>
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        <button onClick={() => setTab("local")}
-          className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "local" ? "bg-white shadow-sm font-medium text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
-          Local Notes
-        </button>
-        <button onClick={() => setTab("obsidian")}
-          className={`text-sm px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${tab === "obsidian" ? "bg-white shadow-sm font-medium text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
-          <FolderOpen size={14} strokeWidth={1.75} />
-          Obsidian Vault
-        </button>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <t.icon size={14} strokeWidth={1.75} />{t.label}
+          </button>
+        ))}
       </div>
 
-      {tab === "local" ? <LocalNotes /> : <ObsidianVault />}
+      {/* VAULT TAB */}
+      {tab === "vault" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {path !== "/" && (
+                  <button onClick={() => { setPath("/"); loadVault("/"); }} className="p-1 text-gray-400 hover:text-gray-600">
+                    <ChevronRight size={14} className="rotate-180" />
+                  </button>
+                )}
+                <span className="text-xs font-mono text-gray-500 truncate">{path}</span>
+              </div>
+              <button onClick={() => loadVault(path)} className="p-1.5 text-gray-400 hover:text-gray-600">
+                <RefreshCw size={13} strokeWidth={1.75} />
+              </button>
+            </div>
+
+            {!configured.obsidian ? (
+              <div className="p-6 text-center">
+                <AlertCircle size={32} strokeWidth={1.25} className="mx-auto mb-3 text-gray-300" />
+                <p className="text-sm text-gray-500 mb-1">Obsidian ulanmagan</p>
+                <p className="text-xs text-gray-400">Railway'da <code className="bg-gray-100 px-1 rounded">OBSIDIAN_URL</code> o'rnating</p>
+                <a href="/settings" className="mt-3 inline-block text-xs text-indigo-600 hover:underline">Sozlamalar →</a>
+              </div>
+            ) : vaultLoading ? (
+              <div className="p-6 text-center text-xs text-gray-400">Yuklanmoqda...</div>
+            ) : files.length === 0 ? (
+              <div className="p-6 text-center text-xs text-gray-400">Fayllar topilmadi</div>
+            ) : (
+              <div className="divide-y divide-gray-50 max-h-[500px] overflow-y-auto">
+                {files.map(f => {
+                  const name = f.path.split("/").filter(Boolean).pop() || f.path;
+                  const isDir = f.path.endsWith("/");
+                  return (
+                    <button key={f.path} onClick={() => openVaultFile(f.path)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors text-left">
+                      {isDir
+                        ? <FolderOpen size={14} strokeWidth={1.75} className="text-yellow-500 flex-shrink-0" />
+                        : <FileText size={14} strokeWidth={1.75} className="text-gray-400 flex-shrink-0" />}
+                      <span className="text-xs text-gray-700 truncate">{name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {openFile ? (
+              <>
+                <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+                  <span className="text-xs font-mono text-gray-500 truncate">{openFile.path}</span>
+                  <button onClick={() => setOpenFile(null)} className="p-1.5 text-gray-400 hover:text-gray-600">
+                    <X size={14} strokeWidth={1.75} />
+                  </button>
+                </div>
+                <div className="p-5 overflow-y-auto max-h-[500px]">
+                  <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed">{openFile.content}</pre>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full py-20 text-center">
+                <BookOpen size={40} strokeWidth={1.25} className="text-gray-200 mb-3" />
+                <p className="text-sm text-gray-400">Chap tomondagi faylni tanlang</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SEARCH TAB */}
+      {tab === "search" && (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Search size={15} strokeWidth={1.75} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input value={query} onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && doSearch()}
+                placeholder="Vault ichidan qidiring..."
+                className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            </div>
+            <button onClick={doSearch} disabled={!query.trim() || searching}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm rounded-xl transition-all flex items-center gap-2">
+              {searching ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
+              Qidirish
+            </button>
+          </div>
+
+          {!configured.obsidian && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-xs text-yellow-700 flex items-center gap-2">
+              <AlertCircle size={14} /> Obsidian ulanmagan — lokal xotiradan qidirish ishlaydi
+            </div>
+          )}
+
+          {results.length > 0 && (
+            <div className="space-y-2">
+              {results.map((r, i) => (
+                <button key={i} onClick={() => openVaultFile(r.filename)}
+                  className="w-full bg-white border border-gray-100 hover:border-indigo-200 rounded-xl px-4 py-3.5 text-left transition-all shadow-sm">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FileText size={14} strokeWidth={1.75} className="text-indigo-500 flex-shrink-0" />
+                    <span className="text-sm font-medium text-gray-900 truncate">{r.filename.split("/").pop()}</span>
+                    <span className="ml-auto text-xs text-gray-400">{Math.round((r.score || 0) * 100)}%</span>
+                  </div>
+                  {r.context && <p className="text-xs text-gray-500 line-clamp-2 ml-5">{r.context}</p>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {searching && <div className="text-center py-8 text-sm text-gray-400">Qidirilmoqda...</div>}
+          {!searching && results.length === 0 && query && <div className="text-center py-8 text-sm text-gray-400">Hech narsa topilmadi</div>}
+        </div>
+      )}
+
+      {/* MEMORY TAB */}
+      {tab === "memory" && (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Search size={15} strokeWidth={1.75} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input value={memQuery} onChange={e => setMemQuery(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && loadMemory(memQuery)}
+                placeholder="Xotirani qidiring..."
+                className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            </div>
+            <button onClick={() => loadMemory(memQuery)} className="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all">
+              <RefreshCw size={14} strokeWidth={1.75} />
+            </button>
+            <button onClick={() => setShowNewMem(true)}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl transition-all flex items-center gap-2">
+              <Plus size={14} /> Yangi
+            </button>
+          </div>
+
+          {showNewMem && (
+            <div className="bg-white border border-indigo-200 rounded-2xl p-5 space-y-3 shadow-sm">
+              <input value={newTitle} onChange={e => setNewTitle(e.target.value)}
+                placeholder="Sarlavha"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
+                placeholder="Kontent..."
+                rows={3}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200 resize-none" />
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setShowNewMem(false)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">Bekor</button>
+                <button onClick={saveMem} className="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all flex items-center gap-1.5">
+                  <Send size={12} /> Saqlash
+                </button>
+              </div>
+            </div>
+          )}
+
+          {memLoading ? (
+            <div className="text-center py-8 text-sm text-gray-400">Yuklanmoqda...</div>
+          ) : memItems.length === 0 ? (
+            <div className="text-center py-12">
+              <Brain size={40} strokeWidth={1.25} className="mx-auto mb-3 text-gray-200" />
+              <p className="text-sm text-gray-400">Xotira bo'sh</p>
+              <p className="text-xs text-gray-400 mt-1">Obsidian ulanganida vault ma'lumotlari shu yerda ko'rinadi</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {memItems.map((m, i) => (
+                <div key={m.id || i} className="bg-white border border-gray-100 rounded-xl px-4 py-3.5 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <Brain size={14} strokeWidth={1.75} className="text-purple-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">{m.title}</p>
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-3">{m.content}</p>
+                      {m.createdAt && (
+                        <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                          <Clock size={10} />{new Date(m.createdAt).toLocaleDateString("uz")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* HERMES TAB */}
+      {tab === "hermes" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-900">MCP Vositalar</p>
+              <button onClick={loadHermes} className="p-1.5 text-gray-400 hover:text-gray-600">
+                <RefreshCw size={13} strokeWidth={1.75} />
+              </button>
+            </div>
+
+            {!configured.hermes ? (
+              <div className="p-6 text-center">
+                <AlertCircle size={32} strokeWidth={1.25} className="mx-auto mb-3 text-gray-300" />
+                <p className="text-sm text-gray-500 mb-1">Hermes ulanmagan</p>
+                <p className="text-xs text-gray-400">Railway'da <code className="bg-gray-100 px-1 rounded">HERMES_URL</code> o'rnating</p>
+                <a href="/settings" className="mt-3 inline-block text-xs text-indigo-600 hover:underline">Sozlamalar →</a>
+              </div>
+            ) : tools.length === 0 ? (
+              <div className="p-6 text-center text-xs text-gray-400">Vositalar topilmadi</div>
+            ) : (
+              <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
+                {tools.map(t => (
+                  <button key={t.name} onClick={() => setToolName(t.name)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left ${toolName === t.name ? "bg-orange-50" : ""}`}>
+                    <Zap size={14} strokeWidth={1.75} className="text-orange-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-mono font-semibold text-gray-800">{t.name}</p>
+                      {t.description && <p className="text-xs text-gray-400 truncate">{t.description}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-50">
+              <p className="text-sm font-semibold text-gray-900">Vositani ishlatish</p>
+            </div>
+            <div className="p-4 space-y-3">
+              <input value={toolName} onChange={e => setToolName(e.target.value)}
+                placeholder="tool_name"
+                className="w-full px-3 py-2 text-xs font-mono border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-200" />
+              <textarea value={toolArgs} onChange={e => setToolArgs(e.target.value)}
+                placeholder='{"key": "value"}'
+                rows={4}
+                className="w-full px-3 py-2 text-xs font-mono border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-200 resize-none" />
+              <button onClick={runTool} disabled={!toolName || toolRunning}
+                className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm rounded-xl transition-all flex items-center justify-center gap-2">
+                {toolRunning ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
+                Ishlatish
+              </button>
+              {toolResult && (
+                <pre className="text-xs font-mono bg-gray-900 text-green-400 p-3 rounded-xl overflow-x-auto max-h-40">{toolResult}</pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
