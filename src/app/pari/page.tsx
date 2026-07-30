@@ -80,7 +80,7 @@ export default function PariPage() {
           <p className="text-sm text-[#a99bf5]">{greeting}, Sadi</p>
           <h1 className="text-2xl font-bold text-white mt-1">Pari bilan gaplashing</h1>
 
-          <div className="my-2" style={{ aspectRatio: "1 / 1", maxWidth: 420, marginInline: "auto" }}>
+          <div className="my-2 mx-auto" style={{ width: "min(100%, 420px)", height: "min(100vw, 420px)" }}>
             <button
               onClick={jarvis.wake}
               disabled={!jarvis.supported || jarvis.state !== "asleep"}

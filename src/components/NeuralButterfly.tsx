@@ -72,14 +72,23 @@ export default function NeuralButterfly({ state, nodes }: { state: JarvisState; 
 
     function resize() {
       if (!canvas) return;
-      const parent = canvas.parentElement;
-      const size = Math.min(parent?.clientWidth || 480, parent?.clientHeight || 480, 480);
+      // Walk up to find a sized ancestor (avoid clientHeight=0 circular dependency)
+      let el: HTMLElement | null = canvas.parentElement;
+      let size = 0;
+      while (el && size === 0) {
+        size = Math.min(el.clientWidth, el.clientHeight);
+        if (size === 0) size = el.clientWidth; // height may be 0, width won't be
+        el = el.parentElement;
+      }
+      size = Math.min(size || 420, 480);
       canvas.width = size * window.devicePixelRatio;
       canvas.height = size * window.devicePixelRatio;
       canvas.style.width = `${size}px`;
       canvas.style.height = `${size}px`;
     }
     resize();
+    // Also try after a frame — layout may not be ready at mount
+    const rafResize = requestAnimationFrame(resize);
     window.addEventListener("resize", resize);
 
     function draw() {
@@ -164,6 +173,7 @@ export default function NeuralButterfly({ state, nodes }: { state: JarvisState; 
 
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(rafResize);
       window.removeEventListener("resize", resize);
     };
   }, [nodes]);

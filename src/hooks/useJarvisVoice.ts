@@ -60,12 +60,36 @@ export function useJarvisVoice(onCommand: (text: string) => Promise<string>) {
     });
   }, []);
 
+  // Browser speech recognition language — uz-UZ is rarely supported; use ru-RU as closest
+  // available Cyrillic locale, or empty string (browser default) as ultimate fallback.
+  const speechLang = useRef("");
+  useEffect(() => {
+    const supported_langs = ["uz-UZ", "ru-RU", ""];
+    const w = window as SpeechWindow;
+    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Ctor) return;
+    // Pick first lang that doesn't immediately error
+    let idx = 0;
+    function tryLang() {
+      if (idx >= supported_langs.length) return;
+      const r = new Ctor!();
+      r.lang = supported_langs[idx];
+      r.continuous = false;
+      r.interimResults = false;
+      r.onresult = () => { speechLang.current = supported_langs[idx]; r.abort(); };
+      r.onerror = () => { idx++; tryLang(); };
+      r.onend = () => {};
+      try { r.start(); } catch { idx++; tryLang(); }
+    }
+    tryLang();
+  }, []);
+
   const startWakeListening = useCallback(() => {
     const w = window as SpeechWindow;
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!Ctor) return;
     const rec = new Ctor();
-    rec.lang = "uz-UZ";
+    rec.lang = speechLang.current;
     rec.continuous = true;
     rec.interimResults = true;
     rec.onresult = (e) => {
@@ -81,7 +105,11 @@ export function useJarvisVoice(onCommand: (text: string) => Promise<string>) {
         try { rec.start(); } catch {}
       }
     };
-    rec.onerror = () => {};
+    rec.onerror = () => {
+      if (alwaysOnRef.current && stateRef.current === "asleep") {
+        setTimeout(() => { try { rec.start(); } catch {} }, 1000);
+      }
+    };
     recRef.current = rec;
     try { rec.start(); } catch {}
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -91,7 +119,7 @@ export function useJarvisVoice(onCommand: (text: string) => Promise<string>) {
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!Ctor) return;
     const rec = new Ctor();
-    rec.lang = "uz-UZ";
+    rec.lang = speechLang.current;
     rec.continuous = false;
     rec.interimResults = false;
     rec.onresult = async (e) => {
