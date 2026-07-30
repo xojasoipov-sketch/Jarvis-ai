@@ -58,45 +58,13 @@ function NavItem({ item, onClose }: { item: NavEntry; onClose?: () => void }) {
   );
 }
 
-function ButterflyLogo() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="wg1" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#c4b5fd" />
-          <stop offset="100%" stopColor="#6d28d9" />
-        </linearGradient>
-        <linearGradient id="wg2" x1="1" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#c4b5fd" />
-          <stop offset="100%" stopColor="#6d28d9" />
-        </linearGradient>
-        <linearGradient id="wg3" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#4c1d95" stopOpacity="0.9" />
-        </linearGradient>
-        <linearGradient id="wg4" x1="1" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#4c1d95" stopOpacity="0.9" />
-        </linearGradient>
-      </defs>
-      <ellipse cx="34" cy="34" rx="26" ry="18" fill="url(#wg1)" transform="rotate(-35 34 34)" opacity="0.92" />
-      <ellipse cx="66" cy="34" rx="26" ry="18" fill="url(#wg2)" transform="rotate(35 66 34)" opacity="0.92" />
-      <ellipse cx="36" cy="62" rx="18" ry="14" fill="url(#wg3)" transform="rotate(20 36 62)" opacity="0.85" />
-      <ellipse cx="64" cy="62" rx="18" ry="14" fill="url(#wg4)" transform="rotate(-20 64 62)" opacity="0.85" />
-      <ellipse cx="50" cy="58" rx="3.5" ry="13" fill="#4c1d95" opacity="0.9" />
-      <circle cx="50" cy="42" r="4" fill="#4c1d95" opacity="0.9" />
-      <path d="M48 39 Q42 28 38 24" stroke="#4c1d95" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.8" />
-      <path d="M52 39 Q58 28 62 24" stroke="#4c1d95" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.8" />
-    </svg>
-  );
-}
 
 export default function Sidebar({ onClose }: { onClose?: () => void }) {
   return (
     <aside className="w-60 h-screen bg-white border-r border-gray-100 flex flex-col flex-shrink-0">
       <div className="px-4 py-4 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <ButterflyLogo />
+          <img src="/logo.png" alt="Pari AI" width={36} height={36} className="object-contain" />
           <span className="font-bold text-gray-900 text-lg tracking-tight">PARI AI</span>
           {onClose && (
             <button onClick={onClose} className="ml-auto p-1 text-gray-400 hover:text-gray-600 lg:hidden">
