@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { toolsAsOpenAIFunctions, runTool } from "@/lib/tools";
-
-const OR_KEY = process.env.OPENROUTER_API_KEY || "";
-const MISTRAL_KEY = process.env.MISTRAL_API_KEY || "";
-const GROQ_KEY = process.env.GROQ_API_KEY || "";
-const CEREBRAS_KEY = process.env.CEREBRAS_API_KEY || "";
+import { getProviders, type Provider } from "@/lib/providers";
 
 const SYSTEM = `Sen Pari AI — Sadining shaxsiy AI yordamchisissan. Arxitektura:
 - Ko'p agentli tizim (CEO, Researcher, Coder, Analyst, Writer, Marketing, DevOps, Assistant)
@@ -18,17 +14,6 @@ Qoidalar:
 3. Agar foydalanuvchi ilova kodini o'zgartirishni so'rasa — propose_code_change vositasidan foydalanib PR och, natijada PR havolasini ber
 4. Qisqa va aniq bo'l, lekin kerakli hollarda batafsil tushuntir
 5. Markdown formatidan foydalan`;
-
-type Provider = { url: string; key: string; model: string; headers?: Record<string, string>; supportsTools: boolean };
-
-function providers(): Provider[] {
-  const list: Provider[] = [];
-  if (GROQ_KEY) list.push({ url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "llama-3.3-70b-versatile", supportsTools: true });
-  if (OR_KEY) list.push({ url: "https://openrouter.ai/api/v1/chat/completions", key: OR_KEY, model: "google/gemini-2.0-flash-exp:free", headers: { "HTTP-Referer": "https://pari-ai.up.railway.app", "X-Title": "Pari AI" }, supportsTools: false });
-  if (MISTRAL_KEY) list.push({ url: "https://api.mistral.ai/v1/chat/completions", key: MISTRAL_KEY, model: "mistral-large-latest", supportsTools: false });
-  if (CEREBRAS_KEY) list.push({ url: "https://api.cerebras.ai/v1/chat/completions", key: CEREBRAS_KEY, model: "llama-3.3-70b", supportsTools: false });
-  return list;
-}
 
 type ChatMessage = {
   role: string;
@@ -98,7 +83,7 @@ function textStream(text: string): Response {
 
 export async function POST(req: NextRequest) {
   const { messages, system } = await req.json();
-  const list = providers();
+  const list = getProviders();
   if (!list.length) return NextResponse.json({ error: "API key sozlanmagan" }, { status: 500 });
 
   const baseSystem = system || SYSTEM;

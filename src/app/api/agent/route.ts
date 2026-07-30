@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getProviders } from "@/lib/providers";
 
 const AGENTS = {
   ceo: {
@@ -54,41 +55,12 @@ Jadval tuzish, eslatmalar, ish oqimini optimallashtirish kabi ishlarni bajarasan
   },
 };
 
-const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || "";
-const MISTRAL_KEY = process.env.MISTRAL_API_KEY || "";
-const GROQ_KEY = process.env.GROQ_API_KEY || "";
-const CEREBRAS_KEY = process.env.CEREBRAS_API_KEY || "";
-
 async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
-  const providers = [
-    OPENROUTER_KEY && {
-      url: "https://openrouter.ai/api/v1/chat/completions",
-      key: OPENROUTER_KEY,
-      model: "google/gemini-2.0-flash-exp:free",
-      extra: { "HTTP-Referer": "https://pari-ai.up.railway.app", "X-Title": "Pari AI" },
-    },
-    MISTRAL_KEY && {
-      url: "https://api.mistral.ai/v1/chat/completions",
-      key: MISTRAL_KEY,
-      model: "mistral-large-latest",
-    },
-    GROQ_KEY && {
-      url: "https://api.groq.com/openai/v1/chat/completions",
-      key: GROQ_KEY,
-      model: "llama-3.3-70b-versatile",
-    },
-    CEREBRAS_KEY && {
-      url: "https://api.cerebras.ai/v1/chat/completions",
-      key: CEREBRAS_KEY,
-      model: "llama-3.3-70b",
-    },
-  ].filter(Boolean) as Array<{ url: string; key: string; model: string; extra?: Record<string, string> }>;
-
-  for (const p of providers) {
+  for (const p of getProviders()) {
     try {
       const res = await fetch(p.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}`, ...(p.extra || {}) },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}`, ...(p.headers || {}) },
         body: JSON.stringify({
           model: p.model,
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMessage }],

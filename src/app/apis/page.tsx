@@ -5,13 +5,18 @@ import { Plug, CheckCircle2, XCircle, RefreshCw, ExternalLink } from "lucide-rea
 type Status = "idle" | "checking" | "ok" | "error";
 
 const APIS = [
-  { id: "openrouter", name: "OpenRouter", desc: "Gemini 2.0 Flash, GPT-4o", envKey: "OPENROUTER_API_KEY", url: "https://openrouter.ai", cat: "AI" },
-  { id: "mistral", name: "Mistral AI", desc: "Mistral Large — kod va tahlil", envKey: "MISTRAL_API_KEY", url: "https://console.mistral.ai", cat: "AI" },
-  { id: "groq", name: "Groq", desc: "LLaMA 3.3 70B — eng tez", envKey: "GROQ_API_KEY", url: "https://groq.com", cat: "AI" },
+  { id: "pollinations", name: "Pollinations", desc: "Key shart emas — hoziroq ishlaydi", envKey: null, url: "https://pollinations.ai", cat: "AI" },
+  { id: "groq", name: "Groq", desc: "LLaMA 3.3 70B — eng tez, tool-calling", envKey: "GROQ_API_KEY", url: "https://groq.com/keys", cat: "AI" },
   { id: "cerebras", name: "Cerebras", desc: "LLaMA 3.3 70B — 1M token/kun", envKey: "CEREBRAS_API_KEY", url: "https://inference.cerebras.ai", cat: "AI" },
+  { id: "openrouter", name: "OpenRouter (Gemini)", desc: "Gemini 2.0 Flash — bepul model", envKey: "OPENROUTER_API_KEY", url: "https://openrouter.ai", cat: "AI" },
+  { id: "deepseek", name: "DeepSeek", desc: "DeepSeek Chat", envKey: "DEEPSEEK_API_KEY", url: "https://platform.deepseek.com", cat: "AI" },
+  { id: "kimi", name: "Kimi (Moonshot AI)", desc: "Moonshot v1 — kuchli matn", envKey: "MOONSHOT_API_KEY", url: "https://platform.moonshot.ai", cat: "AI" },
+  { id: "qwen", name: "Qwen (Alibaba)", desc: "Qwen Plus — tez tahlil", envKey: "DASHSCOPE_API_KEY", url: "https://dashscope.console.aliyun.com", cat: "AI" },
+  { id: "mistral", name: "Mistral AI", desc: "Mistral Large — $25 bepul kredit", envKey: "MISTRAL_API_KEY", url: "https://console.mistral.ai", cat: "AI" },
   { id: "telegram", name: "Telegram Bot", desc: "Bot integratsiyasi", envKey: "TELEGRAM_BOT_TOKEN", url: "https://t.me/BotFather", cat: "Messaging" },
-  { id: "obsidian", name: "Obsidian Vault", desc: "Lokal bilim bazasi (REST API)", envKey: "OBSIDIAN_URL", url: "https://obsidian.md", cat: "Knowledge" },
-  { id: "hermes", name: "Hermes MCP", desc: "MCP tool gateway", envKey: "HERMES_URL", url: "https://github.com/nwiizo/hermes", cat: "Tools" },
+  { id: "obsidian", name: "Vault (GitHub-asosli)", desc: "Shaxsiy bilim bazasi", envKey: "GITHUB_TOKEN", url: "https://github.com/settings/tokens", cat: "Knowledge" },
+  { id: "hermes", name: "Hermes — built-in vositalar", desc: "MCP tool executor (Railway'da)", envKey: null, url: "", cat: "Tools" },
+  { id: "supabase", name: "Supabase", desc: "Tasks/Projects ma'lumotlar bazasi", envKey: "SUPABASE_URL", url: "https://supabase.com", cat: "Database" },
 ];
 
 export default function ApisPage() {
@@ -56,12 +61,16 @@ export default function ApisPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-gray-900">{api.name}</p>
-                      <a href={api.url} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-indigo-600">
-                        <ExternalLink size={12} strokeWidth={1.75} />
-                      </a>
+                      {api.url && (
+                        <a href={api.url} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-indigo-600">
+                          <ExternalLink size={12} strokeWidth={1.75} />
+                        </a>
+                      )}
                     </div>
                     <p className="text-xs text-gray-500">{api.desc}</p>
-                    <code className="text-xs text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded mt-1 inline-block">{api.envKey}</code>
+                    {api.envKey && (
+                      <code className="text-xs text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded mt-1 inline-block">{api.envKey}</code>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {st === "ok" && <CheckCircle2 size={16} strokeWidth={1.75} className="text-green-500" />}
