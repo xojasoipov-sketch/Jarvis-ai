@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
-import { Plug, CheckCircle2, XCircle, RefreshCw, ExternalLink, Mic, Volume2 } from "lucide-react";
+import { Plug, CheckCircle2, XCircle, RefreshCw, ExternalLink, Mic, Volume2, KeyRound, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 
 type Status = "idle" | "checking" | "ok" | "error";
+
+const VERCEL_ENV_URL = "https://vercel.com/xojasoipov-6117s-projects/pari-ai/settings/environment-variables";
 
 const APIS = [
   { id: "pollinations", name: "Pollinations", desc: "Key shart emas — hoziroq ishlaydi", envKey: null, url: "https://pollinations.ai", cat: "AI Text" },
@@ -23,6 +25,179 @@ const APIS = [
 
 const AI_IDS = new Set(APIS.filter((a) => a.cat === "AI Text").map((a) => a.id));
 const VOICE_IDS = new Set(["gemini-voice", "groq-stt", "elevenlabs"]);
+
+// Providers that can actually receive a key (skip keyless entries like Pollinations/Hermes)
+const KEYABLE = APIS.filter((a) => a.envKey);
+
+function CopyLine({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+      className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${copied ? "text-green-500" : "text-gray-400 hover:text-indigo-600"}`}
+    >
+      {copied ? <Check size={13} strokeWidth={2} /> : <Copy size={13} strokeWidth={1.75} />}
+    </button>
+  );
+}
+
+function AddKeyPanel() {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"single" | "bulk">("single");
+
+  // Single mode
+  const [providerId, setProviderId] = useState(KEYABLE[0]?.id || "");
+  const [keyValue, setKeyValue] = useState("");
+
+  // Bulk mode
+  const [bulkText, setBulkText] = useState("");
+  const [bulkParsed, setBulkParsed] = useState<{ line: string; known: boolean }[]>([]);
+
+  const provider = KEYABLE.find((p) => p.id === providerId);
+  const singleLine = provider && keyValue ? `${provider.envKey}=${keyValue}` : "";
+
+  function parseBulk() {
+    const knownEnvKeys = new Set(KEYABLE.map((p) => p.envKey));
+    const lines = bulkText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith("#") && l.includes("="));
+    setBulkParsed(lines.map((line) => ({ line, known: knownEnvKeys.has(line.split("=")[0].trim()) })));
+  }
+
+  function copyAllBulk() {
+    navigator.clipboard.writeText(bulkParsed.map((p) => p.line).join("\n"));
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+            <KeyRound size={18} strokeWidth={1.75} className="text-indigo-600" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold text-gray-900">AI Key qo&apos;shish</p>
+            <p className="text-xs text-gray-500">Bittalab yoki bulk (bir nechta birdan)</p>
+          </div>
+        </div>
+        {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+      </button>
+
+      {open && (
+        <div className="px-5 py-4 border-t border-gray-50 space-y-4">
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-800">
+            Vercel ilova ichidan environment variable&apos;ni to&apos;g&apos;ridan-to&apos;g&apos;ri o&apos;zgartira olmaydi (xavfsizlik cheklovi).
+            Shuning uchun bu yerda tayyor <code className="bg-white px-1 rounded">KEY=value</code> qatori generatsiya qilinadi —
+            uni nusxalab, Vercel&apos;dagi Environment Variables sahifasiga qo&apos;shasiz.
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setMode("single")}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-all ${mode === "single" ? "bg-indigo-600 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"}`}
+            >
+              Bittalab
+            </button>
+            <button
+              onClick={() => setMode("bulk")}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-all ${mode === "bulk" ? "bg-indigo-600 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"}`}
+            >
+              Bulk (ko&apos;plab)
+            </button>
+          </div>
+
+          {mode === "single" ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Provider</label>
+                <select
+                  value={providerId}
+                  onChange={(e) => setProviderId(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                >
+                  {KEYABLE.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.envKey})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">API Key</label>
+                <input
+                  type="password"
+                  value={keyValue}
+                  onChange={(e) => setKeyValue(e.target.value)}
+                  placeholder="Kalitni shu yerga joylashtiring..."
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 font-mono"
+                />
+              </div>
+              {singleLine && (
+                <div className="flex items-center gap-2 font-mono text-xs text-gray-700 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                  <span className="flex-1 truncate">{provider?.envKey}=••••••••</span>
+                  <CopyLine text={singleLine} />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                  KEY=value formatida, har birini yangi qatorga yozing
+                </label>
+                <textarea
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                  onBlur={parseBulk}
+                  rows={5}
+                  placeholder={"GROQ_API_KEY=xxx\nCEREBRAS_API_KEY=yyy\nELEVENLABS_API_KEY=zzz"}
+                  className="w-full text-xs font-mono border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                />
+              </div>
+              <button
+                onClick={parseBulk}
+                className="text-xs px-3 py-1.5 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600 text-gray-600 rounded-lg transition-all"
+              >
+                Tekshirish
+              </button>
+              {bulkParsed.length > 0 && (
+                <div className="space-y-2">
+                  {bulkParsed.map((p, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-center gap-2 font-mono text-xs rounded-lg px-3 py-2 border ${p.known ? "bg-gray-50 border-gray-100 text-gray-700" : "bg-red-50 border-red-100 text-red-600"}`}
+                    >
+                      <span className="flex-1 truncate">{p.line.split("=")[0]}=••••••••</span>
+                      {!p.known && <span className="text-[10px] uppercase flex-shrink-0">noma&apos;lum key</span>}
+                      <CopyLine text={p.line} />
+                    </div>
+                  ))}
+                  <button
+                    onClick={copyAllBulk}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all"
+                  >
+                    <Copy size={12} strokeWidth={2} /> Hammasini nusxalash
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <a
+            href={VERCEL_ENV_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:underline"
+          >
+            Vercel Environment Variables sahifasini ochish <ExternalLink size={11} />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ApisPage() {
   const [statuses, setStatuses] = useState<Record<string, Status>>({});
@@ -79,8 +254,8 @@ export default function ApisPage() {
     <div className="fade-in max-w-4xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">APIs & Integrations</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Ulangan xizmatlar va API kalitlar holati</p>
+          <h1 className="text-2xl font-bold text-gray-900">Connectors</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Ulangan xizmatlar, API kalitlar holati va yangi ulanish qo&apos;shish</p>
         </div>
         <button
           onClick={testAll}
@@ -90,6 +265,8 @@ export default function ApisPage() {
           Hammasini tekshir
         </button>
       </div>
+
+      <AddKeyPanel />
 
       {cats.map((cat) => (
         <div key={cat}>
