@@ -5,7 +5,8 @@ import {
 } from "@/lib/telegram";
 import { listChannels, createPost, listPosts, getChannel } from "@/lib/smm-store";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL
+  || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://pari-ai-ten.vercel.app");
 
 const MAIN_KEYBOARD = {
   inline_keyboard: [
@@ -34,34 +35,34 @@ async function transcribeVoice(fileId: string): Promise<{ transcript: string; re
   if (!blob) return null;
   const fd = new FormData();
   fd.append("audio", blob, "voice.ogg");
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
-  const res = await fetch(`${baseUrl}/api/voice`, { method: "POST", body: fd });
+  const res = await fetch(`${APP_URL}/api/voice`, { method: "POST", body: fd });
   if (!res.ok) return null;
   return res.json();
 }
 
 async function callAI(messages: Array<{ role: string; content: string }>, system?: string): Promise<string> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
-  const res = await fetch(`${baseUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, system }),
-  });
-  if (!res.ok) return "Kechirasiz, xato yuz berdi.";
-  const reader = res.body!.getReader();
-  const dec = new TextDecoder();
-  let text = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    text += dec.decode(value);
+  const { getProviders } = await import("@/lib/providers");
+  const providers = getProviders();
+  const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;
+  for (const p of providers) {
+    try {
+      const res = await fetch(p.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}`, ...(p.headers || {}) },
+        body: JSON.stringify({ model: p.model, messages: msgs, stream: false }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || "";
+      if (text.trim()) return text.trim();
+    } catch { continue; }
   }
-  return text.trim() || "Javob bo'sh qaytdi.";
+  return "Kechirasiz, xato yuz berdi.";
 }
 
 async function callAgent(agentId: string, task: string): Promise<string> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
-  const res = await fetch(`${baseUrl}/api/agent`, {
+  const res = await fetch(`${APP_URL}/api/agent`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ agentId, task }),
@@ -75,7 +76,6 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
   const session = getSession(chatId);
   const cmd = text.trim().toLowerCase();
 
-  // Buyruqlar
   if (cmd === "/start") {
     clearHistory(chatId);
     updateSession(chatId, { mode: "chat", agentId: undefined });
@@ -113,7 +113,6 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
     return;
   }
 
-  // ── SMM buyruqlari ─────────────────────────────
   if (cmd === "/smm") {
     const channels = await listChannels();
     if (channels.length === 0) {
@@ -150,28 +149,16 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
     return;
   }
 
-  // /post [matn]  — birinchi kanalga post yuborish
   if (cmd.startsWith("/post ") || cmd.startsWith("/post\n")) {
     const content = text.slice(6).trim();
-    if (!content) {
-      await sendMessage(chatId, "Ishlatish: `/post Matn yozing`");
-      return;
-    }
+    if (!content) { await sendMessage(chatId, "Ishlatish: `/post Matn yozing`"); return; }
     const channels = await listChannels();
-    if (channels.length === 0) {
-      await sendMessage(chatId, "Avval kanal qo'shing. /smm yozing.");
-      return;
-    }
+    if (channels.length === 0) { await sendMessage(chatId, "Avval kanal qo'shing. /smm yozing."); return; }
     updateSession(chatId, { mode: "smm_post", smmChannelId: channels[0].id, smmContent: content });
     if (channels.length === 1) {
-      // Auto-select single channel
       await sendMessage(chatId,
         `✍️ *${channels[0].title}* kanaliga post:\n\n_${content}_\n\nYuborilsinmi?`,
-        {
-          inline_keyboard: [
-            [{ text: "✅ Ha, yuborish", callback_data: `smm:publish:${channels[0].id}` }, { text: "❌ Bekor", callback_data: "smm:cancel" }],
-          ]
-        }
+        { inline_keyboard: [[{ text: "✅ Ha, yuborish", callback_data: `smm:publish:${channels[0].id}` }, { text: "❌ Bekor", callback_data: "smm:cancel" }]] }
       );
     } else {
       const buttons = channels.map((c) => [{ text: c.title, callback_data: `smm:publish:${c.id}` }]);
@@ -181,13 +168,9 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
     return;
   }
 
-  // /generate [mavzu]  — AI post yaratish
   if (cmd.startsWith("/generate ") || cmd.startsWith("/generate\n")) {
     const topic = text.slice(10).trim();
-    if (!topic) {
-      await sendMessage(chatId, "Ishlatish: `/generate Mavzu nomi`");
-      return;
-    }
+    if (!topic) { await sendMessage(chatId, "Ishlatish: `/generate Mavzu nomi`"); return; }
     await sendChatAction(chatId);
     await sendMessage(chatId, `🤖 *${topic}* mavzusida post yaratyapman...`);
     try {
@@ -199,7 +182,6 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
       const data = await res.json();
       const posts: string[] = data.posts || [];
       if (!posts.length) throw new Error("Bo'sh javob");
-
       updateSession(chatId, { mode: "smm_generated", smmDrafts: posts });
       const numbered = posts.map((p, i) => `*${i + 1}.*\n${p}`).join("\n\n──────\n\n");
       const buttons = posts.map((_, i) => ({ text: `${i + 1}-ni tanlash`, callback_data: `smm:use:${i}` }));
@@ -241,7 +223,6 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
     return;
   }
 
-  // Agent rejimida vazifa
   if (session.mode === "agent" && session.agentId) {
     await sendChatAction(chatId);
     const agentName = AGENT_NAMES[session.agentId];
@@ -265,7 +246,6 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
     return;
   }
 
-  // Chat rejimi
   await sendChatAction(chatId);
   addToHistory(chatId, "user", text);
   try {
@@ -305,48 +285,32 @@ async function handleCallback(callbackId: string, chatId: number, data: string, 
   }
 
   if (data === "menu:tasks") {
-    await sendMessage(chatId,
-      `📋 *Vazifalar*\n\nVazifalarni web ilovadan boshqaring:\nhttps://pari-ai-v2-production.up.railway.app/tasks`
-    );
+    await sendMessage(chatId, `📋 *Vazifalar*\n\nVazifalarni web ilovadan boshqaring:\n${APP_URL}/tasks`);
     return;
   }
 
   if (data === "menu:projects") {
-    await sendMessage(chatId,
-      `📁 *Loyihalar*\n\nLoyihalarni web ilovadan ko'ring:\nhttps://pari-ai-v2-production.up.railway.app/projects`
-    );
+    await sendMessage(chatId, `📁 *Loyihalar*\n\nLoyihalarni web ilovadan ko'ring:\n${APP_URL}/projects`);
     return;
   }
 
-  if (data === "menu:help") {
-    await handleMessage(chatId, "/help", firstName);
-    return;
-  }
+  if (data === "menu:help") { await handleMessage(chatId, "/help", firstName); return; }
+  if (data === "menu:smm") { await handleMessage(chatId, "/smm", firstName); return; }
 
-  if (data === "menu:smm") {
-    await handleMessage(chatId, "/smm", firstName);
-    return;
-  }
-
-  // SMM: publish to channel
   if (data.startsWith("smm:publish:")) {
     const channelId = data.split(":")[2];
     const session = getSession(chatId);
     const content = session.smmContent;
     if (!content) { await sendMessage(chatId, "Post matni topilmadi."); return; }
-
     const channel = await getChannel(channelId);
     if (!channel) { await sendMessage(chatId, "Kanal topilmadi."); return; }
-
     const post = await createPost({ channel_id: channelId, content, status: "draft" });
-
     const res = await fetch(`${APP_URL}/api/smm/publish`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ post_id: post.id }),
     });
     const result = await res.json();
-
     if (result.ok) {
       await sendMessage(chatId, `✅ *${channel.title}* kanaliga post yuborildi!`);
     } else {
@@ -356,30 +320,19 @@ async function handleCallback(callbackId: string, chatId: number, data: string, 
     return;
   }
 
-  // SMM: use generated draft
   if (data.startsWith("smm:use:")) {
     const idx = parseInt(data.split(":")[2], 10);
     const session = getSession(chatId);
     const drafts = session.smmDrafts || [];
     const content = drafts[idx];
     if (!content) { await sendMessage(chatId, "Draft topilmadi."); return; }
-
     const channels = await listChannels();
-    if (channels.length === 0) {
-      await sendMessage(chatId, "Kanal qo'shilmagan. /smm ni ishlatib kanal qo'shing.");
-      return;
-    }
-
+    if (channels.length === 0) { await sendMessage(chatId, "Kanal qo'shilmagan. /smm ni ishlatib kanal qo'shing."); return; }
     updateSession(chatId, { mode: "smm_post", smmContent: content, smmDrafts: undefined });
-
     if (channels.length === 1) {
       await sendMessage(chatId,
         `✍️ *${channels[0].title}* kanaliga:\n\n${content}\n\nYuborilsinmi?`,
-        {
-          inline_keyboard: [
-            [{ text: "✅ Yuborish", callback_data: `smm:publish:${channels[0].id}` }, { text: "❌ Bekor", callback_data: "smm:cancel" }],
-          ]
-        }
+        { inline_keyboard: [[{ text: "✅ Yuborish", callback_data: `smm:publish:${channels[0].id}` }, { text: "❌ Bekor", callback_data: "smm:cancel" }]] }
       );
     } else {
       const buttons = channels.map((c) => [{ text: c.title, callback_data: `smm:publish:${c.id}` }]);
@@ -390,9 +343,7 @@ async function handleCallback(callbackId: string, chatId: number, data: string, 
   }
 
   if (data === "smm:create") {
-    await sendMessage(chatId,
-      `✍️ *Post yaratish*\n\nQo'lda yozing:\n/post Matn yozing\n\nYoki AI bilan yarating:\n/generate Mavzu`
-    );
+    await sendMessage(chatId, `✍️ *Post yaratish*\n\nQo'lda yozing:\n/post Matn yozing\n\nYoki AI bilan yarating:\n/generate Mavzu`);
     return;
   }
 
@@ -413,7 +364,6 @@ export async function POST(req: NextRequest) {
       await handleMessage(chat.id, text, from.first_name);
     }
 
-    // Ovoz xabari — Gemini transcribe + javob
     if (update.message?.voice || update.message?.audio) {
       const { chat, from } = update.message;
       const fileId = (update.message.voice || update.message.audio)!.file_id;
@@ -423,9 +373,7 @@ export async function POST(req: NextRequest) {
         if (result?.transcript) {
           addToHistory(chat.id, "user", result.transcript);
           addToHistory(chat.id, "assistant", result.reply);
-          await sendMessage(chat.id,
-            `_"${result.transcript}"_\n\n${cleanMarkdown(result.reply)}`
-          );
+          await sendMessage(chat.id, `_"${result.transcript}"_\n\n${cleanMarkdown(result.reply)}`);
         } else {
           await sendMessage(chat.id, "Ovozni tushunmadim, qayta yuboring.");
         }
@@ -444,7 +392,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error("Telegram webhook error:", e);
     log("error", "telegram", `Webhook xatosi: ${(e as Error).message}`);
-    return NextResponse.json({ ok: false }, { status: 200 }); // Telegram 200 talab qiladi
+    return NextResponse.json({ ok: false }, { status: 200 });
   }
 }
 

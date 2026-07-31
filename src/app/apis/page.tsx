@@ -1,25 +1,29 @@
 "use client";
 import { useState } from "react";
-import { Plug, CheckCircle2, XCircle, RefreshCw, ExternalLink } from "lucide-react";
+import { Plug, CheckCircle2, XCircle, RefreshCw, ExternalLink, Mic, Volume2 } from "lucide-react";
 
 type Status = "idle" | "checking" | "ok" | "error";
 
 const APIS = [
-  { id: "pollinations", name: "Pollinations", desc: "Key shart emas — hoziroq ishlaydi", envKey: null, url: "https://pollinations.ai", cat: "AI" },
-  { id: "groq", name: "Groq", desc: "LLaMA 3.3 70B — eng tez, tool-calling", envKey: "GROQ_API_KEY", url: "https://groq.com/keys", cat: "AI" },
-  { id: "cerebras", name: "Cerebras", desc: "LLaMA 3.3 70B — 1M token/kun", envKey: "CEREBRAS_API_KEY", url: "https://inference.cerebras.ai", cat: "AI" },
-  { id: "openrouter", name: "OpenRouter (Gemini)", desc: "Gemini 2.0 Flash — bepul model", envKey: "OPENROUTER_API_KEY", url: "https://openrouter.ai", cat: "AI" },
-  { id: "deepseek", name: "DeepSeek", desc: "DeepSeek Chat", envKey: "DEEPSEEK_API_KEY", url: "https://platform.deepseek.com", cat: "AI" },
-  { id: "kimi", name: "Kimi (Moonshot AI)", desc: "Moonshot v1 — kuchli matn", envKey: "MOONSHOT_API_KEY", url: "https://platform.moonshot.ai", cat: "AI" },
-  { id: "qwen", name: "Qwen (Alibaba)", desc: "Qwen Plus — tez tahlil", envKey: "DASHSCOPE_API_KEY", url: "https://dashscope.console.aliyun.com", cat: "AI" },
-  { id: "mistral", name: "Mistral AI", desc: "Mistral Large — $25 bepul kredit", envKey: "MISTRAL_API_KEY", url: "https://console.mistral.ai", cat: "AI" },
+  { id: "pollinations", name: "Pollinations", desc: "Key shart emas — hoziroq ishlaydi", envKey: null, url: "https://pollinations.ai", cat: "AI Text" },
+  { id: "groq", name: "Groq", desc: "LLaMA 3.3 70B — eng tez, tool-calling", envKey: "GROQ_API_KEY", url: "https://groq.com/keys", cat: "AI Text" },
+  { id: "cerebras", name: "Cerebras", desc: "LLaMA 3.3 70B — 1M token/kun", envKey: "CEREBRAS_API_KEY", url: "https://inference.cerebras.ai", cat: "AI Text" },
+  { id: "openrouter", name: "OpenRouter (Gemini)", desc: "Gemini 2.0 Flash — bepul model", envKey: "OPENROUTER_API_KEY", url: "https://openrouter.ai", cat: "AI Text" },
+  { id: "deepseek", name: "DeepSeek", desc: "DeepSeek Chat", envKey: "DEEPSEEK_API_KEY", url: "https://platform.deepseek.com", cat: "AI Text" },
+  { id: "kimi", name: "Kimi (Moonshot AI)", desc: "Moonshot v1 — kuchli matn", envKey: "MOONSHOT_API_KEY", url: "https://platform.moonshot.ai", cat: "AI Text" },
+  { id: "qwen", name: "Qwen (Alibaba)", desc: "Qwen Plus — tez tahlil", envKey: "DASHSCOPE_API_KEY", url: "https://dashscope.console.aliyun.com", cat: "AI Text" },
+  { id: "mistral", name: "Mistral AI", desc: "Mistral Large — $25 bepul kredit", envKey: "MISTRAL_API_KEY", url: "https://console.mistral.ai", cat: "AI Text" },
+  { id: "gemini-voice", name: "Gemini STT", desc: "Ovozni matn+AI ga aylantirishda birinchi urinish", envKey: "GEMINI_API_KEY", url: "https://aistudio.google.com", cat: "Voice" },
+  { id: "groq-stt", name: "Groq Whisper STT", desc: "O'zbek ovozini matnga — Gemini ishlamasa", envKey: "GROQ_API_KEY", url: "https://groq.com/keys", cat: "Voice" },
+  { id: "elevenlabs", name: "ElevenLabs TTS", desc: "Pari ovozi — Rachel (eleven_multilingual_v2)", envKey: "ELEVENLABS_API_KEY", url: "https://elevenlabs.io", cat: "Voice" },
   { id: "telegram", name: "Telegram Bot", desc: "Bot integratsiyasi", envKey: "TELEGRAM_BOT_TOKEN", url: "https://t.me/BotFather", cat: "Messaging" },
   { id: "obsidian", name: "Vault (GitHub-asosli)", desc: "Shaxsiy bilim bazasi", envKey: "GITHUB_TOKEN", url: "https://github.com/settings/tokens", cat: "Knowledge" },
-  { id: "hermes", name: "Hermes — built-in vositalar", desc: "MCP tool executor (Railway'da)", envKey: null, url: "", cat: "Tools" },
+  { id: "hermes", name: "Hermes — built-in vositalar", desc: "MCP tool executor", envKey: null, url: "", cat: "Tools" },
   { id: "supabase", name: "Supabase", desc: "Tasks/Projects ma'lumotlar bazasi", envKey: "SUPABASE_URL", url: "https://supabase.com", cat: "Database" },
 ];
 
-const AI_IDS = new Set(APIS.filter((a) => a.cat === "AI").map((a) => a.id));
+const AI_IDS = new Set(APIS.filter((a) => a.cat === "AI Text").map((a) => a.id));
+const VOICE_IDS = new Set(["gemini-voice", "groq-stt", "elevenlabs"]);
 
 export default function ApisPage() {
   const [statuses, setStatuses] = useState<Record<string, Status>>({});
@@ -36,6 +40,13 @@ export default function ApisPage() {
         if (!d.ok) setErrors((e) => ({ ...e, [id]: d.error || "Key sozlanmagan" }));
         return;
       }
+      if (VOICE_IDS.has(id)) {
+        const r = await fetch(`/api/voice/test?provider=${id}`, { signal: AbortSignal.timeout(12000) });
+        const d = await r.json();
+        setStatuses((s) => ({ ...s, [id]: d.ok ? "ok" : "error" }));
+        if (!d.ok) setErrors((e) => ({ ...e, [id]: d.error || "Key sozlanmagan yoki ishlamaydi" }));
+        return;
+      }
       const endpoint = endpoints[id] || "";
       const r = await fetch(endpoint, { signal: AbortSignal.timeout(5000) });
       const d = await r.json().catch(() => ({}));
@@ -45,6 +56,13 @@ export default function ApisPage() {
     } catch (err) {
       setStatuses((s) => ({ ...s, [id]: "error" }));
       setErrors((e) => ({ ...e, [id]: (err as Error).message }));
+    }
+  }
+
+  async function testAll() {
+    for (const api of APIS) {
+      testApi(api.id);
+      await new Promise((r) => setTimeout(r, 200));
     }
   }
 
@@ -59,9 +77,18 @@ export default function ApisPage() {
 
   return (
     <div className="fade-in max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">APIs & Integrations</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Ulangan xizmatlar va API kalitlar holati</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">APIs & Integrations</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Ulangan xizmatlar va API kalitlar holati</p>
+        </div>
+        <button
+          onClick={testAll}
+          className="flex items-center gap-1.5 text-sm px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors flex-shrink-0"
+        >
+          <RefreshCw size={13} strokeWidth={2} />
+          Hammasini tekshir
+        </button>
       </div>
 
       {cats.map((cat) => (
@@ -73,7 +100,13 @@ export default function ApisPage() {
               return (
                 <div key={api.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
                   <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
-                    <Plug size={16} strokeWidth={1.75} className="text-indigo-600" />
+                    {api.cat === "Voice" && api.id === "elevenlabs" ? (
+                      <Volume2 size={16} strokeWidth={1.75} className="text-indigo-600" />
+                    ) : api.cat === "Voice" ? (
+                      <Mic size={16} strokeWidth={1.75} className="text-indigo-600" />
+                    ) : (
+                      <Plug size={16} strokeWidth={1.75} className="text-indigo-600" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
