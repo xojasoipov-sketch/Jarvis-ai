@@ -1,17 +1,7 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
-import { Mic, Radio, Send, AlertCircle } from "lucide-react";
-import NeuralButterfly from "@/components/NeuralButterfly";
+import { useCallback, useState } from "react";
+import { Send } from "lucide-react";
 import { useJarvisVoice } from "@/hooks/useJarvisVoice";
-import type { MemoryNode } from "@/app/api/pari/nodes/route";
-
-const TYPE_LABEL: Record<MemoryNode["type"], string> = {
-  vault: "vault fayli",
-  task: "vazifa",
-  project: "loyiha",
-  agent: "agent xotirasi",
-  tool: "vosita",
-};
 
 const STATE_LABEL: Record<string, string> = {
   asleep:    "Bosing va gapiring",
@@ -43,24 +33,8 @@ export default function PariPage() {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [textAnswer, setTextAnswer] = useState("");
-  const [nodes, setNodes] = useState<MemoryNode[]>([]);
-  const [counts, setCounts] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    fetch("/api/pari/nodes")
-      .then((r) => r.json())
-      .then((d) => { setNodes(d.nodes || []); setCounts(d.counts || {}); })
-      .catch(() => {});
-  }, []);
 
   const jarvis = useJarvisVoice();
-
-  // Clear error after 4 seconds
-  useEffect(() => {
-    if (!jarvis.error) return;
-    const t = setTimeout(() => {}, 4000);
-    return () => clearTimeout(t);
-  }, [jarvis.error]);
 
   const sendTyped = useCallback(async () => {
     const msg = typed.trim();
@@ -73,110 +47,89 @@ export default function PariPage() {
     setBusy(false);
   }, [typed, busy]);
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Xayrli tong" : hour < 17 ? "Xayrli kun" : "Xayrli kech";
-
   const isActive = jarvis.active;
-  const isDisabled = !jarvis.supported || jarvis.state === "thinking" || jarvis.state === "speaking";
+  const isBusy = jarvis.state === "thinking" || jarvis.state === "speaking";
 
   return (
-    <div className="fade-in max-w-4xl mx-auto">
-      <div
-        className="relative overflow-hidden rounded-3xl border border-[#26224a] shadow-sm"
-        style={{ background: "radial-gradient(120% 100% at 50% 0%, #1b1738 0%, #0c0b16 60%)" }}
-      >
-        <div className="relative z-10 px-6 pt-10 pb-8 sm:px-10 text-center">
-          <p className="text-sm text-[#a99bf5]">{greeting}, Sadi</p>
-          <h1 className="text-2xl font-bold text-white mt-1">Pari</h1>
+    <div className="fade-in flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-4">
+      <div className="w-full max-w-sm flex flex-col items-center gap-8">
 
-          {/* Butterfly */}
-          <div className="my-4 mx-auto" style={{ width: "min(100%, 360px)", height: "min(80vw, 360px)" }}>
-            <button
-              onClick={jarvis.toggle}
-              disabled={isDisabled}
-              className="w-full h-full cursor-pointer disabled:cursor-default focus:outline-none"
-              aria-label={isActive ? "To'xtatish" : "Bosing va gapiring"}
-            >
-              <NeuralButterfly state={jarvis.state} nodes={nodes} level={jarvis.level} />
-            </button>
-          </div>
+        {/* Title */}
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Pari</h1>
+          <p className="text-sm text-white/40 mt-1">Sadining ovozli yordamchisi</p>
+        </div>
 
-          {/* State label */}
-          <p className="text-sm text-[#c7bdf7] min-h-[20px] transition-all">
-            {STATE_LABEL[jarvis.state]}
-          </p>
-
-          {/* Error message */}
-          {jarvis.error && (
-            <div className="mt-2 flex items-center justify-center gap-1.5 text-xs text-red-400">
-              <AlertCircle size={13} strokeWidth={2} />
-              {jarvis.error}
-            </div>
+        {/* Tap button */}
+        <button
+          onClick={jarvis.toggle}
+          disabled={!jarvis.supported || isBusy}
+          className={`relative w-32 h-32 rounded-full transition-all duration-300 disabled:opacity-40 disabled:cursor-default focus:outline-none ${
+            isActive
+              ? "bg-[#ff6a1a]/15 border-2 border-[#ff6a1a]/60 shadow-[0_0_32px_rgba(255,106,26,0.2)]"
+              : "bg-white/5 border-2 border-white/10 hover:border-white/25 hover:bg-white/8"
+          }`}
+          aria-label={isActive ? "To'xtatish" : "Bosing va gapiring"}
+        >
+          {/* Pulse ring when listening */}
+          {jarvis.state === "listening" && (
+            <span className="absolute inset-0 rounded-full border-2 border-[#ff6a1a]/40 animate-ping" />
           )}
 
-          {/* Node count */}
-          {nodes.length > 0 && (
-            <p className="text-xs text-white/30 mt-1.5">
-              {nodes.length} ta xotira —{" "}
-              {Object.entries(counts)
-                .map(([type, n]) => `${n} ${TYPE_LABEL[type as MemoryNode["type"]]}`)
-                .join(", ")}
-            </p>
-          )}
+          {/* Mic icon */}
+          <span className="flex flex-col items-center justify-center gap-1">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+              className={isActive ? "text-[#ff6a1a]" : "text-white/50"}>
+              <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+            </svg>
+          </span>
+        </button>
 
-          {/* Toggle button */}
-          {jarvis.supported ? (
-            <button
-              onClick={jarvis.toggle}
-              disabled={isDisabled}
-              className={`mt-5 inline-flex items-center gap-2 text-xs font-medium px-5 py-2.5 rounded-full border transition-all disabled:opacity-40 ${
-                isActive
-                  ? "bg-[#8b7bf0]/20 border-[#8b7bf0] text-[#c7bdf7]"
-                  : "bg-white/5 border-white/15 text-white/50 hover:text-white/70 hover:border-white/30"
-              }`}
-            >
-              <Radio
-                size={12}
-                strokeWidth={2}
-                className={isActive && jarvis.state === "listening" ? "animate-pulse" : ""}
-              />
-              {isActive
-                ? jarvis.state === "thinking" ? "O'ylayapman..."
-                  : jarvis.state === "speaking" ? "Javob beryapman..."
-                  : "Tinglayapman — to'xtatish uchun bos"
-                : "Ovoz bilan gapirish"}
-            </button>
-          ) : (
-            <p className="mt-4 text-xs text-white/40">
-              Mikrofon ruxsati yo&apos;q — pastdan yozing.
-            </p>
-          )}
+        {/* State label */}
+        <p className={`text-sm transition-colors ${isActive ? "text-[#ff6a1a]/80" : "text-white/35"}`}>
+          {STATE_LABEL[jarvis.state]}
+        </p>
+
+        {/* Error */}
+        {jarvis.error && (
+          <p className="text-xs text-red-400/80 text-center">{jarvis.error}</p>
+        )}
+
+        {/* Divider */}
+        <div className="w-full flex items-center gap-3">
+          <div className="flex-1 h-px bg-white/8" />
+          <span className="text-xs text-white/20">yoki yozing</span>
+          <div className="flex-1 h-px bg-white/8" />
         </div>
 
         {/* Text input */}
-        <div className="relative z-10 border-t border-white/10 bg-black/20 px-5 py-4">
-          <div className="flex items-center gap-2 max-w-xl mx-auto">
+        <div className="w-full flex flex-col gap-3">
+          <div className="flex gap-2">
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendTyped()}
-              placeholder="Yoki shu yerga yozing..."
-              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#8b7bf0]/50"
+              placeholder="Savol yozing..."
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-white/25 transition-colors"
             />
             <button
               onClick={sendTyped}
               disabled={!typed.trim() || busy}
-              className="w-10 h-10 flex-shrink-0 rounded-xl bg-[#6f5be0] hover:bg-[#7d69ee] disabled:opacity-30 text-white flex items-center justify-center transition-all"
+              className="w-10 h-10 flex-shrink-0 rounded-xl bg-[#ff6a1a] hover:bg-[#ff7a30] disabled:opacity-30 disabled:cursor-default text-white flex items-center justify-center transition-colors"
             >
-              {busy ? <Mic size={14} className="animate-pulse" /> : <Send size={14} strokeWidth={2} />}
+              <Send size={14} strokeWidth={2} />
             </button>
           </div>
+
           {textAnswer && (
-            <p className="max-w-xl mx-auto mt-3 text-sm text-white/80 leading-relaxed">
+            <p className="text-sm text-white/70 leading-relaxed px-1">
               {textAnswer}
             </p>
           )}
         </div>
+
       </div>
     </div>
   );
