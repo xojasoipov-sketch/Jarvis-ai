@@ -26,33 +26,59 @@ function getBestMime(): string {
   return "";
 }
 
+let currentAudio: HTMLAudioElement | null = null;
+
 function speakText(text: string): Promise<void> {
   return new Promise((resolve) => {
-    if (!("speechSynthesis" in window)) return resolve();
-    window.speechSynthesis.cancel();
-    const clean = text.replace(/[*_#`>~\[\]]/g, "").replace(/\n+/g, " ").slice(0, 1800);
-    const utter = new SpeechSynthesisUtterance(clean);
-    const voices = window.speechSynthesis.getVoices();
-    utter.voice =
-      voices.find((v) => v.lang.startsWith("uz")) ||
-      voices.find((v) => v.lang.startsWith("ru") && v.localService) ||
-      voices.find((v) => v.lang.startsWith("ru")) ||
-      voices.find((v) => v.localService) ||
-      voices[0] ||
-      null;
-    utter.lang = utter.voice?.lang || "ru-RU";
-    utter.rate = 1.0;
-    utter.pitch = 1.0;
-    utter.volume = 1.0;
-    // iOS sometimes fires onend before speaking starts — guard with timeout
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.src = "";
+      currentAudio = null;
+    }
+
+    const clean = text.replace(/[*_#`>~\[\]]/g, "").replace(/\n+/g, " ").slice(0, 500);
+    if (!clean) return resolve();
+
+    // Detect language: default to Uzbek, fallback to Russian
+    const lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru" : "uz";
+    const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
+
+    const audio = new Audio(url);
+    currentAudio = audio;
+    audio.volume = 1.0;
+
     let resolved = false;
-    const done = () => { if (!resolved) { resolved = true; resolve(); } };
-    utter.onend = done;
-    utter.onerror = done;
-    window.speechSynthesis.speak(utter);
-    // Fallback timeout in case speech synthesis hangs (common on iOS)
+    const done = () => {
+      if (!resolved) {
+        resolved = true;
+        currentAudio = null;
+        resolve();
+      }
+    };
+
+    audio.onended = done;
+    audio.onerror = () => {
+      // Fallback to speechSynthesis if TTS proxy fails
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(clean);
+        utter.lang = lang === "uz" ? "uz-UZ" : "ru-RU";
+        utter.onend = done;
+        utter.onerror = done;
+        window.speechSynthesis.speak(utter);
+      } else {
+        done();
+      }
+    };
+
+    // Fallback timeout
     const wordCount = clean.split(/\s+/).length;
-    setTimeout(done, Math.max(5000, wordCount * 600));
+    setTimeout(done, Math.max(8000, wordCount * 500));
+
+    audio.play().catch(() => {
+      // autoplay blocked — trigger speechSynthesis fallback
+      audio.onerror?.(new Event("error"));
+    });
   });
 }
 
@@ -102,10 +128,6 @@ export function useJarvisVoice() {
       !!navigator.mediaDevices?.getUserMedia &&
       (typeof AudioContext !== "undefined" || typeof (window as unknown as { webkitAudioContext: unknown }).webkitAudioContext !== "undefined");
     setSupported(ok);
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.getVoices();
-      window.speechSynthesis.addEventListener("voiceschanged", () => window.speechSynthesis.getVoices());
-    }
   }, []);
 
   const stopAll = useCallback(() => {
@@ -265,6 +287,7 @@ export function useJarvisVoice() {
   }, [startVADLoop]);
 
   const stopConversation = useCallback(() => {
+    if (currentAudio) { currentAudio.pause(); currentAudio.src = ""; currentAudio = null; }
     window.speechSynthesis?.cancel();
     stopAll();
     setActive(false);
