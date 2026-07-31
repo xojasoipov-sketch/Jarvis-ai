@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { History } from "lucide-react";
 import {
   Briefcase, Microscope, Code2, BarChart3, PenLine, Megaphone,
-  Settings2, Target, Bot, Play, type LucideIcon,
+  Settings2, Target, Bot, Play, Zap, type LucideIcon,
 } from "lucide-react";
 
 const AGENTS: { id: string; name: string; icon: LucideIcon; desc: string; color: string; tags: string[] }[] = [
@@ -19,15 +20,19 @@ const AGENTS: { id: string; name: string; icon: LucideIcon; desc: string; color:
 
 type Result = { agent: string; icon: string; result: string };
 type RunHistory = { id: number; agent_name: string; task: string; result: string; created_at: string };
+type Mode = "manual" | "parallel" | "hermes";
 
-export default function AgentsPage() {
+function AgentsInner() {
+  const searchParams = useSearchParams();
   const [selected, setSelected] = useState<typeof AGENTS[0] | null>(null);
   const [task, setTask] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Result[]>([]);
-  const [multiMode, setMultiMode] = useState(false);
+  const [mode, setMode] = useState<Mode>("manual");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [history, setHistory] = useState<RunHistory[]>([]);
+  const [routingReason, setRoutingReason] = useState("");
+  const multiMode = mode === "parallel";
 
   const loadHistory = useCallback(async () => {
     try {
@@ -39,6 +44,19 @@ export default function AgentsPage() {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
+  useEffect(() => {
+    const fromDashboard = searchParams.get("task");
+    if (searchParams.get("hermes") && fromDashboard) {
+      setMode("hermes");
+      setTask(fromDashboard);
+      setLoading(true);
+      setResults([]);
+      setRoutingReason("");
+      runHermes(fromDashboard).then((res) => { setResults(res); setLoading(false); loadHistory(); });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function runAgent(agentId: string, taskText: string): Promise<Result> {
     const res = await fetch("/api/agent", {
       method: "POST",
@@ -48,12 +66,28 @@ export default function AgentsPage() {
     return res.json();
   }
 
+  async function runHermes(taskText: string): Promise<Result[]> {
+    const res = await fetch("/api/hermes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task: taskText }),
+    });
+    const data = await res.json();
+    setRoutingReason(data.routing?.reason || "");
+    return (data.results || []).map((r: { agent: string; icon: string; result: string }) => ({
+      agent: r.agent, icon: r.icon, result: r.result,
+    }));
+  }
+
   async function handleRun() {
     if (!task.trim()) return;
     setLoading(true);
     setResults([]);
+    setRoutingReason("");
 
-    if (multiMode && selectedIds.length > 0) {
+    if (mode === "hermes") {
+      setResults(await runHermes(task));
+    } else if (mode === "parallel" && selectedIds.length > 0) {
       const promises = selectedIds.map(id => runAgent(id, task));
       const res = await Promise.all(promises);
       setResults(res);
@@ -86,18 +120,34 @@ export default function AgentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">AI Agents</h1>
           <p className="text-sm text-gray-500 mt-0.5">Ixtisoslashgan agentlar — har biri o'z sohasida mutaxassis</p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-          <div
-            onClick={() => setMultiMode(!multiMode)}
-            className={`w-10 h-6 rounded-full transition-all ${multiMode ? "bg-indigo-600" : "bg-gray-200"} relative`}
-          >
-            <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${multiMode ? "left-5" : "left-1"}`} />
-          </div>
-          Parallel rejim
-        </label>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+          {([
+            { id: "manual", label: "Qo'lda" },
+            { id: "parallel", label: "Parallel" },
+            { id: "hermes", label: "Hermes" },
+          ] as { id: Mode; label: string }[]).map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setMode(m.id)}
+              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${
+                mode === m.id ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {m.id === "hermes" && <Zap size={12} strokeWidth={2} />}
+              {m.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Agent cards */}
+      {mode === "hermes" && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-xs text-indigo-700">
+          Hermes rejimi — vazifangizni yozing, u qaysi agent(lar) mos kelishini avtomatik aniqlab, ularni ishga tushiradi.
+        </div>
+      )}
+
+      {/* Agent cards — hidden in Hermes mode since selection is automatic */}
+      {mode !== "hermes" && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {AGENTS.map(a => {
           const isActive = multiMode ? selectedIds.includes(a.id) : selected?.id === a.id;
@@ -128,11 +178,16 @@ export default function AgentsPage() {
           );
         })}
       </div>
+      )}
 
       {/* Task input */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-3">
-          {multiMode ? (
+          {mode === "hermes" ? (
+            <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Zap size={15} strokeWidth={1.75} className="text-indigo-600" /> Hermes vazifani tahlil qiladi
+            </p>
+          ) : multiMode ? (
             <p className="text-sm font-medium text-gray-700">
               {selectedIds.length > 0 ? `${selectedIds.length} ta agent parallel ishlaydi` : "Agentlarni tanlang"}
             </p>
@@ -153,7 +208,7 @@ export default function AgentsPage() {
         <div className="flex justify-end mt-3">
           <button
             onClick={handleRun}
-            disabled={loading || !task.trim() || (!selected && selectedIds.length === 0)}
+            disabled={loading || !task.trim() || (mode !== "hermes" && !selected && selectedIds.length === 0)}
             className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-all"
           >
             {loading ? (
@@ -167,6 +222,13 @@ export default function AgentsPage() {
 
       {/* Results */}
       {results.length > 0 && (
+        <>
+        {routingReason && (
+          <div className="flex items-center gap-2 text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5">
+            <Zap size={12} strokeWidth={2} className="flex-shrink-0" />
+            <span><strong>Hermes yo&apos;naltirdi:</strong> {routingReason}</span>
+          </div>
+        )}
         <div className={`grid gap-4 ${results.length > 1 ? "md:grid-cols-2" : ""}`}>
           {results.map((r, i) => (
             <div key={i} className="fade-in bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -189,6 +251,7 @@ export default function AgentsPage() {
             </div>
           ))}
         </div>
+        </>
       )}
 
       {/* Real run history — Supabase-backed */}
@@ -215,5 +278,13 @@ export default function AgentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AgentsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-gray-400">Yuklanmoqda...</div>}>
+      <AgentsInner />
+    </Suspense>
   );
 }

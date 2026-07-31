@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   MessageSquare, CheckCircle2, Paperclip, Search, Code2, FileText,
-  Bot, Lightbulb, Send, Sparkles, ChevronDown, Brain, ArrowRight, type LucideIcon,
+  Bot, Lightbulb, Send, Sparkles, Brain, ArrowRight, type LucideIcon,
 } from "lucide-react";
 
 const quickActions: { label: string; icon: LucideIcon; href: string }[] = [
@@ -32,6 +32,7 @@ type AgentInfo = { id: string; name: string; icon: string };
 
 export default function Dashboard() {
   const [task, setTask] = useState("");
+  const [smartMode, setSmartMode] = useState(true);
   const router = useRouter();
   const [live, setLive] = useState<LiveStatus | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -63,7 +64,9 @@ export default function Dashboard() {
   }, []);
 
   const go = () => {
-    if (task.trim()) router.push(`/chat?q=${encodeURIComponent(task)}`);
+    if (!task.trim()) return;
+    if (smartMode) router.push(`/agents?hermes=1&task=${encodeURIComponent(task)}`);
+    else router.push(`/chat?q=${encodeURIComponent(task)}`);
   };
 
   const hour = new Date().getHours();
@@ -100,8 +103,14 @@ export default function Dashboard() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 lg:p-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-gray-700">What would you like Pari AI to do?</p>
-          <button className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all">
-            <Sparkles size={13} strokeWidth={1.75} /> Smart Mode <ChevronDown size={13} strokeWidth={1.75} />
+          <button
+            onClick={() => setSmartMode((v) => !v)}
+            title={smartMode ? "Hermes vazifani mos agentga avtomatik yo'naltiradi" : "Oddiy chatga o'tadi"}
+            className={`hidden sm:flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${
+              smartMode ? "text-indigo-600 bg-indigo-50 hover:bg-indigo-100" : "text-gray-500 bg-gray-100 hover:bg-gray-200"
+            }`}
+          >
+            <Sparkles size={13} strokeWidth={1.75} /> Smart Mode {smartMode ? "ON" : "OFF"}
           </button>
         </div>
         <textarea
