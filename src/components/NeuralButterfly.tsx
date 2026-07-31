@@ -3,9 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { JarvisState } from "@/hooks/useJarvisVoice";
 import type { MemoryNode } from "@/app/api/pari/nodes/route";
 
-// Butterfly curve (Fay, 1989): r = e^cos(θ) - 2cos(4θ) + sin(θ/12)^5
-// Each particle is a real memory node (Obsidian vault file, Supabase task/project,
-// agent run, or built-in tool) sampled along this curve — not decoration.
+// Butterfly curve (Fay, 1989)
 function butterflyPoint(theta: number, scale: number) {
   const r = Math.exp(Math.cos(theta)) - 2 * Math.cos(4 * theta) + Math.pow(Math.sin(theta / 12), 5);
   return { x: Math.sin(theta) * r * scale, y: -Math.cos(theta) * r * scale };
@@ -13,28 +11,36 @@ function butterflyPoint(theta: number, scale: number) {
 
 type Particle = { baseX: number; baseY: number; phase: number; speed: number; size: number; node: MemoryNode };
 
-const STATE_COLOR: Record<JarvisState, string> = {
-  asleep: "139, 123, 240",
-  waking: "168, 130, 255",
-  listening: "196, 140, 255",
-  thinking: "150, 160, 255",
-  speaking: "210, 150, 255",
+// Obsidian graph view palette — crisp, no glow
+const STATE_ACCENT: Record<JarvisState, [number, number, number]> = {
+  asleep:    [99,  82, 191],
+  waking:    [124, 101, 230],
+  listening: [139, 92,  246],
+  thinking:  [99,  150, 246],
+  speaking:  [168, 85,  247],
 };
 
-const TYPE_COLOR: Record<MemoryNode["type"], string> = {
-  vault: "168, 145, 255",
-  task: "140, 200, 255",
-  project: "255, 170, 210",
-  agent: "150, 255, 210",
-  tool: "255, 210, 140",
+const TYPE_RGB: Record<MemoryNode["type"], [number, number, number]> = {
+  vault:   [139, 92,  246],
+  task:    [96,  165, 250],
+  project: [244, 114, 182],
+  agent:   [52,  211, 153],
+  tool:    [251, 191, 36],
 };
 
-const MIN_PARTICLES = 24;
-const MAX_PARTICLES = 320;
+const MIN_PARTICLES = 28;
+const MAX_PARTICLES = 300;
 
-export default function NeuralButterfly({ state, nodes, level = 0 }: { state: JarvisState; nodes: MemoryNode[]; level?: number }) {
+export default function NeuralButterfly({
+  state,
+  nodes,
+  level = 0,
+}: {
+  state: JarvisState;
+  nodes: MemoryNode[];
+  level?: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const positionsRef = useRef<{ x: number; y: number }[]>([]);
   const stateRef = useRef(state);
@@ -51,7 +57,12 @@ export default function NeuralButterfly({ state, nodes, level = 0 }: { state: Ja
     if (!ctx) return;
 
     const count = Math.max(MIN_PARTICLES, Math.min(MAX_PARTICLES, nodes.length || MIN_PARTICLES));
-    const source = nodes.length ? nodes : Array.from({ length: MIN_PARTICLES }, () => ({ label: "", type: "tool" as const }));
+    const source: MemoryNode[] = nodes.length
+      ? nodes
+      : Array.from({ length: MIN_PARTICLES }, (_, i) => ({
+          label: "",
+          type: (["vault", "tool", "task", "project", "agent"] as MemoryNode["type"][])[i % 5],
+        }));
     const loops = count > 120 ? 3 : count > 50 ? 2 : 1.4;
 
     const pts: Particle[] = [];
@@ -62,8 +73,8 @@ export default function NeuralButterfly({ state, nodes, level = 0 }: { state: Ja
         baseX: p.x,
         baseY: p.y,
         phase: Math.random() * Math.PI * 2,
-        speed: 0.6 + Math.random() * 0.8,
-        size: 1 + Math.random() * 1.8,
+        speed: 0.5 + Math.random() * 0.7,
+        size: 1.4 + Math.random() * 1.4,
         node: source[i % source.length],
       });
     }
@@ -74,12 +85,11 @@ export default function NeuralButterfly({ state, nodes, level = 0 }: { state: Ja
 
     function resize() {
       if (!canvas) return;
-      // Walk up to find a sized ancestor (avoid clientHeight=0 circular dependency)
       let el: HTMLElement | null = canvas.parentElement;
       let size = 0;
       while (el && size === 0) {
         size = Math.min(el.clientWidth, el.clientHeight);
-        if (size === 0) size = el.clientWidth; // height may be 0, width won't be
+        if (size === 0) size = el.clientWidth;
         el = el.parentElement;
       }
       size = Math.min(size || 420, 480);
@@ -89,7 +99,6 @@ export default function NeuralButterfly({ state, nodes, level = 0 }: { state: Ja
       canvas.style.height = `${size}px`;
     }
     resize();
-    // Also try after a frame — layout may not be ready at mount
     const rafResize = requestAnimationFrame(resize);
     window.addEventListener("resize", resize);
 
@@ -97,40 +106,41 @@ export default function NeuralButterfly({ state, nodes, level = 0 }: { state: Ja
       if (!canvas || !ctx) return;
       const w = canvas.width, h = canvas.height;
       const dpr = window.devicePixelRatio;
-      const cx = w / 2, cy = h / 2 + 10 * dpr;
-      const scale = (w / 2 / 3.2);
+      const cx = w / 2, cy = h / 2 + 8 * dpr;
+      const scale = w / 2 / 3.2;
 
       ctx.clearRect(0, 0, w, h);
+      t += 1;
 
       const s = stateRef.current;
-      const stateCol = STATE_COLOR[s];
-      const speedMul = s === "asleep" ? 0.5 : s === "listening" ? 1.6 : s === "speaking" ? 2.2 : 1.1;
-      const micBoost = levelRef.current * 0.25; // mic level amplifies breathing
-      const breathe = 0.85 + (0.15 + micBoost) * Math.sin(t * 0.02 * speedMul);
-
-      t += 1;
+      const mic = levelRef.current;
+      const [ar, ag, ab] = STATE_ACCENT[s];
+      const speedMul = s === "asleep" ? 0.4 : s === "listening" ? 1.5 : s === "speaking" ? 2.0 : 1.0;
+      const breathe = 0.88 + (0.12 + mic * 0.08) * Math.sin(t * 0.018 * speedMul);
 
       const pts = particlesRef.current;
       const positions: { x: number; y: number }[] = [];
 
       for (const p of pts) {
-        const wobble = Math.sin(t * 0.03 * p.speed + p.phase) * 3 * dpr;
-        const x = cx + (p.baseX * scale) * breathe + wobble;
-        const y = cy + (p.baseY * scale) * breathe + wobble * 0.6;
+        const wobble = Math.sin(t * 0.025 * p.speed + p.phase) * 2.5 * dpr;
+        const x = cx + p.baseX * scale * breathe + wobble;
+        const y = cy + p.baseY * scale * breathe + wobble * 0.5;
         positions.push({ x, y });
       }
       positionsRef.current = positions;
 
-      ctx.lineWidth = 0.6 * dpr;
+      // Edges — thin, low-alpha (Obsidian style)
+      const edgeAlpha = s === "asleep" ? 0.10 : 0.18;
+      const maxDist = 28 * dpr;
+      ctx.lineWidth = 0.5 * dpr;
       for (let i = 0; i < positions.length; i++) {
         for (let j = i + 1; j < positions.length; j++) {
           const dx = positions[i].x - positions[j].x;
           const dy = positions[i].y - positions[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const maxDist = 26 * dpr;
-          if (dist < maxDist) {
-            const alpha = (1 - dist / maxDist) * 0.12;
-            ctx.strokeStyle = `rgba(${stateCol}, ${alpha})`;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < maxDist * maxDist) {
+            const t2 = 1 - Math.sqrt(d2) / maxDist;
+            ctx.strokeStyle = `rgba(${ar},${ag},${ab},${t2 * edgeAlpha})`;
             ctx.beginPath();
             ctx.moveTo(positions[i].x, positions[i].y);
             ctx.lineTo(positions[j].x, positions[j].y);
@@ -139,41 +149,45 @@ export default function NeuralButterfly({ state, nodes, level = 0 }: { state: Ja
         }
       }
 
+      // Nodes — crisp solid circles (Obsidian graph style)
       for (let i = 0; i < positions.length; i++) {
         const p = pts[i];
         const pos = positions[i];
-        const flicker = 0.5 + 0.5 * Math.sin(t * 0.04 * p.speed + p.phase);
-        const alpha = 0.35 + flicker * 0.55;
-        const size = p.size * dpr * (0.8 + flicker * 0.6);
-        const color = TYPE_COLOR[p.node.type];
+        const [r, g, b] = TYPE_RGB[p.node.type];
+        const flicker = 0.65 + 0.35 * Math.sin(t * 0.035 * p.speed + p.phase);
+        const alpha = s === "asleep" ? flicker * 0.55 : flicker * 0.90;
+        const sz = p.size * dpr;
 
-        const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, size * 4);
-        glow.addColorStop(0, `rgba(${color}, ${alpha})`);
-        glow.addColorStop(1, `rgba(${color}, 0)`);
-        ctx.fillStyle = glow;
+        // Tiny soft halo — anti-aliased edge only, not a glow
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, size * 4, 0, Math.PI * 2);
+        ctx.arc(pos.x, pos.y, sz + 1.5 * dpr, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.18})`;
         ctx.fill();
 
-        ctx.fillStyle = `rgba(${color}, ${Math.min(1, alpha + 0.3)})`;
+        // Crisp solid core dot
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+        ctx.arc(pos.x, pos.y, sz, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
         ctx.fill();
       }
 
-      const coreAlpha = s === "speaking" ? 0.5 : s === "listening" ? 0.4 : 0.25;
-      const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, 40 * dpr * breathe);
-      core.addColorStop(0, `rgba(${stateCol}, ${coreAlpha})`);
-      core.addColorStop(1, `rgba(${stateCol}, 0)`);
-      ctx.fillStyle = core;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 40 * dpr * breathe, 0, Math.PI * 2);
-      ctx.fill();
+      // Center core — dim, only when active
+      if (s !== "asleep") {
+        const coreR = (18 + mic * 12) * dpr * breathe;
+        const coreAlpha = s === "speaking" ? 0.22 : s === "listening" ? 0.16 : 0.10;
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+        grad.addColorStop(0, `rgba(${ar},${ag},${ab},${coreAlpha})`);
+        grad.addColorStop(1, `rgba(${ar},${ag},${ab},0)`);
+        ctx.beginPath();
+        ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
 
       raf = requestAnimationFrame(draw);
     }
-    raf = requestAnimationFrame(draw);
 
+    raf = requestAnimationFrame(draw);
     return () => {
       cancelAnimationFrame(raf);
       cancelAnimationFrame(rafResize);
@@ -190,7 +204,7 @@ export default function NeuralButterfly({ state, nodes, level = 0 }: { state: Ja
     const my = (e.clientY - rect.top) * dpr;
 
     let nearest = -1;
-    let nearestDist = 14 * dpr;
+    let nearestDist = 16 * dpr;
     const positions = positionsRef.current;
     for (let i = 0; i < positions.length; i++) {
       const dx = positions[i].x - mx, dy = positions[i].y - my;
@@ -209,11 +223,11 @@ export default function NeuralButterfly({ state, nodes, level = 0 }: { state: Ja
   }
 
   return (
-    <div ref={wrapRef} className="relative" onMouseMove={handleMove} onMouseLeave={() => setHover(null)}>
+    <div className="relative" onMouseMove={handleMove} onMouseLeave={() => setHover(null)}>
       <canvas ref={canvasRef} className="mx-auto block" />
       {hover && (
         <div
-          className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full rounded-lg bg-black/90 px-2.5 py-1.5 text-xs text-white shadow-lg max-w-[220px] truncate"
+          className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full rounded-md bg-[#1a1730] border border-[#3d3560] px-2.5 py-1.5 text-xs text-[#c4b5fd] shadow-lg max-w-[220px] truncate"
           style={{ left: hover.x, top: hover.y - 8 }}
         >
           {hover.label}
