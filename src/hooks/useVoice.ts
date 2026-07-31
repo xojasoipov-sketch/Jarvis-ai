@@ -189,6 +189,7 @@ export function useVoiceOutput() {
     const ctx = audioCtxRef.current;
     if (ctx && ctx.state !== "closed") {
       try {
+        if (ctx.state === "suspended") await ctx.resume();
         const res = await fetch(url);
         if (res.ok) {
           const buf = await res.arrayBuffer();
@@ -202,7 +203,7 @@ export function useVoiceOutput() {
           return;
         }
       } catch (e) {
-        console.warn("ElevenLabs TTS Web Audio failed:", e);
+        console.warn("TTS Web Audio failed:", e);
       }
     }
 
@@ -210,7 +211,8 @@ export function useVoiceOutput() {
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(clean);
-      utter.lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru-RU" : "";
+      utter.lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru-RU" : "en-US";
+      utter.rate = 0.95;
       window.speechSynthesis.speak(utter);
     }
   }, [enabled]);
