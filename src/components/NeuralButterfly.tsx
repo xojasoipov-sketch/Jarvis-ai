@@ -115,8 +115,9 @@ export default function NeuralButterfly({
       const s = stateRef.current;
       const mic = levelRef.current;
       const [ar, ag, ab] = STATE_ACCENT[s];
-      const speedMul = s === "asleep" ? 0.4 : s === "listening" ? 1.5 : s === "speaking" ? 2.0 : 1.0;
-      const breathe = 0.88 + (0.12 + mic * 0.08) * Math.sin(t * 0.018 * speedMul);
+      const speedMul = s === "asleep" ? 0.4 : s === "listening" ? 1.8 : s === "speaking" ? 2.8 : 1.0;
+      const breatheAmp = s === "speaking" ? 0.22 + mic * 0.18 : s === "listening" ? 0.16 + mic * 0.12 : 0.12 + mic * 0.08;
+      const breathe = 0.85 + breatheAmp * Math.sin(t * 0.018 * speedMul);
 
       const pts = particlesRef.current;
       const positions: { x: number; y: number }[] = [];
@@ -193,7 +194,8 @@ export default function NeuralButterfly({
       cancelAnimationFrame(rafResize);
       window.removeEventListener("resize", resize);
     };
-  }, [nodes]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleMove(e: React.MouseEvent<HTMLDivElement>) {
     const canvas = canvasRef.current;

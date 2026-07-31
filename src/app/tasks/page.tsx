@@ -90,7 +90,7 @@ export default function TasksPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {(["all", "todo", "progress", "done"] as const).map(s => (
           <button key={s} onClick={() => setFilter(s)}
             className={`p-4 rounded-2xl border-2 text-left transition-all ${filter === s ? "border-indigo-500 bg-indigo-50" : "border-gray-100 bg-white hover:border-gray-200"}`}>

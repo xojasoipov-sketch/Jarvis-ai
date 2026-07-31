@@ -132,8 +132,19 @@ function ParticleCanvas() {
     draw();
     return () => cancelAnimationFrame(raf);
   }, []);
-  return <canvas ref={ref} width={1200} height={1080}
-    className="absolute inset-0 w-full h-full pointer-events-none" />;
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = canvas.offsetWidth * dpr;
+      canvas.height = canvas.offsetHeight * dpr;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  return <canvas ref={ref} className="absolute inset-0 w-full h-full pointer-events-none" />;
 }
 
 // ── Voice API ───────────────────────────────────────────────────────────────
@@ -574,8 +585,8 @@ export default function PariPage() {
       </div>
 
       {/* State label */}
-      <p className={`mt-0 text-xs tracking-widest uppercase transition-all duration-400 ${
-        jarvis.active ? "text-violet-300/60" : "text-white/18"
+      <p className={`mt-0 text-xs tracking-widest uppercase transition-all duration-300 ${
+        jarvis.active ? "text-violet-300/60" : "text-white/20"
       }`}>{STATE_LABEL[jarvis.state]}</p>
 
       {jarvis.error && (
@@ -593,7 +604,7 @@ export default function PariPage() {
       <div className="mt-3 max-w-xs w-full px-4">
         {!showInput ? (
           <button onClick={() => setShowInput(true)}
-            className="w-full text-xs text-white/18 hover:text-white/38 transition-colors py-2">
+            className="w-full text-xs text-white/20 hover:text-white/40 transition-colors py-2">
             yoki yozing...
           </button>
         ) : (

@@ -17,7 +17,6 @@ const APIS = [
   { id: "groq-stt", name: "Groq Whisper STT", desc: "ElevenLabs ishlamasa — zaxira STT", envKey: "GROQ_API_KEY", url: "https://groq.com/keys", cat: "Voice" },
   { id: "gemini-voice", name: "Gemini Audio", desc: "Oxirgi zaxira — STT+javob bitta so'rovda", envKey: "GEMINI_API_KEY", url: "https://aistudio.google.com", cat: "Voice" },
   { id: "telegram", name: "Telegram Bot", desc: "Bot integratsiyasi", envKey: "TELEGRAM_BOT_TOKEN", url: "https://t.me/BotFather", cat: "Messaging" },
-  { id: "obsidian", name: "Vault (GitHub-asosli)", desc: "Shaxsiy bilim bazasi", envKey: "GITHUB_TOKEN", url: "https://github.com/settings/tokens", cat: "Knowledge" },
   { id: "hermes", name: "Hermes — built-in vositalar", desc: "MCP tool executor", envKey: null, url: "", cat: "Tools" },
   { id: "supabase", name: "Supabase", desc: "Tasks/Projects ma'lumotlar bazasi", envKey: "SUPABASE_URL", url: "https://supabase.com", cat: "Database" },
 ];

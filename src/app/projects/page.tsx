@@ -89,7 +89,7 @@ export default function ProjectsPage() {
       )}
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: "Faol loyihalar", value: projects.filter(p => p.status === "progress").length, icon: Rocket, color: "text-green-600" },
           { label: "Rejadagi loyihalar", value: projects.filter(p => p.status === "planning").length, icon: CheckCircle2, color: "text-indigo-600" },
