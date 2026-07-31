@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   TgUpdate, sendMessage, sendChatAction, answerCallbackQuery,
-  cleanMarkdown, AGENT_KEYBOARD,
+  cleanMarkdown, AGENT_KEYBOARD, getFileUrl,
 } from "@/lib/telegram";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-production.up.railway.app";
@@ -215,6 +215,50 @@ export async function POST(req: NextRequest) {
       const { chat, text, from } = update.message;
       log("info", "telegram", `Xabar qabul qilindi: "${text.slice(0, 60)}" from @${from.first_name}`);
       await handleMessage(chat.id, text, from.first_name);
+    }
+
+    if (update.message?.voice || update.message?.audio) {
+      const msg = update.message;
+      const { chat, from } = msg;
+      const fileId = (msg.voice ?? msg.audio)!.file_id;
+      await sendChatAction(chat.id, "typing");
+      try {
+        const fileUrl = await getFileUrl(fileId);
+        if (!fileUrl) throw new Error("Fayl URL topilmadi");
+
+        const audioRes = await fetch(fileUrl, { signal: AbortSignal.timeout(20000) });
+        if (!audioRes.ok) throw new Error("Fayl yuklanmadi");
+        const audioBlob = await audioRes.blob();
+
+        // Send to Groq Whisper via our own STT endpoint (server-side)
+        const groqKey = process.env.GROQ_API_KEY || process.env.GROQ_API_KEY2;
+        if (!groqKey) throw new Error("GROQ_API_KEY sozlanmagan");
+
+        const form = new FormData();
+        form.append("file", audioBlob, "voice.ogg");
+        form.append("model", "whisper-large-v3");
+        form.append("language", "uz");
+        form.append("response_format", "json");
+
+        const sttRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${groqKey}` },
+          body: form,
+          signal: AbortSignal.timeout(25000),
+        });
+
+        if (!sttRes.ok) throw new Error(`Groq STT xato: ${sttRes.status}`);
+        const sttData = await sttRes.json();
+        const transcript = sttData.text?.trim();
+        if (!transcript) throw new Error("Matn aniqlanmadi");
+
+        log("info", "telegram", `Ovoz transkripsiya: "${transcript.slice(0, 60)}"`);
+        await sendMessage(chat.id, `🎤 _"${transcript}"_`);
+        await handleMessage(chat.id, transcript, from.first_name);
+      } catch (e) {
+        log("error", "telegram", `Ovoz xatosi: ${(e as Error).message}`);
+        await sendMessage(chat.id, "❌ Ovoz xabarini o'qishda xato yuz berdi.");
+      }
     }
 
     if (update.callback_query) {

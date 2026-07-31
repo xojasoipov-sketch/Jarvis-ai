@@ -10,6 +10,8 @@ export type TgMessage = {
   chat: { id: number; type: string };
   text?: string;
   date: number;
+  voice?: { file_id: string; duration: number; mime_type?: string };
+  audio?: { file_id: string; duration: number; mime_type?: string };
 };
 
 export type TgCallbackQuery = {
@@ -84,6 +86,16 @@ export async function getWebhookInfo() {
 export async function getMe() {
   const res = await fetch(`${getApi()}/getMe`);
   return res.json();
+}
+
+export async function getFileUrl(fileId: string): Promise<string | null> {
+  const res = await fetch(`${getApi()}/getFile?file_id=${fileId}`, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const path = data?.result?.file_path;
+  if (!path) return null;
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  return `https://api.telegram.org/file/bot${token}/${path}`;
 }
 
 export function cleanMarkdown(text: string): string {
