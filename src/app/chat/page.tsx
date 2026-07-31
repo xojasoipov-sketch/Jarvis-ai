@@ -287,7 +287,7 @@ function ChatInner() {
         <div className="flex items-center gap-2">
           {voiceOut.supported && (
             <button
-              onClick={() => { if (voiceOut.enabled) voiceOut.stop(); voiceOut.setEnabled(!voiceOut.enabled); }}
+              onClick={() => { if (voiceOut.enabled) voiceOut.stop(); voiceOut.setEnabled(); }}
               className={`p-1.5 rounded-lg transition-all ${voiceOut.enabled ? "text-purple-300" : "text-white/20 hover:text-white/40"}`}
             >
               {voiceOut.enabled ? <Volume2 size={13} strokeWidth={1.75} /> : <VolumeX size={13} strokeWidth={1.75} />}
