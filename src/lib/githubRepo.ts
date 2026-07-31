@@ -101,6 +101,37 @@ export async function proposeCodeChange(
   return { prUrl, branch };
 }
 
+export type PullRequestInfo = {
+  number: number;
+  title: string;
+  htmlUrl: string;
+  state: "open" | "closed";
+  merged: boolean;
+  branch: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function listPullRequests(): Promise<PullRequestInfo[]> {
+  if (!repoConfigured) throw new Error("GITHUB_TOKEN yoki repo sozlanmagan");
+  const res = await fetch(api("pulls?state=all&per_page=20&sort=updated&direction=desc"), {
+    headers: headers(),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`PR ro'yxati olinmadi: ${res.status}`);
+  const data = await res.json();
+  return (data as Record<string, unknown>[]).map((pr) => ({
+    number: pr.number as number,
+    title: pr.title as string,
+    htmlUrl: pr.html_url as string,
+    state: pr.state as "open" | "closed",
+    merged: Boolean((pr as { merged_at?: string }).merged_at),
+    branch: (pr.head as { ref: string }).ref,
+    createdAt: pr.created_at as string,
+    updatedAt: pr.updated_at as string,
+  }));
+}
+
 export async function mergePullRequest(prNumber: number): Promise<{ merged: boolean; sha: string }> {
   if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan");
   const res = await fetch(api(`pulls/${prNumber}/merge`), {
