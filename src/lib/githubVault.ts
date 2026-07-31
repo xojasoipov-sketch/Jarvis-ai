@@ -6,7 +6,7 @@ const TOKEN =
   process.env.GITHUB_PERSONAL_ACCESS_TOKEN ||
   process.env.GH_TOKEN ||
   "";
-const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "";
+const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
 const ROOT = (process.env.GITHUB_VAULT_PATH || "vault").replace(/^\/|\/$/g, "");
 
