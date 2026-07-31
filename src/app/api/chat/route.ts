@@ -123,6 +123,7 @@ export async function POST(req: NextRequest) {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}`, ...(p.headers || {}) },
         body: JSON.stringify({ ...body, model: p.model }),
+        signal: AbortSignal.timeout(9000),
       });
       if (!res.ok) continue;
 
