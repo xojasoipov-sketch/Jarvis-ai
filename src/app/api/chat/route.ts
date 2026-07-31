@@ -3,6 +3,7 @@ import { toolsAsOpenAIFunctions, runTool } from "@/lib/tools";
 import { getProviders, type Provider } from "@/lib/providers";
 import { log } from "@/lib/logger";
 import { supabase, dbConfigured } from "@/lib/supabase";
+import { classifyFast, normalizeUzbek, intentToContext } from "@/lib/fatosat";
 
 const SYSTEM = `Sen Pari AI — Sadining shaxsiy AI yordamchisissan. Arxitektura:
 - Ko'p agentli tizim (18 ta agent: CEO, Researcher, Coder, Analyst, Writer, Marketing, DevOps, Assistant, Architect, Debug, Security, Database, Designer, Legal, Testing, Finance, Sales, HR)
@@ -109,13 +110,30 @@ function textStream(text: string): Response {
 export async function POST(req: NextRequest) {
   const start = Date.now();
   const { messages, system } = await req.json();
+
+  // Fatosat: normalize + classify last message
+  const rawLast = messages[messages.length - 1]?.content || "";
+  const normalizedLast = normalizeUzbek(rawLast);
+  const fastIntent = classifyFast(normalizedLast);
+
+  // Auto-create task if intent detected
+  if (fastIntent?.type === "task" && dbConfigured) {
+    void supabase!.from("pari_tasks").insert({ title: fastIntent.title, status: "todo" });
+  }
+  // Auto-save to knowledge if intent detected
+  if (fastIntent?.type === "knowledge_save" && dbConfigured) {
+    void supabase!.from("pari_knowledge").insert({ title: "Chat'dan saqlangan", content: rawLast.slice(0, 1000) });
+  }
+
   const list = getProviders();
   if (!list.length) {
     log("error", "chat-api", "POST /api/chat — 500 — hech qanday provider key sozlanmagan");
     return NextResponse.json({ error: "API key sozlanmagan" }, { status: 500 });
   }
 
-  const baseSystem = system || SYSTEM;
+  // Fatosat: enrich system with intent hint so AI knows what user wants
+  const intentHint = fastIntent ? intentToContext(fastIntent) : "";
+  const baseSystem = (system || SYSTEM) + (intentHint ? `\n\n${intentHint}` : "");
 
   // Prefer the tool-capable provider so the agent can actually call vault/code/web tools.
   // Only if a real key is set — skip tool loop for keyless providers like Pollinations.

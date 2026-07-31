@@ -238,6 +238,25 @@ async function saveConversation(id: string | null, messages: Message[]): Promise
   } catch { return null; }
 }
 
+// Intent chip labels shown above input
+const INTENT_LABELS: Record<string, string> = {
+  task: "✅ Vazifa",
+  code: "💻 Kod",
+  search: "🔍 Qidiruv",
+  analyze: "📊 Tahlil",
+  write: "✍️ Yozish",
+  devops: "⚙️ DevOps",
+  plan: "🗺️ Reja",
+  calendar: "📅 Taqvim",
+  finance: "💰 Moliya",
+  legal: "⚖️ Huquq",
+  knowledge_save: "💾 Xotira",
+  knowledge_search: "🧠 Qidirish",
+  navigate: "🔗 Sahifa",
+  hermes: "🪄 Agent",
+  agent: "🤖 Agent",
+};
+
 function ChatInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -246,9 +265,30 @@ function ChatInner() {
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState("");
   const [convId, setConvId] = useState<string | null>(null);
+  const [intentHint, setIntentHint] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const initialized = useRef(false);
+  const intentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Detect intent as user types (debounced, 600ms)
+  const detectIntent = useCallback((text: string) => {
+    if (intentTimer.current) clearTimeout(intentTimer.current);
+    if (!text.trim() || text.length < 5) { setIntentHint(null); return; }
+    intentTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch("/api/fatosat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const d = await r.json();
+        const t = d.intent?.type;
+        if (t && t !== "chat") setIntentHint(INTENT_LABELS[t] || t);
+        else setIntentHint(null);
+      } catch { setIntentHint(null); }
+    }, 600);
+  }, []);
 
   const onVoiceResult = useCallback((text: string) => {
     setInput((prev) => (prev ? `${prev} ${text}` : text));
@@ -281,6 +321,7 @@ function ChatInner() {
     const msg = (text || input).trim();
     if (!msg || loading) return;
     setInput("");
+    setIntentHint(null);
 
     const newMessages: Message[] = [...messages, { role: "user", content: msg, ts: Date.now() }];
     setMessages(newMessages);
@@ -408,6 +449,18 @@ function ChatInner() {
         <div ref={bottomRef} />
       </div>
 
+      {/* Intent hint chip */}
+      {intentHint && (
+        <div className="relative z-10 px-5 pb-1">
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+            style={{ background: "rgba(160,100,255,0.15)", color: "rgba(200,170,255,0.8)", border: "1px solid rgba(160,100,255,0.2)" }}
+          >
+            {intentHint}
+          </span>
+        </div>
+      )}
+
       {/* Input */}
       <div className="relative z-10 px-4 pb-4">
         <div
@@ -421,7 +474,7 @@ function ChatInner() {
           <textarea
             ref={inputRef}
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={e => { setInput(e.target.value); detectIntent(e.target.value); }}
             onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())}
             placeholder="…"
             rows={1}
