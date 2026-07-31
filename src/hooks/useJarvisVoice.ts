@@ -4,11 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export type JarvisState = "asleep" | "waking" | "listening" | "thinking" | "speaking";
 
 // VAD thresholds — iOS mic gain is lower than desktop
-const SPEAK_THRESHOLD = 0.002;   // speech start (very low for iOS)
-const SILENCE_THRESHOLD = 0.001; // silence
-const SILENCE_DURATION = 1500;   // ms silence → stop recording
-const MIN_SPEECH_MS = 300;       // ignore clips shorter than this
-const MAX_SPEECH_MS = 15000;     // max recording length
+const SPEAK_THRESHOLD = 0.002;
+const SILENCE_THRESHOLD = 0.001;
+const SILENCE_DURATION = 1500;
+const MIN_SPEECH_MS = 300;
+const MAX_SPEECH_MS = 15000;
 
 function getBestMime(): string {
   if (typeof MediaRecorder === "undefined") return "";
@@ -16,9 +16,9 @@ function getBestMime(): string {
     "audio/webm;codecs=opus",
     "audio/webm",
     "audio/ogg;codecs=opus",
-    "audio/mp4",        // iOS Safari
+    "audio/mp4",
     "audio/x-m4a",
-    "",                 // browser default
+    "",
   ];
   for (const t of types) {
     if (!t || MediaRecorder.isTypeSupported(t)) return t;
@@ -26,66 +26,65 @@ function getBestMime(): string {
   return "";
 }
 
-let currentAudio: HTMLAudioElement | null = null;
+// Play TTS via Web Audio API (works on iOS in async context) with <audio> fallback
+async function speakText(text: string, audioCtx: AudioContext | null): Promise<void> {
+  const clean = text.replace(/[*_#`>~[\]]/g, "").replace(/\n+/g, " ").slice(0, 500);
+  if (!clean) return;
 
-function speakText(text: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.src = "";
-      currentAudio = null;
-    }
+  const lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru" : "uz";
+  const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
 
-    const clean = text.replace(/[*_#`>~\[\]]/g, "").replace(/\n+/g, " ").slice(0, 500);
-    if (!clean) return resolve();
-
-    // Detect language: default to Uzbek, fallback to Russian
-    const lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru" : "uz";
-    const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
-
-    const audio = new Audio(url);
-    currentAudio = audio;
-    audio.volume = 1.0;
-
-    let resolved = false;
-    const done = () => {
-      if (!resolved) {
-        resolved = true;
-        currentAudio = null;
-        resolve();
+  // Method 1: Web Audio API — iOS Safari compatible even in async chains
+  if (audioCtx && audioCtx.state !== "closed") {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        const decoded = await audioCtx.decodeAudioData(buf);
+        await new Promise<void>((resolve) => {
+          const src = audioCtx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(audioCtx.destination);
+          src.onended = resolve;
+          src.start(0);
+        });
+        return;
       }
-    };
+    } catch (e) {
+      console.warn("Web Audio TTS failed, trying fallback:", e);
+    }
+  }
 
-    audio.onended = done;
+  // Method 2: <audio> element fallback (desktop / non-iOS)
+  await new Promise<void>((resolve) => {
+    const audio = new Audio(url);
+    audio.volume = 1.0;
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+
+    audio.onended = finish;
     audio.onerror = () => {
-      // Fallback to speechSynthesis if TTS proxy fails
+      // Method 3: speechSynthesis last resort
       if ("speechSynthesis" in window) {
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(clean);
-        // uz-UZ not available on iOS — use ru-RU for Cyrillic, default otherwise
         utter.lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru-RU" : "";
-        utter.onend = done;
-        utter.onerror = done;
+        utter.onend = finish;
+        utter.onerror = finish;
         window.speechSynthesis.speak(utter);
       } else {
-        done();
+        finish();
       }
     };
 
-    // Fallback timeout
     const wordCount = clean.split(/\s+/).length;
-    setTimeout(done, Math.max(8000, wordCount * 500));
-
-    audio.play().catch(() => {
-      // autoplay blocked — trigger speechSynthesis fallback
-      audio.onerror?.(new Event("error"));
-    });
+    setTimeout(finish, Math.max(8000, wordCount * 500));
+    audio.play().catch(() => audio.onerror?.(new Event("error")));
   });
 }
 
 async function callVoiceAPI(blob: Blob): Promise<{ transcript: string; reply: string }> {
   const fd = new FormData();
-  // Use correct extension based on MIME so the server and Gemini parse it right
   const ext = blob.type.includes("mp4") || blob.type.includes("m4a") ? "mp4"
     : blob.type.includes("ogg") ? "ogg"
     : blob.type.includes("wav") ? "wav"
@@ -120,7 +119,6 @@ export function useJarvisVoice() {
   const speechStartRef = useRef<number>(0);
   const isSpeakingRef = useRef(false);
   const chunksRef = useRef<BlobPart[]>([]);
-  const mimeRef = useRef<string>("");
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { activeRef.current = active; }, [active]);
@@ -160,19 +158,13 @@ export function useJarvisVoice() {
     const { reply } = await callVoiceAPI(blob);
 
     setState("speaking");
-    await speakText(reply);
+    // Pass audioCtx so Web Audio API is used on iOS
+    await speakText(reply, audioCtxRef.current);
     if (activeRef.current) setState("listening");
     else setState("asleep");
   }, []);
 
-  const startVADLoop = useCallback((stream: MediaStream) => {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new AudioCtx();
-    audioCtxRef.current = ctx;
-
-    // iOS: AudioContext starts suspended — must resume after user gesture (we're inside one)
-    ctx.resume().catch(() => {});
-
+  const startVADLoop = useCallback((stream: MediaStream, ctx: AudioContext) => {
     const analyser = ctx.createAnalyser();
     analyserRef.current = analyser;
     analyser.fftSize = 2048;
@@ -180,7 +172,6 @@ export function useJarvisVoice() {
     ctx.createMediaStreamSource(stream).connect(analyser);
 
     const mime = getBestMime();
-    mimeRef.current = mime;
     const data = new Float32Array(analyser.fftSize);
 
     function startRecording() {
@@ -255,42 +246,46 @@ export function useJarvisVoice() {
     setActive(true);
     setState("waking");
 
-    // iOS Safari requires a user-gesture-initiated Audio.play() to unlock autoplay
+    // Create & resume AudioContext directly in user gesture — this unlocks Web Audio on iOS
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioCtx();
+    audioCtxRef.current = ctx;
+    await ctx.resume().catch(() => {});
+
+    // Play a silent buffer to fully unlock audio output on iOS
     try {
-      const unlock = new Audio();
-      unlock.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-      await unlock.play().catch(() => {});
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
     } catch { /* ignore */ }
 
     let stream: MediaStream;
     try {
-      // iOS Safari does not support sampleRate constraint — omit it
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch (e) {
       console.error("getUserMedia error:", e);
       setError("Mikrofon ruxsati berilmadi.");
       setActive(false);
       setState("asleep");
+      ctx.close().catch(() => {});
+      audioCtxRef.current = null;
       return;
     }
     streamRef.current = stream;
 
     setTimeout(() => {
-      if (activeRef.current) {
+      if (activeRef.current && audioCtxRef.current) {
         setState("listening");
-        startVADLoop(stream);
+        startVADLoop(stream, audioCtxRef.current);
       }
     }, 400);
   }, [startVADLoop]);
 
   const stopConversation = useCallback(() => {
-    if (currentAudio) { currentAudio.pause(); currentAudio.src = ""; currentAudio = null; }
     window.speechSynthesis?.cancel();
     stopAll();
     setActive(false);
