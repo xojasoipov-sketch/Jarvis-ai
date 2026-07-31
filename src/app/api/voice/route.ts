@@ -16,7 +16,6 @@ Qoidalar:
 - Maksimal 3-4 gap
 - Agar savol bo'lmasa ham, samimiy muloqot qil`;
 
-// ── 1. Gemini 1.5 Flash (STT + AI, bitta chaqiruv) ──────────────────────────
 async function tryGeminiWithKey(key: string, audioBuffer: Buffer, mimeType: string): Promise<{ transcript: string; reply: string } | null> {
   const b64 = audioBuffer.toString("base64");
   const safeMime = normalizeMime(mimeType);
@@ -62,7 +61,6 @@ async function tryGemini(audioBuffer: Buffer, mimeType: string): Promise<{ trans
   return null;
 }
 
-// ── 2. Groq Whisper STT ─────────────────────────────────────────────────────
 async function transcribeGroq(audioBuffer: Buffer, mimeType: string, filename: string): Promise<string | null> {
   if (!GROQ_KEY) return null;
 
@@ -85,7 +83,6 @@ async function transcribeGroq(audioBuffer: Buffer, mimeType: string, filename: s
   return data?.text || null;
 }
 
-// ── 3. Pari text AI — direct provider call (no HTTP round-trip) ─────────────
 async function askPariText(transcript: string): Promise<string> {
   const providers = getProviders();
   const messages = [
@@ -113,7 +110,6 @@ async function askPariText(transcript: string): Promise<string> {
   return "Kechirasiz, tushunmadim.";
 }
 
-// ── Helper: normalize MIME type for Gemini ───────────────────────────────────
 function normalizeMime(raw: string): string {
   const m = raw.toLowerCase().split(";")[0].trim();
   const map: Record<string, string> = {
@@ -139,7 +135,6 @@ function mimeToFilename(mime: string): string {
   return "audio.webm";
 }
 
-// ── Main handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
@@ -156,24 +151,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "audio juda qisqa" }, { status: 400 });
     }
 
-    // ── Attempt 1: Gemini (STT + AI in one call) ──
     const geminiResult = await tryGemini(buf, mimeType);
     if (geminiResult?.reply) {
       return NextResponse.json(geminiResult);
     }
 
-    // ── Attempt 2: Groq Whisper STT + Pari chat ──
     const transcript = await transcribeGroq(buf, mimeType, filename);
     if (transcript && transcript.trim().length > 1) {
       const reply = await askPariText(transcript.trim());
       return NextResponse.json({ transcript: transcript.trim(), reply });
     }
 
-    // ── Attempt 3: Empty audio or both failed ──
     console.error("Voice: all providers failed. mime:", mimeType, "size:", buf.length);
     return NextResponse.json(
       { transcript: "", reply: "Kechirasiz, ovozni tushunmadim. Qayta gapiring." },
-      { status: 200 } // 200 so client doesn't crash — soft error
+      { status: 200 }
     );
 
   } catch (e) {
@@ -182,11 +174,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Quick diagnostic — GET /api/voice returns provider status
 export async function GET() {
   return NextResponse.json({
     gemini: GEMINI_KEYS.length ? `✅ ${GEMINI_KEYS.length} key(s) set` : "❌ not set",
     groq: GROQ_KEY ? "✅ key set" : "❌ not set",
-    base_url: BASE_URL,
   });
 }
