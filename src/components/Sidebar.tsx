@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutGrid, MessageSquare, History, Bot, CheckSquare, FolderKanban, BookOpen, Brain,
   Zap, Calendar, FolderOpen, BarChart3, Code2, Database, Plug, Sparkles,
-  Wrench, Settings, ShieldCheck, CreditCard, ScrollText, ChevronDown, X, Radio, type LucideIcon,
+  Wrench, Settings, ShieldCheck, CreditCard, ScrollText, ChevronDown, X, Radio, GitPullRequest, type LucideIcon,
 } from "lucide-react";
 
 type NavEntry = { label: string; href: string; icon: LucideIcon };
@@ -28,6 +28,7 @@ const nav: NavEntry[] = [
 
 const devNav: NavEntry[] = [
   { label: "Code Editor", href: "/code", icon: Code2 },
+  { label: "Sessions", href: "/sessions", icon: GitPullRequest },
   { label: "Databases", href: "/databases", icon: Database },
   { label: "Connectors", href: "/apis", icon: Plug },
   { label: "Dev Tools", href: "/devtools", icon: Wrench },
