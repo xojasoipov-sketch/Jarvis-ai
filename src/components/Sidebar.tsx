@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutGrid, MessageSquare, History, Bot, CheckSquare, FolderKanban, BookOpen, Brain,
   Zap, Calendar, FolderOpen, BarChart3, Code2, Database, Plug, Sparkles,
-  Wrench, Settings, ShieldCheck, CreditCard, ScrollText, ChevronDown, X, Radio, GitPullRequest, type LucideIcon,
+  Wrench, Settings, ShieldCheck, CreditCard, ScrollText, LogOut, X, Radio, GitPullRequest, type LucideIcon,
 } from "lucide-react";
 
 type NavEntry = { label: string; href: string; icon: LucideIcon };
@@ -62,6 +62,20 @@ function NavItem({ item, onClose }: { item: NavEntry; onClose?: () => void }) {
 }
 
 
+function LogoutButton() {
+  const router = useRouter();
+  async function logout() {
+    await fetch("/api/auth/login", { method: "DELETE" });
+    router.push("/login");
+    router.refresh();
+  }
+  return (
+    <button onClick={logout} title="Chiqish" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+      <LogOut size={15} strokeWidth={1.75} />
+    </button>
+  );
+}
+
 export default function Sidebar({ onClose }: { onClose?: () => void }) {
   return (
     <aside className="w-60 h-screen bg-white border-r border-gray-100 flex flex-col flex-shrink-0">
@@ -99,22 +113,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       <div className="px-3 py-3 border-t border-gray-100">
-        <button className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 transition-all">
+        <div className="flex items-center gap-3 px-2 py-2">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">S</div>
           <div className="flex-1 min-w-0 text-left">
-            <p className="text-xs font-semibold text-gray-900 truncate">Sadi Prime</p>
-            <p className="text-xs text-indigo-600">Pro Plan</p>
+            <p className="text-xs font-semibold text-gray-900 truncate">Sadi</p>
           </div>
-          <ChevronDown size={14} strokeWidth={1.75} className="text-gray-400 flex-shrink-0" />
-        </button>
-        <div className="mt-2 px-2">
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-            <span>Credits</span>
-            <span className="font-medium text-gray-700">12,450 / 20,000</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{ width: "62%" }} />
-          </div>
+          <LogoutButton />
         </div>
       </div>
     </aside>
