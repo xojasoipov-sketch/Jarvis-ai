@@ -40,6 +40,25 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     },
   },
   {
+    name: "web_search",
+    description: "Internetdan qidiruv qiladi (DuckDuckGo Instant Answer) — hozirgi voqealar, faktlar, ta'riflar uchun",
+    parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+    run: async (args) => {
+      const query = String(args.query || "");
+      const res = await fetch(
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      const data = await res.json();
+      const results: string[] = [];
+      if (data.AbstractText) results.push(`${data.Heading}: ${data.AbstractText}`);
+      for (const t of (data.RelatedTopics || []).slice(0, 5)) {
+        if (t.Text) results.push(t.Text);
+      }
+      return { query, results };
+    },
+  },
+  {
     name: "vault_read",
     description: "Obsidian vault'dan (shaxsiy xotira) faylni o'qiydi",
     parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
