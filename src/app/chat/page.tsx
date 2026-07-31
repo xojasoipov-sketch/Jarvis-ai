@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Mic, Send, History, Volume2, VolumeX, ChevronDown } from "lucide-react";
+import { Mic, Send, History, Volume2, VolumeX, ChevronDown, Code2, Eye } from "lucide-react";
 import { useVoiceInput, useVoiceOutput } from "@/hooks/useVoice";
 
 type Message = { role: "user" | "assistant"; content: string; ts?: number };
@@ -108,6 +108,59 @@ function DustCanvas() {
   );
 }
 
+// ─── HTML Artifact preview ────────────────────────────────────────────────────
+function ArtifactCard({ html }: { html: string }) {
+  const [view, setView] = useState<"preview" | "code">("preview");
+
+  return (
+    <div className="mt-2 rounded-xl border border-purple-500/20 bg-black/30 overflow-hidden max-w-xs sm:max-w-md">
+      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-purple-500/15">
+        <span className="text-[10px] text-purple-300/60 uppercase tracking-wider">Artifact</span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setView("preview")}
+            className={`p-1 rounded transition-colors ${view === "preview" ? "text-purple-300 bg-purple-500/15" : "text-purple-300/40 hover:text-purple-300/70"}`}
+          >
+            <Eye size={11} strokeWidth={1.75} />
+          </button>
+          <button
+            onClick={() => setView("code")}
+            className={`p-1 rounded transition-colors ${view === "code" ? "text-purple-300 bg-purple-500/15" : "text-purple-300/40 hover:text-purple-300/70"}`}
+          >
+            <Code2 size={11} strokeWidth={1.75} />
+          </button>
+        </div>
+      </div>
+      {view === "preview" ? (
+        <iframe
+          srcDoc={html}
+          sandbox="allow-scripts"
+          className="w-full bg-white"
+          style={{ height: 280 }}
+        />
+      ) : (
+        <pre className="text-purple-200 text-xs p-3 overflow-auto font-mono" style={{ maxHeight: 280 }}>
+          {html}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function splitArtifacts(text: string): { type: "text" | "html"; content: string }[] {
+  const parts: { type: "text" | "html"; content: string }[] = [];
+  const re = /```html\n?([\s\S]*?)```/g;
+  let last = 0;
+  let match;
+  while ((match = re.exec(text))) {
+    if (match.index > last) parts.push({ type: "text", content: text.slice(last, match.index) });
+    parts.push({ type: "html", content: match[1].trim() });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push({ type: "text", content: text.slice(last) });
+  return parts;
+}
+
 // ─── Message bubble (hidden until clicked) ────────────────────────────────────
 function MessageBubble({ m }: { m: Message }) {
   const [open, setOpen] = useState(false);
@@ -123,43 +176,51 @@ function MessageBubble({ m }: { m: Message }) {
       .replace(/\n/g, "<br />");
   }
 
+  const segments = !isUser ? splitArtifacts(m.content) : null;
+
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={`group relative flex items-center gap-2 transition-all duration-300 ${
-          isUser ? "flex-row-reverse" : ""
-        }`}
-      >
-        {/* Dot indicator */}
-        <span
-          className={`flex-shrink-0 rounded-full transition-all duration-300 ${
-            open ? "w-2 h-2" : "w-2.5 h-2.5"
-          } ${isUser ? "bg-orange-400/70" : "bg-purple-400/60"}`}
-          style={{ boxShadow: open ? "0 0 6px 2px rgba(160,100,255,0.3)" : "none" }}
-        />
-
-        {/* Content — hidden until open */}
-        <span
-          className={`text-sm leading-relaxed transition-all duration-300 text-left max-w-xs sm:max-w-md rounded-2xl px-3 py-2 ${
-            open
-              ? isUser
-                ? "opacity-100 bg-orange-500/15 text-orange-100 border border-orange-500/20"
-                : "opacity-100 bg-purple-500/10 text-purple-100 border border-purple-500/15"
-              : "opacity-0 w-0 px-0 py-0 overflow-hidden"
-          }`}
+      <div className={`group relative flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={`flex items-center gap-2 transition-all duration-300 ${isUser ? "flex-row-reverse" : ""}`}
         >
-          {m.role === "assistant" ? (
-            <span dangerouslySetInnerHTML={{ __html: formatText(m.content) }} />
-          ) : (
-            m.content
-          )}
-        </span>
+          {/* Dot indicator */}
+          <span
+            className={`flex-shrink-0 rounded-full transition-all duration-300 ${
+              open ? "w-2 h-2" : "w-2.5 h-2.5"
+            } ${isUser ? "bg-orange-400/70" : "bg-purple-400/60"}`}
+            style={{ boxShadow: open ? "0 0 6px 2px rgba(160,100,255,0.3)" : "none" }}
+          />
 
-        {open && (
-          <ChevronDown size={10} className={`text-purple-400/50 flex-shrink-0 ${isUser ? "rotate-180" : ""}`} />
-        )}
-      </button>
+          {/* Content — hidden until open */}
+          <span
+            className={`text-sm leading-relaxed transition-all duration-300 text-left max-w-xs sm:max-w-md rounded-2xl px-3 py-2 ${
+              open
+                ? isUser
+                  ? "opacity-100 bg-orange-500/15 text-orange-100 border border-orange-500/20"
+                  : "opacity-100 bg-purple-500/10 text-purple-100 border border-purple-500/15"
+                : "opacity-0 w-0 px-0 py-0 overflow-hidden"
+            }`}
+          >
+            {segments ? (
+              segments.filter((s) => s.type === "text" && s.content.trim()).map((s, i) => (
+                <span key={i} dangerouslySetInnerHTML={{ __html: formatText(s.content) }} />
+              ))
+            ) : (
+              m.content
+            )}
+          </span>
+
+          {open && (
+            <ChevronDown size={10} className={`text-purple-400/50 flex-shrink-0 ${isUser ? "rotate-180" : ""}`} />
+          )}
+        </button>
+
+        {open && segments && segments.filter((s) => s.type === "html").map((s, i) => (
+          <ArtifactCard key={i} html={s.content} />
+        ))}
+      </div>
     </div>
   );
 }
