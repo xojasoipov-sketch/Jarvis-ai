@@ -72,6 +72,16 @@ create policy "service_role full access" on pari_events for all using (true) wit
 -- ── pari_agent_runs: add agent_id column if missing ──────────────────────────
 alter table pari_agent_runs add column if not exists agent_id text;
 
+-- ── Telegram sessions (persistent across server restarts) ────────────────────
+create table if not exists pari_tg_sessions (
+  chat_id    bigint primary key,
+  data       jsonb not null default '{}',
+  updated_at timestamptz default now()
+);
+
+alter table pari_tg_sessions enable row level security;
+create policy "service_role full access" on pari_tg_sessions for all using (true) with check (true);
+
 -- ── Read-only query runner (for /databases page) ──────────────────────────────
 create or replace function pari_run_readonly_query(query_text text)
 returns setof json language plpgsql security definer as $$

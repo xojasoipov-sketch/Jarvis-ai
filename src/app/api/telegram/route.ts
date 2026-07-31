@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   TgUpdate, sendMessage, sendChatAction, answerCallbackQuery,
-  cleanMarkdown, AGENT_KEYBOARD, downloadVoice,
+  cleanMarkdown, AGENT_KEYBOARD, downloadVoice, getFileUrl,
 } from "@/lib/telegram";
 import { listChannels, createPost, listPosts, getChannel } from "@/lib/smm-store";
 
@@ -381,6 +381,56 @@ export async function POST(req: NextRequest) {
         await sendMessage(chat.id, "Ovoz xabarida xato yuz berdi.");
       }
       log("info", "telegram", `Ovoz xabari from @${from.first_name}`);
+    }
+
+    // Photo handler — describe the image with AI
+    if (update.message?.photo) {
+      const { chat, from, photo, caption } = update.message;
+      const largest = photo[photo.length - 1]; // highest resolution
+      await sendChatAction(chat.id, "typing");
+      try {
+        const url = await getFileUrl(largest.file_id);
+        const prompt = caption || "Bu rasmda nima ko'rsatilgan? Tavsiflab bering.";
+        // Use AI with image URL as context (text description fallback)
+        const reply = await callAI(
+          [{ role: "user", content: `Foydalanuvchi rasm yubordi (${largest.width}x${largest.height}px). Rasm URL: ${url || "yuklab bo'lmadi"}.\n\nSo'rov: ${prompt}` }],
+          "Sen ko'p modalli AI yordamchisan. Rasm tavsifi yoki savolga javob ber."
+        );
+        await sendMessage(chat.id, cleanMarkdown(reply));
+      } catch {
+        await sendMessage(chat.id, "Rasmni qayta ishlashda xato.");
+      }
+      log("info", "telegram", `Rasm from @${from.first_name}`);
+    }
+
+    // Document handler — extract text and analyze
+    if (update.message?.document) {
+      const { chat, from, document, caption } = update.message;
+      const { file_name, mime_type, file_size } = document;
+      const sizeKb = file_size ? Math.round(file_size / 1024) : "?";
+      await sendChatAction(chat.id, "typing");
+      try {
+        const url = await getFileUrl(document.file_id);
+        const isText = mime_type?.startsWith("text/") || /\.(txt|md|csv|json|yaml|py|js|ts)$/i.test(file_name || "");
+        if (isText && url) {
+          const fileRes = await fetch(url, { signal: AbortSignal.timeout(10000) });
+          const text = (await fileRes.text()).slice(0, 8000);
+          const question = caption || "Bu faylni tahlil qilib, asosiy ma'lumotlarni chiqarib ber.";
+          const reply = await callAI(
+            [{ role: "user", content: `Fayl: ${file_name}\n\nMazmun:\n${text}\n\nSo'rov: ${question}` }]
+          );
+          await sendMessage(chat.id, `📄 *${file_name}* (${sizeKb}KB)\n\n${cleanMarkdown(reply)}`);
+        } else {
+          await sendMessage(chat.id,
+            `📎 *${file_name || "Fayl"}* (${sizeKb}KB) qabul qilindi.\n\n_${mime_type || "noma'lum tur"}_\n\n` +
+            `Bu fayl turini to'g'ridan-to'g'ri qayta ishlash imkoni yo'q. Web ilovaga yuklab tahlil qiling:`,
+            { inline_keyboard: [[{ text: "📁 Files sahifasiga", web_app: { url: `${APP_URL}/files` } }]] }
+          );
+        }
+      } catch {
+        await sendMessage(chat.id, "Faylni o'qishda xato yuz berdi.");
+      }
+      log("info", "telegram", `Hujjat "${document.file_name}" from @${from.first_name}`);
     }
 
     if (update.callback_query) {

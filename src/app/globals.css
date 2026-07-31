@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+[data-theme="light"] {
   --bg: #f8f9fc;
   --sidebar: #ffffff;
   --card: #ffffff;
@@ -15,6 +16,19 @@
   --danger: #ef4444;
 }
 
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --sidebar: #161b27;
+  --card: #1c2233;
+  --border: #2a3147;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #818cf8;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -22,6 +36,7 @@ body {
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background 0.2s, color 0.2s;
 }
 
 ::-webkit-scrollbar { width: 4px; }

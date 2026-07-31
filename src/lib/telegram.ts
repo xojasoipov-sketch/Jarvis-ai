@@ -9,8 +9,11 @@ export type TgMessage = {
   from: { id: number; first_name: string; username?: string };
   chat: { id: number; type: string };
   text?: string;
+  caption?: string;
   voice?: { file_id: string; duration: number; mime_type?: string };
   audio?: { file_id: string; mime_type?: string };
+  photo?: { file_id: string; width: number; height: number; file_size?: number }[];
+  document?: { file_id: string; file_name?: string; mime_type?: string; file_size?: number };
   date: number;
 };
 
@@ -115,6 +118,37 @@ export function cleanMarkdown(text: string): string {
     .slice(0, 4096);
 }
 
+export async function sendDocument(chatId: number, fileUrl: string, filename: string, caption?: string) {
+  const body: Record<string, unknown> = { chat_id: chatId, document: fileUrl };
+  if (caption) body.caption = caption;
+  await fetch(`${getApi()}/sendDocument`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function sendPhoto(chatId: number, photoUrl: string, caption?: string, keyboard?: InlineKeyboard) {
+  const body: Record<string, unknown> = { chat_id: chatId, photo: photoUrl };
+  if (caption) body.caption = caption;
+  if (keyboard) body.reply_markup = keyboard;
+  await fetch(`${getApi()}/sendPhoto`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function editMessageText(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard) {
+  const body: Record<string, unknown> = { chat_id: chatId, message_id: messageId, text, parse_mode: "Markdown" };
+  if (keyboard) body.reply_markup = keyboard;
+  await fetch(`${getApi()}/editMessageText`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export const AGENT_KEYBOARD: InlineKeyboard = {
   inline_keyboard: [
     [
@@ -130,6 +164,12 @@ export const AGENT_KEYBOARD: InlineKeyboard = {
     [
       { text: "⚙️ DevOps", callback_data: "agent:devops" },
       { text: "🎯 Assistant", callback_data: "agent:assistant" },
+      { text: "🔒 Security", callback_data: "agent:security" },
+    ],
+    [
+      { text: "🏗️ Architect", callback_data: "agent:architect" },
+      { text: "🐛 Debug", callback_data: "agent:debug" },
+      { text: "💰 Finance", callback_data: "agent:finance" },
     ],
   ],
 };
