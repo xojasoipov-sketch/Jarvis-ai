@@ -4,17 +4,28 @@ import { useSearchParams } from "next/navigation";
 import { History } from "lucide-react";
 import {
   Briefcase, Microscope, Code2, BarChart3, PenLine, Megaphone,
-  Settings2, Target, Bot, Play, Zap, type LucideIcon,
+  Settings2, Target, Bot, Play, Zap, Building2, Bug, Shield, Database,
+  Palette, Scale, FlaskConical, DollarSign, Handshake, Users, type LucideIcon,
 } from "lucide-react";
 
 const AGENTS: { id: string; name: string; icon: LucideIcon; desc: string; color: string; tags: string[] }[] = [
   { id: "ceo", name: "CEO Agent", icon: Briefcase, desc: "Strategiya va biznes qarorlari", color: "from-blue-500 to-indigo-600", tags: ["Strategiya", "Qarorlar", "Biznes"] },
+  { id: "architect", name: "Architect Agent", icon: Building2, desc: "Tizim dizayni va arxitektura", color: "from-indigo-500 to-blue-700", tags: ["Dizayn", "Scalability", "Komponentlar"] },
   { id: "researcher", name: "Research Agent", icon: Microscope, desc: "Chuqur tadqiqot va tahlil", color: "from-purple-500 to-pink-600", tags: ["Tadqiqot", "Tahlil", "Ma'lumot"] },
   { id: "coder", name: "Coding Agent", icon: Code2, desc: "Kod yozish va debug", color: "from-green-500 to-teal-600", tags: ["Python", "JS", "TypeScript"] },
+  { id: "debug", name: "Debug Agent", icon: Bug, desc: "Xatolarni topish va tuzatish", color: "from-red-500 to-rose-600", tags: ["Stack trace", "Root cause", "Fix"] },
+  { id: "security", name: "Security Agent", icon: Shield, desc: "Xavfsizlik va zaifliklar", color: "from-slate-600 to-slate-800", tags: ["Audit", "Zaiflik", "Himoya"] },
+  { id: "database", name: "Database Agent", icon: Database, desc: "Ma'lumotlar bazasi dizayni", color: "from-teal-500 to-cyan-700", tags: ["SQL", "Sxema", "Optimizatsiya"] },
+  { id: "designer", name: "Designer Agent", icon: Palette, desc: "UI/UX dizayn", color: "from-fuchsia-500 to-pink-600", tags: ["UI", "UX", "Layout"] },
   { id: "analyst", name: "Data Analyst", icon: BarChart3, desc: "Ma'lumot tahlili va hisobot", color: "from-orange-500 to-red-600", tags: ["Excel", "SQL", "Vizual"] },
   { id: "writer", name: "Content Writer", icon: PenLine, desc: "Kontent va matn yaratish", color: "from-pink-500 to-rose-600", tags: ["Blog", "SEO", "Reklama"] },
   { id: "marketing", name: "Marketing Agent", icon: Megaphone, desc: "Marketing va reklama", color: "from-yellow-500 to-orange-600", tags: ["SMM", "Ads", "Brend"] },
-  { id: "devops", name: "DevOps Agent", icon: Settings2, desc: "Deploy va infratuzilma", color: "from-slate-500 to-gray-600", tags: ["Docker", "Railway", "CI/CD"] },
+  { id: "sales", name: "Sales Agent", icon: Handshake, desc: "Sotuv va muzokara", color: "from-emerald-500 to-green-700", tags: ["Pitch", "Voronka", "Mijoz"] },
+  { id: "finance", name: "Finance Agent", icon: DollarSign, desc: "Moliyaviy tahlil", color: "from-lime-600 to-green-700", tags: ["Byudjet", "Prognoz", "Narxlash"] },
+  { id: "legal", name: "Legal Agent", icon: Scale, desc: "Shartnoma va huquqiy yo'nalish", color: "from-amber-600 to-yellow-700", tags: ["Shartnoma", "Litsenziya"] },
+  { id: "hr", name: "HR Agent", icon: Users, desc: "Jamoa va ishga olish", color: "from-sky-500 to-blue-600", tags: ["Vakansiya", "Intervyu", "Jamoa"] },
+  { id: "testing", name: "Testing Agent", icon: FlaskConical, desc: "Test strategiyasi va QA", color: "from-violet-500 to-purple-700", tags: ["Test case", "QA", "Edge case"] },
+  { id: "devops", name: "DevOps Agent", icon: Settings2, desc: "Deploy va infratuzilma", color: "from-slate-500 to-gray-600", tags: ["Docker", "Vercel", "CI/CD"] },
   { id: "assistant", name: "Personal Assistant", icon: Target, desc: "Kundalik vazifalar va rejalar", color: "from-cyan-500 to-blue-600", tags: ["Jadval", "Eslatma", "Tashkil"] },
 ];
 
