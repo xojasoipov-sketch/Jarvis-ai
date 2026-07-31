@@ -17,7 +17,7 @@ const CHECK_LABELS: Record<keyof Checks, { label: string; desc: string }> = {
   secretsNotHardcoded: { label: "Sirlar kodga hardcode qilinmagan", desc: "Barcha API kalitlar faqat environment variable orqali o'qiladi" },
   botProtected: { label: "Telegram bot token muhofazalangan", desc: "TELEGRAM_BOT_TOKEN Vercel Environment Variables'da" },
   rateLimiting: { label: "Rate limiting", desc: "Hali ulanmagan — Redis yoki Vercel Edge Config kerak" },
-  authSystem: { label: "Login / autentifikatsiya tizimi", desc: "Yo'q — bu bitta foydalanuvchi uchun ilova, URL'ni bilgan har kim to'liq kirish huquqiga ega" },
+  authSystem: { label: "Login / autentifikatsiya tizimi", desc: "Parol-gate (APP_PASSWORD) middleware orqali — sozlanmasa, URL'ni bilgan har kim kira oladi" },
   auditLogs: { label: "Audit loglar", desc: "Mavjud, lekin faqat xotirada (in-memory) — server qayta ishga tushsa yo'qoladi" },
 };
 
