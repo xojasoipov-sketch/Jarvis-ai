@@ -1,29 +1,167 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Bot, Sparkles, Paperclip, Mic, Send, History, Volume2, VolumeX } from "lucide-react";
+import { Mic, Send, History, Volume2, VolumeX, ChevronDown } from "lucide-react";
 import { useVoiceInput, useVoiceOutput } from "@/hooks/useVoice";
 
 type Message = { role: "user" | "assistant"; content: string; ts?: number };
 
-const suggestions = [
-  "Biznesimni rivojlantirish uchun strategiya ber",
-  "Python da web scraper yoz",
-  "Marketing kampaniyasi rejasini tuz",
-  "Raqobatchilarni tahlil qil",
-  "Loyiha boshqaruv tizimini ishlab chiq",
-];
+// ─── Dust Particle Canvas ─────────────────────────────────────────────────────
+function DustCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-function formatText(text: string) {
-  return text
-    .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
-      `<pre class="bg-gray-900 text-green-400 rounded-xl p-4 text-xs overflow-x-auto my-2 font-mono">${code.trim()}</pre>`)
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold text-gray-900 mt-3 mb-1">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold text-gray-900 mt-4 mb-2">$1</h2>')
-    .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-gray-700">$1</li>')
-    .replace(/\n/g, "<br />");
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let raf: number;
+    const pts: { x: number; y: number; vx: number; vy: number; r: number; a: number; da: number }[] = [];
+
+    function resize() {
+      if (!canvas) return;
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    // Butterfly-shaped distribution
+    const N = 120;
+    for (let i = 0; i < N; i++) {
+      const t = (i / N) * Math.PI * 2;
+      // Butterfly curve parametric (r = e^sin(t) - 2cos(4t) + sin^5((2t-π)/24))
+      const r = (Math.exp(Math.sin(t)) - 2 * Math.cos(4 * t) + Math.pow(Math.sin((2 * t - Math.PI) / 24), 5));
+      const cx = (canvas.width ?? 600) / 2;
+      const cy = (canvas.height ?? 400) / 2;
+      const scale = Math.min(canvas.width, canvas.height) * 0.18;
+      const px = cx + r * Math.cos(t) * scale;
+      const py = cy - r * Math.sin(t) * scale * 0.7;
+      pts.push({
+        x: px + (Math.random() - 0.5) * 40,
+        y: py + (Math.random() - 0.5) * 40,
+        vx: (Math.random() - 0.5) * 0.15,
+        vy: (Math.random() - 0.5) * 0.15,
+        r: Math.random() * 1.2 + 0.3,
+        a: Math.random(),
+        da: (Math.random() - 0.5) * 0.004,
+      });
+    }
+
+    function draw() {
+      if (!ctx || !canvas) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Update
+      for (const p of pts) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.a += p.da;
+        if (p.a > 1 || p.a < 0.05) p.da *= -1;
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+      }
+
+      // Connections (only close pairs)
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const dx = pts[i].x - pts[j].x;
+          const dy = pts[i].y - pts[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 70) {
+            ctx.beginPath();
+            ctx.moveTo(pts[i].x, pts[i].y);
+            ctx.lineTo(pts[j].x, pts[j].y);
+            const alpha = (1 - dist / 70) * 0.12;
+            ctx.strokeStyle = `rgba(160, 130, 255, ${alpha})`;
+            ctx.lineWidth = 0.4;
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Particles
+      for (const p of pts) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(180, 150, 255, ${p.a * 0.55})`;
+        ctx.fill();
+      }
+
+      raf = requestAnimationFrame(draw);
+    }
+    draw();
+
+    return () => {
+      window.removeEventListener("resize", resize);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      style={{ opacity: 0.85 }}
+    />
+  );
+}
+
+// ─── Message bubble (hidden until clicked) ────────────────────────────────────
+function MessageBubble({ m }: { m: Message }) {
+  const [open, setOpen] = useState(false);
+  const isUser = m.role === "user";
+
+  function formatText(text: string) {
+    return text
+      .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, _lang, code) =>
+        `<pre class="bg-black/40 text-purple-200 rounded-lg p-3 text-xs overflow-x-auto my-2 font-mono">${code.trim()}</pre>`)
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>")
+      .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+      .replace(/\n/g, "<br />");
+  }
+
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`group relative flex items-center gap-2 transition-all duration-300 ${
+          isUser ? "flex-row-reverse" : ""
+        }`}
+      >
+        {/* Dot indicator */}
+        <span
+          className={`flex-shrink-0 rounded-full transition-all duration-300 ${
+            open ? "w-2 h-2" : "w-2.5 h-2.5"
+          } ${isUser ? "bg-orange-400/70" : "bg-purple-400/60"}`}
+          style={{ boxShadow: open ? "0 0 6px 2px rgba(160,100,255,0.3)" : "none" }}
+        />
+
+        {/* Content — hidden until open */}
+        <span
+          className={`text-sm leading-relaxed transition-all duration-300 text-left max-w-xs sm:max-w-md rounded-2xl px-3 py-2 ${
+            open
+              ? isUser
+                ? "opacity-100 bg-orange-500/15 text-orange-100 border border-orange-500/20"
+                : "opacity-100 bg-purple-500/10 text-purple-100 border border-purple-500/15"
+              : "opacity-0 w-0 px-0 py-0 overflow-hidden"
+          }`}
+        >
+          {m.role === "assistant" ? (
+            <span dangerouslySetInnerHTML={{ __html: formatText(m.content) }} />
+          ) : (
+            m.content
+          )}
+        </span>
+
+        {open && (
+          <ChevronDown size={10} className={`text-purple-400/50 flex-shrink-0 ${isUser ? "rotate-180" : ""}`} />
+        )}
+      </button>
+    </div>
+  );
 }
 
 async function saveConversation(id: string | null, messages: Message[]): Promise<string | null> {
@@ -57,19 +195,15 @@ function ChatInner() {
   const voiceIn = useVoiceInput(onVoiceResult);
   const voiceOut = useVoiceOutput();
 
-  // Load conversation from URL param
   useEffect(() => {
     const id = searchParams.get("id");
     const q = searchParams.get("q");
-
     if (id && !initialized.current) {
       initialized.current = true;
       setConvId(id);
       fetch(`/api/conversations?id=${id}`)
         .then(r => r.json())
-        .then(data => {
-          if (data.messages) setMessages(data.messages);
-        })
+        .then(data => { if (data.messages) setMessages(data.messages); })
         .catch(() => {});
     } else if (q && !initialized.current) {
       initialized.current = true;
@@ -98,34 +232,27 @@ function ChatInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: newMessages.map(({ role, content }) => ({ role, content })) }),
       });
-
-      if (!res.ok) throw new Error("API xatosi");
-
+      if (!res.ok) throw new Error();
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let full = "";
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
-        full += chunk;
+        full += decoder.decode(value);
         setStreaming(full);
       }
-
       const finalMessages: Message[] = [...newMessages, { role: "assistant", content: full, ts: Date.now() }];
       setMessages(finalMessages);
       setStreaming("");
       voiceOut.speak(full);
-
-      // Auto-save conversation
       const savedId = await saveConversation(convId, finalMessages);
       if (savedId && !convId) {
         setConvId(savedId);
         router.replace(`/chat?id=${savedId}`, { scroll: false });
       }
     } catch {
-      setMessages([...newMessages, { role: "assistant", content: "Kechirasiz, xato yuz berdi. Qayta urinib ko'ring.", ts: Date.now() }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "Xato yuz berdi. Qayta urinib ko'ring.", ts: Date.now() }]);
       setStreaming("");
     }
     setLoading(false);
@@ -139,100 +266,74 @@ function ChatInner() {
   }
 
   return (
-    <div className="flex flex-col h-full max-w-4xl mx-auto" style={{ height: "calc(100vh - 8rem)" }}>
+    <div
+      className="flex flex-col relative"
+      style={{
+        height: "calc(100vh - 8rem)",
+        background: "linear-gradient(160deg, #0d0b1a 0%, #100e22 60%, #0f0c1e 100%)",
+        borderRadius: "1.25rem",
+        overflow: "hidden",
+      }}
+    >
+      {/* Particle background */}
+      <DustCanvas />
+
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
-          <Bot size={20} strokeWidth={1.75} />
-        </div>
-        <div className="flex-1">
-          <h1 className="text-lg font-bold text-gray-900">Pari AI</h1>
-          <div className="flex items-center gap-1.5">
-            <span className="pulse-dot w-2 h-2" />
-            <span className="text-xs text-green-600">Online — Gemini 2.0 Flash</span>
-          </div>
+      <div className="relative z-10 flex items-center justify-between px-5 pt-4 pb-3">
+        <div className="flex items-center gap-2.5">
+          <span className="w-2 h-2 rounded-full bg-purple-400/70 animate-pulse" />
+          <span className="text-sm font-medium text-purple-200/80 tracking-wide">Pari</span>
         </div>
         <div className="flex items-center gap-2">
-          {convId && (
-            <span className="text-xs text-gray-400 font-mono hidden sm:block truncate max-w-[120px]">{convId}</span>
-          )}
           {voiceOut.supported && (
             <button
               onClick={() => { if (voiceOut.enabled) voiceOut.stop(); voiceOut.setEnabled(!voiceOut.enabled); }}
-              title={voiceOut.enabled ? "Ovozli javob: yoqilgan" : "Ovozli javob: o'chirilgan"}
-              className={`p-2 rounded-xl border transition-all ${voiceOut.enabled ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600"}`}
+              className={`p-1.5 rounded-lg transition-all ${voiceOut.enabled ? "text-purple-300" : "text-white/20 hover:text-white/40"}`}
             >
-              {voiceOut.enabled ? <Volume2 size={14} strokeWidth={1.75} /> : <VolumeX size={14} strokeWidth={1.75} />}
+              {voiceOut.enabled ? <Volume2 size={13} strokeWidth={1.75} /> : <VolumeX size={13} strokeWidth={1.75} />}
             </button>
           )}
-          <button onClick={newChat} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 px-3 py-1.5 rounded-xl transition-all">
-            <History size={13} strokeWidth={1.75} />
-            <span className="hidden sm:inline">New Chat</span>
+          <button
+            onClick={newChat}
+            className="flex items-center gap-1 text-xs text-white/25 hover:text-white/50 transition-colors px-2 py-1"
+          >
+            <History size={12} strokeWidth={1.75} />
           </button>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-        {messages.length === 0 && !streaming && (
-          <div className="fade-in text-center py-12">
-            <Sparkles size={48} strokeWidth={1.25} className="mx-auto mb-4 text-indigo-600" />
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Pari AI ga xush kelibsiz!</h2>
-            <p className="text-gray-500 text-sm mb-8 max-w-md mx-auto">
-              Men sizning shaxsiy AI yordamchingizman. Biznes, kod, tadqiqot, avtomatlashtirish — hamma narsada yordam beraman.
+      <div className="relative z-10 flex-1 overflow-y-auto px-5 py-3 space-y-3">
+        {messages.length === 0 && !streaming && !loading && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <p className="text-white/15 text-xs tracking-widest uppercase select-none">
+              xabar yozing
             </p>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {suggestions.map(s => (
-                <button key={s} onClick={() => sendMessage(s)}
-                  className="text-sm px-4 py-2 bg-white border border-gray-200 hover:border-indigo-300 hover:text-indigo-600 text-gray-600 rounded-xl transition-all shadow-sm">
-                  {s}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
         {messages.map((m, i) => (
-          <div key={i} className={`fade-in flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
-            <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${
-              m.role === "user" ? "bg-indigo-600 text-white" : "bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-600"
-            }`}>
-              {m.role === "user" ? "S" : "P"}
-            </div>
-            <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-              m.role === "user"
-                ? "bg-indigo-600 text-white rounded-tr-sm"
-                : "bg-white border border-gray-100 shadow-sm text-gray-700 rounded-tl-sm"
-            }`}>
-              {m.role === "assistant" ? (
-                <div dangerouslySetInnerHTML={{ __html: formatText(m.content) }} />
-              ) : (
-                m.content
-              )}
-            </div>
-          </div>
+          <MessageBubble key={i} m={m} />
         ))}
 
         {streaming && (
-          <div className="fade-in flex gap-3">
-            <div className="w-8 h-8 rounded-full flex-shrink-0 bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-sm font-bold text-indigo-600">P</div>
-            <div className="max-w-[80%] bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-gray-700 leading-relaxed">
-              <div dangerouslySetInnerHTML={{ __html: formatText(streaming) }} />
-              <span className="inline-block w-1.5 h-4 bg-indigo-600 ml-0.5 animate-pulse rounded" />
+          <div className="flex justify-start">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-purple-400/60 animate-pulse" />
+              <span className="text-xs text-purple-200/50 italic">{streaming.slice(0, 60)}{streaming.length > 60 ? "…" : ""}</span>
             </div>
           </div>
         )}
 
         {loading && !streaming && (
-          <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-sm font-bold text-indigo-600">P</div>
-            <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3">
-              <div className="flex gap-1.5 items-center h-5">
-                {[0,1,2].map(i => (
-                  <span key={i} className="w-2 h-2 rounded-full bg-indigo-600" style={{ animation: `pulse-dot 1.2s ease infinite ${i*0.2}s` }} />
-                ))}
-              </div>
-            </div>
+          <div className="flex items-center gap-1.5 pl-4">
+            {[0, 1, 2].map(i => (
+              <span
+                key={i}
+                className="w-1 h-1 rounded-full bg-purple-400/40"
+                style={{ animation: `pulse 1.2s ease infinite ${i * 0.25}s` }}
+              />
+            ))}
           </div>
         )}
 
@@ -240,36 +341,49 @@ function ChatInner() {
       </div>
 
       {/* Input */}
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-3">
-        <div className="flex gap-3 items-end">
+      <div className="relative z-10 px-4 pb-4">
+        <div
+          className="flex items-end gap-2 px-4 py-3 rounded-2xl"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(160,130,255,0.12)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
           <textarea
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())}
-            placeholder="Xabar yozing... (Enter — yuborish, Shift+Enter — yangi qator)"
+            placeholder="…"
             rows={1}
-            className="flex-1 resize-none text-sm bg-transparent focus:outline-none placeholder-gray-400 max-h-32 leading-relaxed py-1"
-            style={{ minHeight: "24px" }}
+            className="flex-1 resize-none text-sm bg-transparent focus:outline-none text-white/80 placeholder-white/15 max-h-28 leading-relaxed py-0.5"
+            style={{ minHeight: "20px" }}
           />
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"><Paperclip size={15} strokeWidth={1.75} /></button>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {voiceIn.supported && (
               <button
                 onClick={voiceIn.toggle}
-                title={voiceIn.listening ? "Yozib olishni to'xtatish" : "Ovoz bilan yozish"}
-                className={`p-1.5 rounded-lg transition-colors ${voiceIn.listening ? "text-red-500 animate-pulse" : "text-gray-400 hover:text-gray-600"}`}
+                className={`p-1.5 rounded-lg transition-all ${
+                  voiceIn.listening ? "text-red-400 animate-pulse" : "text-white/25 hover:text-white/50"
+                }`}
               >
-                <Mic size={15} strokeWidth={1.75} />
+                <Mic size={14} strokeWidth={1.75} />
               </button>
             )}
-            <button onClick={() => sendMessage()} disabled={!input.trim() || loading}
-              className="w-9 h-9 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl transition-all flex items-center justify-center">
-              <Send size={14} strokeWidth={2} />
+            <button
+              onClick={() => sendMessage()}
+              disabled={!input.trim() || loading}
+              className="w-8 h-8 rounded-xl flex items-center justify-center transition-all disabled:opacity-20"
+              style={{
+                background: input.trim() && !loading ? "rgba(160,100,255,0.5)" : "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(160,100,255,0.2)",
+              }}
+            >
+              <Send size={13} strokeWidth={2} className="text-white/80" />
             </button>
           </div>
         </div>
-        <p className="text-xs text-gray-400 mt-2">Pari AI xato qilishi mumkin. Muhim ma'lumotlarni tekshiring.</p>
       </div>
     </div>
   );
@@ -277,7 +391,7 @@ function ChatInner() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-64"><span className="text-gray-400">Yuklanmoqda...</span></div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-64"><span className="text-white/20 text-sm">…</span></div>}>
       <ChatInner />
     </Suspense>
   );
