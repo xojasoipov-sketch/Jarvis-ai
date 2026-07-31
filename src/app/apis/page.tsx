@@ -15,6 +15,7 @@ const APIS = [
   { id: "kimi", name: "Kimi (Moonshot AI)", desc: "Moonshot v1 — kuchli matn", envKey: "MOONSHOT_API_KEY", url: "https://platform.moonshot.ai", cat: "AI Text" },
   { id: "qwen", name: "Qwen (Alibaba)", desc: "Qwen Plus — tez tahlil", envKey: "DASHSCOPE_API_KEY", url: "https://dashscope.console.aliyun.com", cat: "AI Text" },
   { id: "mistral", name: "Mistral AI", desc: "Mistral Large — $25 bepul kredit", envKey: "MISTRAL_API_KEY", url: "https://console.mistral.ai", cat: "AI Text" },
+  { id: "openai", name: "OpenAI", desc: "GPT-4o mini — pullik, oxirgi zaxira", envKey: "OPENAI_API_KEY", url: "https://platform.openai.com/api-keys", cat: "AI Text" },
   { id: "elevenlabs", name: "ElevenLabs STT + TTS", desc: "Asosiy: ovoz → matn (Scribe v1) + matn → ovoz (Rachel)", envKey: "ELEVENLABS_API_KEY", url: "https://elevenlabs.io", cat: "Voice" },
   { id: "groq-stt", name: "Groq Whisper STT", desc: "ElevenLabs ishlamasa — zaxira STT", envKey: "GROQ_API_KEY", url: "https://groq.com/keys", cat: "Voice" },
   { id: "gemini-voice", name: "Gemini Audio", desc: "Oxirgi zaxira — STT+javob bitta so'rovda", envKey: "GEMINI_API_KEY", url: "https://aistudio.google.com", cat: "Voice" },
