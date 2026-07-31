@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export type JarvisState = "asleep" | "waking" | "listening" | "thinking" | "speaking";
 
 // VAD thresholds — iOS mic gain is lower than desktop
-const SPEAK_THRESHOLD = 0.004;   // speech start (lowered for iOS)
-const SILENCE_THRESHOLD = 0.002; // silence
+const SPEAK_THRESHOLD = 0.002;   // speech start (very low for iOS)
+const SILENCE_THRESHOLD = 0.001; // silence
 const SILENCE_DURATION = 1500;   // ms silence → stop recording
 const MIN_SPEECH_MS = 300;       // ignore clips shorter than this
 const MAX_SPEECH_MS = 15000;     // max recording length
@@ -62,7 +62,8 @@ function speakText(text: string): Promise<void> {
       if ("speechSynthesis" in window) {
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(clean);
-        utter.lang = lang === "uz" ? "uz-UZ" : "ru-RU";
+        // uz-UZ not available on iOS — use ru-RU for Cyrillic, default otherwise
+        utter.lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru-RU" : "";
         utter.onend = done;
         utter.onerror = done;
         window.speechSynthesis.speak(utter);
@@ -92,10 +93,12 @@ async function callVoiceAPI(blob: Blob): Promise<{ transcript: string; reply: st
   fd.append("audio", blob, `audio.${ext}`);
   try {
     const res = await fetch("/api/voice", { method: "POST", body: fd });
-    if (!res.ok) return { transcript: "", reply: "" };
-    return res.json();
+    if (!res.ok) return { transcript: "", reply: "Kechirasiz, xato yuz berdi. Qayta urinib ko'ring." };
+    const data = await res.json();
+    if (!data.reply) return { transcript: data.transcript || "", reply: "Kechirasiz, tushunmadim. Qayta gapiring." };
+    return data;
   } catch {
-    return { transcript: "", reply: "" };
+    return { transcript: "", reply: "Aloqa xatosi. Internetni tekshiring." };
   }
 }
 
@@ -154,13 +157,7 @@ export function useJarvisVoice() {
 
     setState("thinking");
     setError(null);
-    const { transcript, reply } = await callVoiceAPI(blob);
-
-    if (!reply) {
-      setError("Ovoz aniqlanmadi. Qayta gapiring.");
-      if (activeRef.current) setState("listening");
-      return;
-    }
+    const { reply } = await callVoiceAPI(blob);
 
     setState("speaking");
     await speakText(reply);
@@ -257,6 +254,13 @@ export function useJarvisVoice() {
     setError(null);
     setActive(true);
     setState("waking");
+
+    // iOS Safari requires a user-gesture-initiated Audio.play() to unlock autoplay
+    try {
+      const unlock = new Audio();
+      unlock.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+      await unlock.play().catch(() => {});
+    } catch { /* ignore */ }
 
     let stream: MediaStream;
     try {

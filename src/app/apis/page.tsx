@@ -13,9 +13,9 @@ const APIS = [
   { id: "kimi", name: "Kimi (Moonshot AI)", desc: "Moonshot v1 — kuchli matn", envKey: "MOONSHOT_API_KEY", url: "https://platform.moonshot.ai", cat: "AI Text" },
   { id: "qwen", name: "Qwen (Alibaba)", desc: "Qwen Plus — tez tahlil", envKey: "DASHSCOPE_API_KEY", url: "https://dashscope.console.aliyun.com", cat: "AI Text" },
   { id: "mistral", name: "Mistral AI", desc: "Mistral Large — $25 bepul kredit", envKey: "MISTRAL_API_KEY", url: "https://console.mistral.ai", cat: "AI Text" },
-  { id: "gemini-voice", name: "Gemini STT", desc: "Ovozni matn+AI ga aylantirishda birinchi urinish", envKey: "GEMINI_API_KEY", url: "https://aistudio.google.com", cat: "Voice" },
-  { id: "groq-stt", name: "Groq Whisper STT", desc: "O'zbek ovozini matnga — Gemini ishlamasa", envKey: "GROQ_API_KEY", url: "https://groq.com/keys", cat: "Voice" },
-  { id: "elevenlabs", name: "ElevenLabs TTS", desc: "Pari ovozi — Rachel (eleven_multilingual_v2)", envKey: "ELEVENLABS_API_KEY", url: "https://elevenlabs.io", cat: "Voice" },
+  { id: "elevenlabs", name: "ElevenLabs STT + TTS", desc: "Asosiy: ovoz → matn (Scribe v1) + matn → ovoz (Rachel)", envKey: "ELEVENLABS_API_KEY", url: "https://elevenlabs.io", cat: "Voice" },
+  { id: "groq-stt", name: "Groq Whisper STT", desc: "ElevenLabs ishlamasa — zaxira STT", envKey: "GROQ_API_KEY", url: "https://groq.com/keys", cat: "Voice" },
+  { id: "gemini-voice", name: "Gemini Audio", desc: "Oxirgi zaxira — STT+javob bitta so'rovda", envKey: "GEMINI_API_KEY", url: "https://aistudio.google.com", cat: "Voice" },
   { id: "telegram", name: "Telegram Bot", desc: "Bot integratsiyasi", envKey: "TELEGRAM_BOT_TOKEN", url: "https://t.me/BotFather", cat: "Messaging" },
   { id: "obsidian", name: "Vault (GitHub-asosli)", desc: "Shaxsiy bilim bazasi", envKey: "GITHUB_TOKEN", url: "https://github.com/settings/tokens", cat: "Knowledge" },
   { id: "hermes", name: "Hermes — built-in vositalar", desc: "MCP tool executor", envKey: null, url: "", cat: "Tools" },
@@ -44,6 +44,7 @@ export default function ApisPage() {
         const r = await fetch(`/api/voice/test?provider=${id}`, { signal: AbortSignal.timeout(12000) });
         const d = await r.json();
         setStatuses((s) => ({ ...s, [id]: d.ok ? "ok" : "error" }));
+        if (d.ok && d.info) setErrors((e) => ({ ...e, [id]: d.info }));
         if (!d.ok) setErrors((e) => ({ ...e, [id]: d.error || "Key sozlanmagan yoki ishlamaydi" }));
         return;
       }
@@ -122,7 +123,7 @@ export default function ApisPage() {
                       <code className="text-xs text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded mt-1 inline-block">{api.envKey}</code>
                     )}
                     {errors[api.id] && (
-                      <p className="text-xs text-red-500 mt-1 truncate">{errors[api.id]}</p>
+                      <p className={`text-xs mt-1 truncate ${st === "ok" ? "text-green-600" : "text-red-500"}`}>{errors[api.id]}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

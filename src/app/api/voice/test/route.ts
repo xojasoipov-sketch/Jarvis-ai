@@ -61,7 +61,12 @@ export async function GET(req: NextRequest) {
       }
       const data = await res.json();
       const tier = data?.subscription?.tier || "unknown";
-      return NextResponse.json({ ok: true, info: `Tier: ${tier}` });
+      const chars = data?.subscription?.character_count ?? null;
+      const limit = data?.subscription?.character_limit ?? null;
+      const info = limit !== null
+        ? `Tier: ${tier} | Chars: ${chars?.toLocaleString()}/${limit?.toLocaleString()}`
+        : `Tier: ${tier}`;
+      return NextResponse.json({ ok: true, info });
     } catch (e) {
       return NextResponse.json({ ok: false, error: (e as Error).message });
     }
