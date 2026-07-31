@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Plus, Clock, X } from "lucide-react";
 
-type Event = { id: number; title: string; time: string; type: "meeting" | "task" | "reminder" | "agent"; color: string; day: number };
+type Event = { id: number; title: string; time: string; type: "meeting" | "task" | "reminder" | "agent"; day: number };
 
 const COLORS = { meeting: "bg-blue-500", task: "bg-indigo-600", reminder: "bg-yellow-500", agent: "bg-purple-500" };
 const TYPE_LABELS = { meeting: "Uchrashuv", task: "Vazifa", reminder: "Eslatma", agent: "Agent vazifa" };
@@ -11,19 +11,24 @@ const TODAY = new Date();
 const MONTH_NAMES = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
 const DAY_NAMES = ["Du","Se","Ch","Pa","Ju","Sh","Ya"];
 
-const INIT_EVENTS: Event[] = [
-  { id: 1, title: "Investor meeting", time: "10:00", type: "meeting", color: COLORS.meeting, day: TODAY.getDate() },
-  { id: 2, title: "Pari AI MVP taqdimot", time: "14:00", type: "task", color: COLORS.task, day: TODAY.getDate() },
-  { id: 3, title: "CEO Agent: haftalik hisobot", time: "09:00", type: "agent", color: COLORS.agent, day: TODAY.getDate() + 1 },
-  { id: 4, title: "Team sync", time: "11:30", type: "meeting", color: COLORS.meeting, day: TODAY.getDate() + 2 },
-  { id: 5, title: "Marketing kampaniya boshlash", time: "08:00", type: "reminder", color: COLORS.reminder, day: TODAY.getDate() + 3 },
-];
-
 export default function CalendarPage() {
-  const [events, setEvents] = useState<Event[]>(INIT_EVENTS);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [configured, setConfigured] = useState(true);
   const [selectedDay, setSelectedDay] = useState(TODAY.getDate());
   const [showNew, setShowNew] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: "", time: "09:00", type: "task" as Event["type"] });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/calendar");
+      const data = await res.json();
+      setEvents(data.events || []);
+      setConfigured(Boolean(data.configured));
+    } catch { /* keep previous state on transient network errors */ }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const year = TODAY.getFullYear();
   const month = TODAY.getMonth();
@@ -33,11 +38,29 @@ export default function CalendarPage() {
 
   const dayEvents = events.filter(e => e.day === selectedDay).sort((a, b) => a.time.localeCompare(b.time));
 
-  function addEvent() {
-    if (!newEvent.title.trim()) return;
-    setEvents(p => [...p, { id: Date.now(), ...newEvent, color: COLORS[newEvent.type], day: selectedDay }]);
+  async function addEvent() {
+    if (!newEvent.title.trim() || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newEvent, day: selectedDay }),
+      });
+      const data = await res.json();
+      if (data.event) setEvents((p) => [...p, data.event]);
+      else alert("Xato: " + (data.error || "Saqlanmadi"));
+    } catch { alert("So'rovda xato"); }
     setNewEvent({ title: "", time: "09:00", type: "task" });
     setShowNew(false);
+    setSaving(false);
+  }
+
+  async function removeEvent(id: number) {
+    setEvents((p) => p.filter((e) => e.id !== id));
+    try {
+      await fetch(`/api/calendar?id=${id}`, { method: "DELETE" });
+    } catch { load(); }
   }
 
   return (
@@ -51,6 +74,12 @@ export default function CalendarPage() {
           <Plus size={15} strokeWidth={2} /> Yangi voqea
         </button>
       </div>
+
+      {!configured && (
+        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-800">
+          Supabase ulanmagan — voqealar saqlanmaydi (sahifa yangilansa yo&apos;qoladi). Connectors sahifasidan sozlang.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Calendar grid */}
@@ -117,7 +146,9 @@ export default function CalendarPage() {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setShowNew(false)} className="flex-1 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg">Bekor</button>
-                <button onClick={addEvent} className="flex-1 py-2 bg-indigo-600 text-white text-xs rounded-lg">Qo'shish</button>
+                <button onClick={addEvent} disabled={saving} className="flex-1 py-2 bg-indigo-600 disabled:opacity-50 text-white text-xs rounded-lg">
+                  {saving ? "Saqlanmoqda..." : "Qo'shish"}
+                </button>
               </div>
             </div>
           )}
@@ -130,7 +161,7 @@ export default function CalendarPage() {
             ) : (
               dayEvents.map(ev => (
                 <div key={ev.id} className="bg-white rounded-xl border border-gray-100 p-3 flex items-center gap-3">
-                  <div className={`w-1 h-10 rounded-full ${ev.color} flex-shrink-0`} />
+                  <div className={`w-1 h-10 rounded-full ${COLORS[ev.type]} flex-shrink-0`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{ev.title}</p>
                     <div className="flex items-center gap-2 mt-0.5">
@@ -138,7 +169,7 @@ export default function CalendarPage() {
                       <span className="text-xs text-gray-400">{TYPE_LABELS[ev.type]}</span>
                     </div>
                   </div>
-                  <button onClick={() => setEvents(p => p.filter(e => e.id !== ev.id))}
+                  <button onClick={() => removeEvent(ev.id)}
                     className="p-1 text-gray-300 hover:text-red-400 transition-all"><X size={13} strokeWidth={1.75} /></button>
                 </div>
               ))
