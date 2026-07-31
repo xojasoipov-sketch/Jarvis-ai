@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getProviders } from "@/lib/providers";
 
 const GEMINI_KEYS = [
   process.env.GEMINI_API_KEY,
@@ -6,8 +7,6 @@ const GEMINI_KEYS = [
   process.env.GEMINI_API_KEY3,
 ].filter(Boolean) as string[];
 const GROQ_KEY = process.env.GROQ_API_KEY || "";
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
 const PARI_SYSTEM = `Sen Pari — Sadining shaxsiy ovozli AI yordamchisissan.
 Qoidalar:
@@ -86,26 +85,32 @@ async function transcribeGroq(audioBuffer: Buffer, mimeType: string, filename: s
   return data?.text || null;
 }
 
-// ── 3. Pari /api/chat (text AI) ─────────────────────────────────────────────
+// ── 3. Pari text AI — direct provider call (no HTTP round-trip) ─────────────
 async function askPariText(transcript: string): Promise<string> {
-  const res = await fetch(`${BASE_URL}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messages: [{ role: "user", content: transcript }],
-      system: PARI_SYSTEM,
-    }),
-  });
-  if (!res.ok) return "Kechirasiz, xato yuz berdi.";
-  const reader = res.body!.getReader();
-  const dec = new TextDecoder();
-  let text = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    text += dec.decode(value, { stream: true });
+  const providers = getProviders();
+  const messages = [
+    { role: "system", content: PARI_SYSTEM },
+    { role: "user", content: transcript },
+  ];
+  for (const p of providers) {
+    try {
+      const res = await fetch(p.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${p.key}`,
+          ...(p.headers || {}),
+        },
+        body: JSON.stringify({ model: p.model, messages, stream: false }),
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || "";
+      if (text.trim()) return text.trim();
+    } catch { continue; }
   }
-  return text.trim() || "Kechirasiz, tushunmadim.";
+  return "Kechirasiz, tushunmadim.";
 }
 
 // ── Helper: normalize MIME type for Gemini ───────────────────────────────────
