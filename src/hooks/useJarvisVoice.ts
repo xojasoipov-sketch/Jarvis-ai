@@ -1,240 +1,282 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-interface SpeechRecognitionResult {
-  0: { transcript: string };
-  isFinal: boolean;
-}
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: { length: number; [i: number]: SpeechRecognitionResult };
-}
-interface SpeechRecognitionLike extends EventTarget {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((e: SpeechRecognitionEvent) => void) | null;
-  onerror: ((e: Event) => void) | null;
-  onend: (() => void) | null;
-}
-type SpeechWindow = Window & {
-  SpeechRecognition?: new () => SpeechRecognitionLike;
-  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-};
-
 export type JarvisState = "asleep" | "waking" | "listening" | "thinking" | "speaking";
 
-const WAKE_WORDS = ["pari", "пари", "hey pari", "salom pari"];
+// VAD thresholds — tuned for mobile (iOS has lower mic gain)
+const SPEAK_THRESHOLD = 0.010;   // speech start
+const SILENCE_THRESHOLD = 0.006; // silence
+const SILENCE_DURATION = 1500;   // ms silence → stop recording
+const MIN_SPEECH_MS = 300;       // ignore clips shorter than this
+const MAX_SPEECH_MS = 15000;     // max recording length
 
-function pickBestVoice(lang: string): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices.length) return null;
-
-  const score = (v: SpeechSynthesisVoice, target: string) => {
-    let s = 0;
-    const n = v.name.toLowerCase();
-    if (/neural|premium|enhanced|wavenet|journey|studio/.test(n)) s += 30;
-    if (v.lang === target) s += 100;
-    else if (v.lang.startsWith(target.split("-")[0])) s += 50;
-    if (v.localService) s += 5;
-    return s;
-  };
-
-  let best: SpeechSynthesisVoice | null = null;
-  let bestScore = -1;
-  for (const target of [lang, "uz-UZ", "ru-RU", "en-US"]) {
-    for (const v of voices) {
-      const s = score(v, target);
-      if (s > bestScore) { bestScore = s; best = v; }
-    }
-    if (best && best.lang.startsWith(target.split("-")[0])) break;
+function getBestMime(): string {
+  if (typeof MediaRecorder === "undefined") return "";
+  const types = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",        // iOS Safari
+    "audio/x-m4a",
+    "",                 // browser default
+  ];
+  for (const t of types) {
+    if (!t || MediaRecorder.isTypeSupported(t)) return t;
   }
-  return best;
+  return "";
 }
 
-async function transcribeWithGroq(blob: Blob, lang: string): Promise<string | null> {
-  const form = new FormData();
-  form.append("audio", blob, "audio.webm");
-  form.append("lang", lang.split("-")[0]);
+function speakText(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!("speechSynthesis" in window)) return resolve();
+    window.speechSynthesis.cancel();
+    const clean = text.replace(/[*_#`>~\[\]]/g, "").replace(/\n+/g, " ").slice(0, 1800);
+    const utter = new SpeechSynthesisUtterance(clean);
+    const voices = window.speechSynthesis.getVoices();
+    utter.voice =
+      voices.find((v) => v.lang.startsWith("uz")) ||
+      voices.find((v) => v.lang.startsWith("ru") && v.localService) ||
+      voices.find((v) => v.lang.startsWith("ru")) ||
+      voices.find((v) => v.localService) ||
+      voices[0] ||
+      null;
+    utter.lang = utter.voice?.lang || "ru-RU";
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+    // iOS sometimes fires onend before speaking starts — guard with timeout
+    let resolved = false;
+    const done = () => { if (!resolved) { resolved = true; resolve(); } };
+    utter.onend = done;
+    utter.onerror = done;
+    window.speechSynthesis.speak(utter);
+    // Fallback timeout in case speech synthesis hangs (common on iOS)
+    const wordCount = clean.split(/\s+/).length;
+    setTimeout(done, Math.max(5000, wordCount * 600));
+  });
+}
+
+async function callVoiceAPI(blob: Blob): Promise<{ transcript: string; reply: string }> {
+  const fd = new FormData();
+  // Use correct extension based on MIME so the server and Gemini parse it right
+  const ext = blob.type.includes("mp4") || blob.type.includes("m4a") ? "mp4"
+    : blob.type.includes("ogg") ? "ogg"
+    : blob.type.includes("wav") ? "wav"
+    : "webm";
+  fd.append("audio", blob, `audio.${ext}`);
   try {
-    const res = await fetch("/api/stt", { method: "POST", body: form });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.text || null;
+    const res = await fetch("/api/voice", { method: "POST", body: fd });
+    if (!res.ok) return { transcript: "", reply: "" };
+    return res.json();
   } catch {
-    return null;
+    return { transcript: "", reply: "" };
   }
 }
 
-export function useJarvisVoice(onCommand: (text: string) => Promise<string>) {
+export function useJarvisVoice() {
   const [state, setState] = useState<JarvisState>("asleep");
-  const [alwaysOn, setAlwaysOn] = useState(false);
+  const [active, setActive] = useState(false);
   const [supported, setSupported] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [reply, setReply] = useState("");
-  const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const [level, setLevel] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
   const stateRef = useRef<JarvisState>("asleep");
-  const alwaysOnRef = useRef(false);
-  const speechLang = useRef("ru-RU");
+  const activeRef = useRef(false);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const vadLoopRef = useRef<number>(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speechStartRef = useRef<number>(0);
+  const isSpeakingRef = useRef(false);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const mimeRef = useRef<string>("");
 
   useEffect(() => { stateRef.current = state; }, [state]);
-  useEffect(() => { alwaysOnRef.current = alwaysOn; }, [alwaysOn]);
+  useEffect(() => { activeRef.current = active; }, [active]);
 
   useEffect(() => {
-    const w = window as SpeechWindow;
-    setSupported(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition || navigator.mediaDevices?.getUserMedia));
-    if (window.speechSynthesis) {
+    const ok =
+      typeof MediaRecorder !== "undefined" &&
+      !!navigator.mediaDevices?.getUserMedia &&
+      (typeof AudioContext !== "undefined" || typeof (window as unknown as { webkitAudioContext: unknown }).webkitAudioContext !== "undefined");
+    setSupported(ok);
+    if ("speechSynthesis" in window) {
       window.speechSynthesis.getVoices();
       window.speechSynthesis.addEventListener("voiceschanged", () => window.speechSynthesis.getVoices());
     }
   }, []);
 
-  const speak = useCallback((text: string): Promise<void> => {
-    return new Promise((resolve) => {
-      if (!("speechSynthesis" in window)) return resolve();
-      window.speechSynthesis.cancel();
-      const clean = text.replace(/```[\s\S]*?```/g, " kod bloki ").replace(/[*_#`~]/g, "").replace(/\n+/g, ". ").trim();
-      if (!clean) return resolve();
-      const utter = new SpeechSynthesisUtterance(clean.slice(0, 3000));
-      const voice = pickBestVoice("uz-UZ");
-      if (voice) { utter.voice = voice; utter.lang = voice.lang; }
-      else utter.lang = "uz-UZ";
-      utter.rate = 1.05;
-      utter.pitch = 1.0;
-      utter.volume = 1.0;
-      utter.onend = () => resolve();
-      utter.onerror = () => resolve();
-      window.speechSynthesis.speak(utter);
-    });
+  const stopAll = useCallback(() => {
+    cancelAnimationFrame(vadLoopRef.current);
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    try { recorderRef.current?.stop(); } catch {}
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    audioCtxRef.current?.close().catch(() => {});
+    streamRef.current = null;
+    audioCtxRef.current = null;
+    analyserRef.current = null;
+    recorderRef.current = null;
+    isSpeakingRef.current = false;
+    chunksRef.current = [];
+    setLevel(0);
   }, []);
 
-  const captureCommandGroq = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const chunks: Blob[] = [];
-    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
-    const rec = new MediaRecorder(stream, { mimeType });
-    rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-    rec.onstop = async () => {
-      stream.getTracks().forEach((t) => t.stop());
-      const blob = new Blob(chunks, { type: mimeType });
-      if (blob.size < 500) { setState("asleep"); return; }
-      setState("thinking");
-      const text = await transcribeWithGroq(blob, "uz-UZ");
-      if (!text) { setState("asleep"); if (alwaysOnRef.current) startWakeListening(); return; }
-      setTranscript(text);
-      const answer = await onCommand(text);
-      setReply(answer);
-      setState("speaking");
-      await speak(answer);
-      setState("asleep");
-      if (alwaysOnRef.current) startWakeListening();
-    };
-    rec.start(200);
-    // Auto-stop after 8 seconds
-    setTimeout(() => { if (rec.state === "recording") rec.stop(); }, 8000);
-    setState("listening");
-
-    // Also stop on silence via Web Speech if available
-    const w = window as SpeechWindow;
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (Ctor) {
-      const sr = new Ctor();
-      sr.lang = speechLang.current;
-      sr.continuous = false;
-      sr.interimResults = false;
-      sr.onresult = () => { if (rec.state === "recording") rec.stop(); };
-      sr.onerror = () => { if (rec.state === "recording") rec.stop(); };
-      sr.onend = () => { if (rec.state === "recording") rec.stop(); };
-      try { sr.start(); } catch {}
+  const processChunks = useCallback(async (chunks: BlobPart[], mime: string) => {
+    const blob = new Blob(chunks, { type: mime || "audio/webm" });
+    if (blob.size < 500) {
+      if (activeRef.current) setState("listening");
+      return;
     }
-  }, [onCommand, speak]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const captureCommandSpeech = useCallback(() => {
-    const w = window as SpeechWindow;
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) return;
-    const rec = new Ctor();
-    rec.lang = speechLang.current;
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onresult = async (e) => {
-      const text = Array.from({ length: e.results.length }, (_, i) => e.results[i][0].transcript).join(" ");
-      setTranscript(text);
-      setState("thinking");
-      const answer = await onCommand(text);
-      setReply(answer);
-      setState("speaking");
-      await speak(answer);
-      setState("asleep");
-      if (alwaysOnRef.current) startWakeListening();
-    };
-    rec.onerror = () => { setState("asleep"); if (alwaysOnRef.current) startWakeListening(); };
-    rec.onend = () => {};
-    recRef.current = rec;
-    try { rec.start(); } catch {}
-  }, [onCommand, speak]); // eslint-disable-line react-hooks/exhaustive-deps
+    setState("thinking");
+    setError(null);
+    const { transcript, reply } = await callVoiceAPI(blob);
 
-  const startWakeListening = useCallback(() => {
-    const w = window as SpeechWindow;
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) return;
-    const rec = new Ctor();
-    rec.lang = speechLang.current;
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.onresult = (e) => {
-      const last = e.results[e.results.length - 1];
-      const text = last[0].transcript.toLowerCase();
-      if (WAKE_WORDS.some((w) => text.includes(w))) {
-        rec.stop();
-        wake();
-      }
-    };
-    rec.onend = () => {
-      if (alwaysOnRef.current && stateRef.current === "asleep") {
-        try { rec.start(); } catch {}
-      }
-    };
-    rec.onerror = () => {
-      if (alwaysOnRef.current && stateRef.current === "asleep") {
-        setTimeout(() => { try { rec.start(); } catch {} }, 1000);
-      }
-    };
-    recRef.current = rec;
-    try { rec.start(); } catch {}
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!reply) {
+      setError("Ovoz aniqlanmadi. Qayta gapiring.");
+      if (activeRef.current) setState("listening");
+      return;
+    }
 
-  const wake = useCallback(() => {
-    setState("waking");
-    setTranscript("");
-    setReply("");
-    setTimeout(() => {
-      const hasMedia = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
-      if (hasMedia) {
-        captureCommandGroq().catch(() => {
-          setState("listening");
-          captureCommandSpeech();
-        });
-      } else {
+    setState("speaking");
+    await speakText(reply);
+    if (activeRef.current) setState("listening");
+    else setState("asleep");
+  }, []);
+
+  const startVADLoop = useCallback((stream: MediaStream) => {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioCtx();
+    audioCtxRef.current = ctx;
+
+    // iOS: AudioContext starts suspended — must resume after user gesture (we're inside one)
+    ctx.resume().catch(() => {});
+
+    const analyser = ctx.createAnalyser();
+    analyserRef.current = analyser;
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.35;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+
+    const mime = getBestMime();
+    mimeRef.current = mime;
+    const data = new Float32Array(analyser.fftSize);
+
+    function startRecording() {
+      chunksRef.current = [];
+      try {
+        const opts: MediaRecorderOptions = mime ? { mimeType: mime } : {};
+        const rec = new MediaRecorder(stream, opts);
+        recorderRef.current = rec;
+        rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+        rec.onstop = () => {
+          const elapsed = Date.now() - speechStartRef.current;
+          if (elapsed >= MIN_SPEECH_MS && stateRef.current !== "asleep") {
+            processChunks([...chunksRef.current], rec.mimeType || mime);
+          } else if (activeRef.current) {
+            setState("listening");
+          }
+        };
+        rec.start(250);
+      } catch (e) {
+        console.error("MediaRecorder error:", e);
+        setError("Mikrofon xatosi: " + String(e));
+      }
+      speechStartRef.current = Date.now();
+      isSpeakingRef.current = true;
+    }
+
+    function stopRecording() {
+      isSpeakingRef.current = false;
+      if (recorderRef.current?.state === "recording") {
+        try { recorderRef.current.stop(); } catch {}
+      }
+    }
+
+    function vadTick() {
+      if (!activeRef.current) return;
+      if (stateRef.current === "thinking" || stateRef.current === "speaking") {
+        vadLoopRef.current = requestAnimationFrame(vadTick);
+        return;
+      }
+
+      analyser.getFloatTimeDomainData(data);
+      let rms = 0;
+      for (let i = 0; i < data.length; i++) rms += data[i] * data[i];
+      rms = Math.sqrt(rms / data.length);
+      setLevel(Math.min(rms / 0.08, 1));
+
+      if (!isSpeakingRef.current && rms > SPEAK_THRESHOLD) {
+        if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
         setState("listening");
-        captureCommandSpeech();
+        startRecording();
+        setTimeout(() => { if (isSpeakingRef.current) stopRecording(); }, MAX_SPEECH_MS);
+      } else if (isSpeakingRef.current && rms < SILENCE_THRESHOLD) {
+        if (!silenceTimerRef.current) {
+          silenceTimerRef.current = setTimeout(() => {
+            silenceTimerRef.current = null;
+            stopRecording();
+          }, SILENCE_DURATION);
+        }
+      } else if (isSpeakingRef.current && rms > SPEAK_THRESHOLD) {
+        if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
       }
-    }, 300);
-  }, [captureCommandGroq, captureCommandSpeech]);
 
-  const toggleAlwaysOn = useCallback(() => {
-    setAlwaysOn((prev) => {
-      const next = !prev;
-      if (next) startWakeListening();
-      else recRef.current?.stop();
-      return next;
-    });
-  }, [startWakeListening]);
+      vadLoopRef.current = requestAnimationFrame(vadTick);
+    }
 
-  useEffect(() => () => { recRef.current?.stop(); }, []);
+    vadLoopRef.current = requestAnimationFrame(vadTick);
+  }, [processChunks]);
 
-  return { state, alwaysOn, supported, transcript, reply, toggleAlwaysOn, wake };
+  const startConversation = useCallback(async () => {
+    if (activeRef.current) return;
+    setError(null);
+    setActive(true);
+    setState("waking");
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // iOS requires sampleRate hint
+          sampleRate: 16000,
+        },
+      });
+    } catch (e) {
+      console.error("getUserMedia error:", e);
+      setError("Mikrofon ruxsati berilmadi.");
+      setActive(false);
+      setState("asleep");
+      return;
+    }
+    streamRef.current = stream;
+
+    setTimeout(() => {
+      if (activeRef.current) {
+        setState("listening");
+        startVADLoop(stream);
+      }
+    }, 400);
+  }, [startVADLoop]);
+
+  const stopConversation = useCallback(() => {
+    window.speechSynthesis?.cancel();
+    stopAll();
+    setActive(false);
+    setState("asleep");
+  }, [stopAll]);
+
+  const toggle = useCallback(() => {
+    if (activeRef.current) stopConversation();
+    else startConversation();
+  }, [startConversation, stopConversation]);
+
+  useEffect(() => () => stopAll(), [stopAll]);
+
+  return { state, active, supported, level, error, toggle, stopConversation };
 }

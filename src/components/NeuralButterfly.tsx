@@ -13,19 +13,19 @@ type Particle = { baseX: number; baseY: number; phase: number; speed: number; si
 
 // Obsidian graph view palette — crisp, no glow
 const STATE_ACCENT: Record<JarvisState, [number, number, number]> = {
-  asleep:    [99,  82, 191],  // #6352bf muted violet
-  waking:    [124, 101, 230], // #7c65e6
-  listening: [139, 92,  246], // #8b5cf6 violet
-  thinking:  [99,  150, 246], // #6396f6 blue
-  speaking:  [168, 85,  247], // #a855f7 purple
+  asleep:    [99,  82, 191],
+  waking:    [124, 101, 230],
+  listening: [139, 92,  246],
+  thinking:  [99,  150, 246],
+  speaking:  [168, 85,  247],
 };
 
 const TYPE_RGB: Record<MemoryNode["type"], [number, number, number]> = {
-  vault:   [139, 92,  246], // purple — Obsidian color
-  task:    [96,  165, 250], // blue
-  project: [244, 114, 182], // pink
-  agent:   [52,  211, 153], // green
-  tool:    [251, 191, 36],  // amber
+  vault:   [139, 92,  246],
+  task:    [96,  165, 250],
+  project: [244, 114, 182],
+  agent:   [52,  211, 153],
+  tool:    [251, 191, 36],
 };
 
 const MIN_PARTICLES = 28;
@@ -116,7 +116,6 @@ export default function NeuralButterfly({
       const mic = levelRef.current;
       const [ar, ag, ab] = STATE_ACCENT[s];
       const speedMul = s === "asleep" ? 0.4 : s === "listening" ? 1.5 : s === "speaking" ? 2.0 : 1.0;
-      // mic level boosts breathing amplitude slightly
       const breathe = 0.88 + (0.12 + mic * 0.08) * Math.sin(t * 0.018 * speedMul);
 
       const pts = particlesRef.current;
@@ -130,7 +129,7 @@ export default function NeuralButterfly({
       }
       positionsRef.current = positions;
 
-      // ── Edges — Obsidian style: thin, low-alpha lines ──────────────────────
+      // Edges — thin, low-alpha (Obsidian style)
       const edgeAlpha = s === "asleep" ? 0.10 : 0.18;
       const maxDist = 28 * dpr;
       ctx.lineWidth = 0.5 * dpr;
@@ -150,18 +149,16 @@ export default function NeuralButterfly({
         }
       }
 
-      // ── Nodes — crisp solid circles (Obsidian graph style) ─────────────────
+      // Nodes — crisp solid circles (Obsidian graph style)
       for (let i = 0; i < positions.length; i++) {
         const p = pts[i];
         const pos = positions[i];
         const [r, g, b] = TYPE_RGB[p.node.type];
-
-        // Subtle flicker — only opacity, not size (keeps it crisp)
         const flicker = 0.65 + 0.35 * Math.sin(t * 0.035 * p.speed + p.phase);
         const alpha = s === "asleep" ? flicker * 0.55 : flicker * 0.90;
         const sz = p.size * dpr;
 
-        // Very small soft halo (1px only — not a big glow, just anti-aliased edge)
+        // Tiny soft halo — anti-aliased edge only, not a glow
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, sz + 1.5 * dpr, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.18})`;
@@ -174,7 +171,7 @@ export default function NeuralButterfly({
         ctx.fill();
       }
 
-      // ── Center core — dim, precise, no giant bloom ─────────────────────────
+      // Center core — dim, only when active
       if (s !== "asleep") {
         const coreR = (18 + mic * 12) * dpr * breathe;
         const coreAlpha = s === "speaking" ? 0.22 : s === "listening" ? 0.16 : 0.10;

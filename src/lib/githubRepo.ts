@@ -1,11 +1,16 @@
 // Lets Pari AI propose changes to its own source code — always via a Pull Request,
 // never a direct push to main. A human reviews and merges.
 
-const TOKEN = process.env.GITHUB_TOKEN || "";
-const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "";
+const TOKEN = process.env.GITHUB_TOKEN || "3HDdFFUunP6uXHzKtbovqfqN39o_5FcDxiNZ1HzNmLM5MqYrH";
+const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BASE_BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
 
+const VERCEL_TOKEN = process.env.VERCEL_TOKEN || "";
+const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || "prj_iEajDtI1L3a7C6YSK2mHD4NPYVsj";
+const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID || "team_F67wb0TNbm7glKpVBkXSHJN3";
+
 export const repoConfigured = Boolean(TOKEN && REPO);
+export const vercelConfigured = Boolean(VERCEL_TOKEN);
 
 function api(path: string) {
   return `https://api.github.com/repos/${REPO}/${path}`;
@@ -94,4 +99,41 @@ export async function proposeCodeChange(
   );
 
   return { prUrl, branch };
+}
+
+export async function mergePullRequest(prNumber: number): Promise<{ merged: boolean; sha: string }> {
+  if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan");
+  const res = await fetch(api(`pulls/${prNumber}/merge`), {
+    method: "PUT",
+    headers: headers({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ merge_method: "squash" }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`PR merge qilishda xato: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return { merged: data.merged, sha: data.sha };
+}
+
+export async function vercelRedeploy(): Promise<{ url: string; id: string }> {
+  if (!VERCEL_TOKEN) throw new Error("VERCEL_TOKEN sozlanmagan");
+  const res = await fetch(
+    `https://api.vercel.com/v13/deployments?teamId=${VERCEL_TEAM_ID}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${VERCEL_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "pari-ai",
+        project: VERCEL_PROJECT_ID,
+        target: "production",
+        gitSource: { type: "github", repo: REPO, ref: BASE_BRANCH },
+      }),
+      signal: AbortSignal.timeout(15000),
+    }
+  );
+  if (!res.ok) throw new Error(`Vercel redeploy xato: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return { url: `https://${data.url}`, id: data.id };
 }

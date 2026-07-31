@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutGrid, MessageSquare, History, Bot, CheckSquare, FolderKanban, BookOpen, Brain,
   Zap, Calendar, FolderOpen, BarChart3, Code2, Database, Plug, Sparkles,
-  Wrench, Settings, ShieldCheck, CreditCard, ScrollText, ChevronDown, X, type LucideIcon,
+  Wrench, Settings, ShieldCheck, CreditCard, ScrollText, ChevronDown, X, Radio, type LucideIcon,
 } from "lucide-react";
 
 type NavEntry = { label: string; href: string; icon: LucideIcon };
@@ -23,6 +23,7 @@ const nav: NavEntry[] = [
   { label: "Calendar", href: "/calendar", icon: Calendar },
   { label: "Files", href: "/files", icon: FolderOpen },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
+  { label: "SMM", href: "/smm", icon: Radio },
 ];
 
 const devNav: NavEntry[] = [
