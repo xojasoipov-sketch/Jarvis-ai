@@ -1,14 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
 
-const URL  = process.env.SUPABASE_URL || "https://tomkxsdkerpbvlumubbg.supabase.co";
-// Prefer service_role key (bypasses RLS) for server-side; fall back to anon key
-const KEY  =
+const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvbWt4c2RrZXJwYnZsdW11YmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4MTI5NTMsImV4cCI6MjA5OTM4ODk1M30.betEr6efsXiJSRb9g2FnarUtF7B09DJombiQdKcMR6U";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  "";
 
-export const dbConfigured = Boolean(URL && KEY);
+function isValidUrl(u: string): boolean {
+  try { return /^https?:\/\/.+/.test(new URL(u).href); } catch { return false; }
+}
+
+const validUrl = isValidUrl(rawUrl) ? rawUrl : "";
+
+export const dbConfigured = Boolean(validUrl && KEY);
 
 export const supabase = dbConfigured
-  ? createClient(URL, KEY, { auth: { persistSession: false } })
+  ? createClient(validUrl, KEY, { auth: { persistSession: false } })
   : null;
