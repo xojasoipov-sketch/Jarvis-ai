@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_KEYS = [
+  process.env.GEMINI_API_KEY,
+  process.env.GEMINI_API_KEY2,
+  process.env.GEMINI_API_KEY3,
+].filter(Boolean) as string[];
 const GROQ_KEY = process.env.GROQ_API_KEY || "";
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
@@ -14,9 +18,7 @@ Qoidalar:
 - Agar savol bo'lmasa ham, samimiy muloqot qil`;
 
 // ── 1. Gemini 1.5 Flash (STT + AI, bitta chaqiruv) ──────────────────────────
-async function tryGemini(audioBuffer: Buffer, mimeType: string): Promise<{ transcript: string; reply: string } | null> {
-  if (!GEMINI_KEY) return null;
-
+async function tryGeminiWithKey(key: string, audioBuffer: Buffer, mimeType: string): Promise<{ transcript: string; reply: string } | null> {
   const b64 = audioBuffer.toString("base64");
   const safeMime = normalizeMime(mimeType);
 
@@ -36,7 +38,7 @@ async function tryGemini(audioBuffer: Buffer, mimeType: string): Promise<{ trans
   };
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
   );
   if (!res.ok) {
@@ -50,6 +52,14 @@ async function tryGemini(audioBuffer: Buffer, mimeType: string): Promise<{ trans
     const parsed = JSON.parse(raw);
     if (parsed?.reply) return { transcript: parsed.transcript || "", reply: parsed.reply };
   } catch { /* fall through */ }
+  return null;
+}
+
+async function tryGemini(audioBuffer: Buffer, mimeType: string): Promise<{ transcript: string; reply: string } | null> {
+  for (const key of GEMINI_KEYS) {
+    const result = await tryGeminiWithKey(key, audioBuffer, mimeType);
+    if (result) return result;
+  }
   return null;
 }
 
@@ -170,7 +180,7 @@ export async function POST(req: NextRequest) {
 // Quick diagnostic — GET /api/voice returns provider status
 export async function GET() {
   return NextResponse.json({
-    gemini: GEMINI_KEY ? `✅ key set (${GEMINI_KEY.slice(0, 8)}...)` : "❌ not set",
+    gemini: GEMINI_KEYS.length ? `✅ ${GEMINI_KEYS.length} key(s) set` : "❌ not set",
     groq: GROQ_KEY ? "✅ key set" : "❌ not set",
     base_url: BASE_URL,
   });
