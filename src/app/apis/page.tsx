@@ -20,6 +20,7 @@ const APIS = [
   { id: "gemini-voice", name: "Gemini Audio", desc: "Oxirgi zaxira — STT+javob bitta so'rovda", envKey: "GEMINI_API_KEY", url: "https://aistudio.google.com", cat: "Voice" },
   { id: "telegram", name: "Telegram Bot", desc: "Bot integratsiyasi", envKey: "TELEGRAM_BOT_TOKEN", url: "https://t.me/BotFather", cat: "Messaging" },
   { id: "hermes", name: "Hermes — built-in vositalar", desc: "MCP tool executor", envKey: null, url: "", cat: "Tools" },
+  { id: "github", name: "GitHub — Self-Improvement", desc: "propose_code_change / Sessions uchun PR ochish, merge", envKey: "GITHUB_TOKEN", url: "https://github.com/settings/tokens", cat: "Tools" },
   { id: "supabase", name: "Supabase", desc: "Tasks/Projects ma'lumotlar bazasi", envKey: "SUPABASE_URL", url: "https://supabase.com", cat: "Database" },
 ];
 
@@ -220,6 +221,13 @@ export default function ApisPage() {
         setStatuses((s) => ({ ...s, [id]: d.ok ? "ok" : "error" }));
         if (d.ok && d.info) setErrors((e) => ({ ...e, [id]: d.info }));
         if (!d.ok) setErrors((e) => ({ ...e, [id]: d.error || "Key sozlanmagan yoki ishlamaydi" }));
+        return;
+      }
+      if (id === "github") {
+        const r = await fetch("/api/github/test", { signal: AbortSignal.timeout(10000) });
+        const d = await r.json();
+        setStatuses((s) => ({ ...s, [id]: d.ok ? "ok" : "error" }));
+        setErrors((e) => ({ ...e, [id]: d.ok ? d.info : d.error || "Kirish rad etildi" }));
         return;
       }
       const endpoint = endpoints[id] || "";

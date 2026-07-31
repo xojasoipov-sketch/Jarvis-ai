@@ -32,12 +32,17 @@ export default function CodeEditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agentId: "coder",
-          task: `${lang} tilida yoz: ${aiPrompt}\n\nFaqat kod yoz, izoh minimal bo'lsin.`,
+          task: `Vazifa: ${aiPrompt}\n\nMohiyatiga qarab eng mos dasturlash tilini o'zing tanla (Python, TypeScript, JavaScript, SQL, Bash va h.k. orasidan). Javobni \`\`\`til-nomi fenced blok ichida ber, faqat kod yoz, izoh minimal bo'lsin.`,
         }),
       });
       const data = await res.json();
-      const codeMatch = data.result?.match(/```[\w]*\n?([\s\S]*?)```/);
-      setCode(codeMatch ? codeMatch[1].trim() : data.result);
+      const codeMatch = data.result?.match(/```(\w*)\n?([\s\S]*?)```/);
+      if (codeMatch) {
+        setCode(codeMatch[2].trim());
+        if (codeMatch[1]) setLang(codeMatch[1].toLowerCase());
+      } else {
+        setCode(data.result);
+      }
       setTab("editor");
     } catch { /* ignore */ }
     setAiLoading(false);
@@ -93,12 +98,8 @@ export default function CodeEditorPage() {
         <div className="flex gap-2">
           <input value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
             onKeyDown={e => e.key === "Enter" && generateCode()}
-            placeholder="AI dan kod yozdiring... (masalan: 'FastAPI bilan REST API yoz')"
+            placeholder="Vazifani tabiiy tilda yozing — tilni AI o'zi tanlaydi (masalan: 'FastAPI bilan REST API yoz')"
             className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-          <select value={lang} onChange={e => setLang(e.target.value)}
-            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
-            {["python","typescript","javascript","sql","bash","json"].map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
           <button onClick={generateCode} disabled={aiLoading || !aiPrompt.trim()}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-all">
             {aiLoading ? <Loader2 size={14} strokeWidth={2} className="animate-spin" /> : <Sparkles size={14} strokeWidth={1.75} />} Yoz

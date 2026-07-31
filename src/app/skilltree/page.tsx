@@ -2,7 +2,7 @@
 import { useState } from "react";
 import {
   Brain, Code2, Briefcase, Megaphone, PenLine, Microscope, Settings2,
-  Lock, Star, TrendingUp, Plus, type LucideIcon,
+  Lock, Star, TrendingUp, Plus, Globe, Loader2, type LucideIcon,
 } from "lucide-react";
 
 type Skill = {
@@ -27,8 +27,11 @@ const INIT_SKILLS: Skill[] = [
     notes: ["SMM strategiya asoslari"] },
   { id: "writing", name: "Kontent yaratish", icon: PenLine, level: 3, xp: 150, xpNeeded: 300, unlocked: true,
     notes: ["Copywriting texnikalari"] },
-  { id: "devops", name: "DevOps", icon: Settings2, level: 1, xp: 40, xpNeeded: 200, unlocked: false,
-    notes: [] },
+  { id: "devops", name: "DevOps", icon: Settings2, level: 3, xp: 120, xpNeeded: 300, unlocked: true,
+    notes: [
+      "Pari AI Vercel'da GitHub integratsiyasi orqali deploy bo'ladi — main branch'ga har push avtomatik production deploy'ni ishga tushiradi.",
+      "Environment variable'lar hech qachon kodga hardcode qilinmaydi — faqat Vercel Dashboard > Settings > Environment Variables orqali qo'shiladi.",
+    ] },
 ];
 
 function XPBar({ xp, xpNeeded }: { xp: number; xpNeeded: number }) {
@@ -44,17 +47,39 @@ export default function SkillTreePage() {
   const [skills, setSkills] = useState<Skill[]>(INIT_SKILLS);
   const [selected, setSelected] = useState<Skill | null>(INIT_SKILLS[0]);
   const [newNote, setNewNote] = useState("");
+  const [enriching, setEnriching] = useState(false);
 
   const totalLevel = skills.reduce((a, s) => a + s.level, 0);
   const totalXp = skills.reduce((a, s) => a + s.xp, 0);
 
+  function applyNote(note: string, xpGain: number) {
+    if (!selected) return;
+    setSkills(prev => prev.map(s => s.id === selected.id
+      ? { ...s, notes: [...s.notes, note], xp: Math.min(s.xpNeeded, s.xp + xpGain) }
+      : s));
+    setSelected(prev => prev ? { ...prev, notes: [...prev.notes, note], xp: Math.min(prev.xpNeeded, prev.xp + xpGain) } : prev);
+  }
+
   function addNote() {
     if (!selected || !newNote.trim()) return;
-    setSkills(prev => prev.map(s => s.id === selected.id
-      ? { ...s, notes: [...s.notes, newNote.trim()], xp: Math.min(s.xpNeeded, s.xp + 15) }
-      : s));
-    setSelected(prev => prev ? { ...prev, notes: [...prev.notes, newNote.trim()], xp: Math.min(prev.xpNeeded, prev.xp + 15) } : prev);
+    applyNote(newNote.trim(), 15);
     setNewNote("");
+  }
+
+  async function enrichFromWeb() {
+    if (!selected || enriching) return;
+    setEnriching(true);
+    try {
+      const res = await fetch("/api/skilltree/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: selected.name }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const data = await res.json();
+      if (data.note) applyNote(data.note, data.grounded ? 25 : 15);
+    } catch { /* ignore — user can retry */ }
+    setEnriching(false);
   }
 
   return (
@@ -128,6 +153,14 @@ export default function SkillTreePage() {
                   <h2 className="text-lg font-bold text-gray-900">{selected.name}</h2>
                   <p className="text-xs text-gray-500">Daraja {selected.level} · {selected.xp}/{selected.xpNeeded} XP</p>
                 </div>
+                <button
+                  onClick={enrichFromWeb}
+                  disabled={enriching}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 text-indigo-600 text-xs font-medium rounded-xl transition-all flex-shrink-0"
+                >
+                  {enriching ? <Loader2 size={13} strokeWidth={2} className="animate-spin" /> : <Globe size={13} strokeWidth={1.75} />}
+                  Internetdan bilim qo&apos;sh
+                </button>
               </div>
 
               <p className="text-xs font-medium text-gray-700 mb-3">Bilim yozuvlari ({selected.notes.length})</p>

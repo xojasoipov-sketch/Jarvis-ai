@@ -25,6 +25,21 @@ function headers(extra: Record<string, string> = {}) {
   };
 }
 
+export async function testGitHubAccess(): Promise<{ repo: string; canPush: boolean; canPR: boolean }> {
+  if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan");
+  const res = await fetch(api(""), { headers: headers(), signal: AbortSignal.timeout(8000) });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(`${res.status}: ${body?.message || "Kirish rad etildi"}`);
+  }
+  const data = await res.json();
+  return {
+    repo: data.full_name,
+    canPush: Boolean(data.permissions?.push),
+    canPR: Boolean(data.permissions?.pull),
+  };
+}
+
 async function getBaseSha(): Promise<string> {
   const res = await fetch(api(`git/ref/heads/${BASE_BRANCH}`), { headers: headers(), signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`Base branch topilmadi: ${res.status}`);
@@ -118,7 +133,11 @@ export async function listPullRequests(): Promise<PullRequestInfo[]> {
     headers: headers(),
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) throw new Error(`PR ro'yxati olinmadi: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const reason = body?.message || "Noma'lum sabab";
+    throw new Error(`PR ro'yxati olinmadi: ${res.status} — ${reason}`);
+  }
   const data = await res.json();
   return (data as Record<string, unknown>[]).map((pr) => ({
     number: pr.number as number,
