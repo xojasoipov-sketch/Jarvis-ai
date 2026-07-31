@@ -41,6 +41,8 @@ async function speakText(text: string, audioCtx: AudioContext | null): Promise<v
       if (res.ok) {
         const buf = await res.arrayBuffer();
         const decoded = await audioCtx.decodeAudioData(buf);
+        // Re-unlock context in case iOS suspended it after inactivity
+        if (audioCtx.state === "suspended") await audioCtx.resume();
         await new Promise<void>((resolve) => {
           const src = audioCtx.createBufferSource();
           src.buffer = decoded;

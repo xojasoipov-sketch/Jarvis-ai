@@ -193,6 +193,7 @@ export function useVoiceOutput() {
         if (res.ok) {
           const buf = await res.arrayBuffer();
           const decoded = await ctx.decodeAudioData(buf);
+          if (ctx.state === "suspended") await ctx.resume();
           const src = ctx.createBufferSource();
           src.buffer = decoded;
           src.connect(ctx.destination);

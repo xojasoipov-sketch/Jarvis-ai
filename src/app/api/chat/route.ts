@@ -34,6 +34,7 @@ async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.key}` },
       body: JSON.stringify({ model: provider.model, messages: convo, tools, tool_choice: "auto", stream: false }),
+      signal: AbortSignal.timeout(12000),
     });
     if (!res.ok) throw new Error(`Provider error ${res.status}`);
     const data = await res.json();
@@ -94,7 +95,8 @@ export async function POST(req: NextRequest) {
   const baseSystem = system || SYSTEM;
 
   // Prefer the tool-capable provider so the agent can actually call vault/code/web tools.
-  const toolProvider = list.find((p) => p.supportsTools);
+  // Only if a real key is set — skip tool loop for keyless providers like Pollinations.
+  const toolProvider = list.find((p) => p.supportsTools && p.key !== "dummy");
   if (toolProvider) {
     try {
       const convo: ChatMessage[] = [{ role: "system", content: baseSystem }, ...messages];
