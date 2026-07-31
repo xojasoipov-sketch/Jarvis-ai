@@ -132,6 +132,16 @@ export async function listPullRequests(): Promise<PullRequestInfo[]> {
   }));
 }
 
+export async function getPullRequestDiff(prNumber: number): Promise<string> {
+  if (!repoConfigured) throw new Error("GITHUB_TOKEN yoki repo sozlanmagan");
+  const res = await fetch(api(`pulls/${prNumber}`), {
+    headers: headers({ Accept: "application/vnd.github.v3.diff" }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`Diff olinmadi: ${res.status}`);
+  return res.text();
+}
+
 export async function mergePullRequest(prNumber: number): Promise<{ merged: boolean; sha: string }> {
   if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan");
   const res = await fetch(api(`pulls/${prNumber}/merge`), {

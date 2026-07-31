@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { repoConfigured, vercelConfigured, listPullRequests, mergePullRequest, vercelRedeploy } from "@/lib/githubRepo";
+import { repoConfigured, vercelConfigured, listPullRequests, getPullRequestDiff, mergePullRequest, vercelRedeploy } from "@/lib/githubRepo";
 
-// GET /api/sessions — list Pari AI's self-improvement sessions (= GitHub PRs it opened)
-export async function GET() {
+// GET /api/sessions           — list Pari AI's self-improvement sessions (= GitHub PRs it opened)
+// GET /api/sessions?diff=NUM  — unified diff for one PR
+export async function GET(req: NextRequest) {
+  const prNumber = new URL(req.url).searchParams.get("diff");
+  if (prNumber) {
+    if (!repoConfigured) return NextResponse.json({ error: "GITHUB_TOKEN sozlanmagan" }, { status: 400 });
+    try {
+      const diff = await getPullRequestDiff(Number(prNumber));
+      return NextResponse.json({ diff });
+    } catch (err) {
+      return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    }
+  }
+
   if (!repoConfigured) {
     return NextResponse.json({ configured: false, sessions: [] });
   }
@@ -34,7 +46,13 @@ export async function POST(req: NextRequest) {
     if (!prNumber) return NextResponse.json({ error: "prNumber kerak" }, { status: 400 });
     try {
       const result = await mergePullRequest(Number(prNumber));
-      return NextResponse.json({ ok: true, ...result });
+      // Approved by the user (this call only happens on their explicit click) —
+      // chain a redeploy automatically so merge + deploy is a single action.
+      let deploy: { url: string; id: string } | null = null;
+      if (vercelConfigured) {
+        try { deploy = await vercelRedeploy(); } catch { /* merge already succeeded; report separately */ }
+      }
+      return NextResponse.json({ ok: true, ...result, deploy });
     } catch (err) {
       return NextResponse.json({ error: (err as Error).message }, { status: 500 });
     }
