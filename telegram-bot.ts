@@ -1,0 +1,3 @@
+// Load session from database instead of using loadSession
+const session = await loadSessionFromDatabase();
+...
