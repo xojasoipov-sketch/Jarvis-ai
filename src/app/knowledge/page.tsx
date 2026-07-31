@@ -2,12 +2,12 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Brain, Search, RefreshCw, FileText, FolderOpen, ChevronRight,
-  Plus, Send, X, AlertCircle, Zap, BookOpen, Clock,
+  Plus, Send, X, AlertCircle, Zap, BookOpen, Clock, Trash2, Sparkles, Tag,
 } from "lucide-react";
 
 type VaultFile = { path: string; stat?: { mtime: number; ctime: number; size: number } };
 type SearchResult = { filename: string; score: number; context?: string };
-type MemoryItem = { id?: string; title: string; content: string; createdAt?: number };
+type MemoryItem = { id?: string; title: string; content: string; tags?: string[]; created_at?: string; createdAt?: number };
 
 type Tab = "vault" | "search" | "memory" | "hermes";
 
@@ -26,13 +26,17 @@ export default function KnowledgePage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
-  // Memory
+  // Memory / Knowledge DB
   const [memItems, setMemItems] = useState<MemoryItem[]>([]);
   const [memQuery, setMemQuery] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
+  const [newTags, setNewTags] = useState("");
   const [memLoading, setMemLoading] = useState(false);
+  const [memSaving, setMemSaving] = useState(false);
   const [showNewMem, setShowNewMem] = useState(false);
+  const [memSemantic, setMemSemantic] = useState(false);
+  const [memConfigured, setMemConfigured] = useState(true);
 
   // Hermes
   const [tools, setTools] = useState<{ name: string; description?: string }[]>([]);
@@ -57,10 +61,12 @@ export default function KnowledgePage() {
   const loadMemory = useCallback(async (q = "") => {
     setMemLoading(true);
     try {
-      const url = q ? `/api/memory?q=${encodeURIComponent(q)}` : "/api/memory";
+      const url = q ? `/api/knowledge?q=${encodeURIComponent(q)}` : "/api/knowledge";
       const r = await fetch(url);
       const d = await r.json();
-      setMemItems(d.items || d.results || []);
+      setMemConfigured(d.configured !== false);
+      setMemSemantic(Boolean(d.semantic));
+      setMemItems(d.items || []);
     } finally {
       setMemLoading(false);
     }
@@ -96,13 +102,24 @@ export default function KnowledgePage() {
 
   async function saveMem() {
     if (!newTitle.trim() || !newContent.trim()) return;
-    await fetch("/api/memory", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: newTitle, content: newContent }),
-    });
-    setNewTitle(""); setNewContent(""); setShowNewMem(false);
-    loadMemory();
+    setMemSaving(true);
+    try {
+      const tags = newTags.split(",").map(t => t.trim()).filter(Boolean);
+      await fetch("/api/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTitle, content: newContent, tags }),
+      });
+      setNewTitle(""); setNewContent(""); setNewTags(""); setShowNewMem(false);
+      loadMemory();
+    } finally {
+      setMemSaving(false);
+    }
+  }
+
+  async function deleteMem(id: string | number) {
+    await fetch(`/api/knowledge?id=${id}`, { method: "DELETE" });
+    setMemItems(prev => prev.filter(m => String(m.id) !== String(id)));
   }
 
   async function runTool() {
@@ -134,7 +151,7 @@ export default function KnowledgePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Knowledge Hub</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Obsidian vault · Xotira · Hermes MCP</p>
+          <p className="text-sm text-gray-500 mt-0.5">Obsidian vault · Supabase pgvector · Hermes MCP</p>
         </div>
         <div className="flex items-center gap-2">
           <span className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border ${configured.obsidian ? "border-purple-200 bg-purple-50 text-purple-700" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
@@ -280,17 +297,29 @@ export default function KnowledgePage() {
               <Search size={15} strokeWidth={1.75} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input value={memQuery} onChange={e => setMemQuery(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && loadMemory(memQuery)}
-                placeholder="Xotirani qidiring..."
+                placeholder="Semantik qidiruv (pgvector)..."
                 className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200" />
             </div>
             <button onClick={() => loadMemory(memQuery)} className="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all">
               <RefreshCw size={14} strokeWidth={1.75} />
             </button>
-            <button onClick={() => setShowNewMem(true)}
+            <button onClick={() => setShowNewMem(v => !v)}
               className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl transition-all flex items-center gap-2">
               <Plus size={14} /> Yangi
             </button>
           </div>
+
+          {!memConfigured && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-xs text-amber-800 flex items-center gap-2">
+              <AlertCircle size={13} /> Supabase ulanmagan — <code>pari_knowledge</code> jadvali kerak
+            </div>
+          )}
+
+          {memSemantic && memQuery && (
+            <div className="flex items-center gap-1.5 text-xs text-purple-600">
+              <Sparkles size={11} /> pgvector semantik natijalar
+            </div>
+          )}
 
           {showNewMem && (
             <div className="bg-white border border-indigo-200 rounded-2xl p-5 space-y-3 shadow-sm">
@@ -299,12 +328,18 @@ export default function KnowledgePage() {
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200" />
               <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
                 placeholder="Kontent..."
-                rows={3}
+                rows={4}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200 resize-none" />
+              <input value={newTags} onChange={e => setNewTags(e.target.value)}
+                placeholder="Teglar (vergul bilan): ai, arxitektura, notes"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200" />
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setShowNewMem(false)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">Bekor</button>
-                <button onClick={saveMem} className="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all flex items-center gap-1.5">
-                  <Send size={12} /> Saqlash
+                <button onClick={() => { setShowNewMem(false); setNewTitle(""); setNewContent(""); setNewTags(""); }}
+                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">Bekor</button>
+                <button onClick={saveMem} disabled={memSaving || !newTitle.trim() || !newContent.trim()}
+                  className="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-lg transition-all flex items-center gap-1.5">
+                  {memSaving ? <RefreshCw size={11} className="animate-spin" /> : <Send size={12} />}
+                  Saqlash
                 </button>
               </div>
             </div>
@@ -316,22 +351,39 @@ export default function KnowledgePage() {
             <div className="text-center py-12">
               <Brain size={40} strokeWidth={1.25} className="mx-auto mb-3 text-gray-200" />
               <p className="text-sm text-gray-400">Xotira bo'sh</p>
-              <p className="text-xs text-gray-400 mt-1">Obsidian ulanganida vault ma'lumotlari shu yerda ko'rinadi</p>
+              <p className="text-xs text-gray-400 mt-1">Yangi bilim qo'shing — agentlar undan foydalanadi</p>
             </div>
           ) : (
             <div className="space-y-2">
               {memItems.map((m, i) => (
-                <div key={m.id || i} className="bg-white border border-gray-100 rounded-xl px-4 py-3.5 shadow-sm">
+                <div key={m.id || i} className="group bg-white border border-gray-100 rounded-xl px-4 py-3.5 shadow-sm">
                   <div className="flex items-start gap-3">
                     <Brain size={14} strokeWidth={1.75} className="text-purple-500 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{m.title}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-gray-900">{m.title}</p>
+                        <button onClick={() => m.id && deleteMem(m.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-500 transition-all flex-shrink-0">
+                          <Trash2 size={12} strokeWidth={1.75} />
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500 mt-1 line-clamp-3">{m.content}</p>
-                      {m.createdAt && (
-                        <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
-                          <Clock size={10} />{new Date(m.createdAt).toLocaleDateString("uz")}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-3 mt-2">
+                        {m.tags && m.tags.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Tag size={10} strokeWidth={1.75} className="text-gray-400" />
+                            {m.tags.map(tag => (
+                              <span key={tag} className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md">{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                        {(m.created_at || m.createdAt) && (
+                          <p className="text-xs text-gray-400 flex items-center gap-1 ml-auto">
+                            <Clock size={10} />
+                            {new Date(m.created_at || m.createdAt!).toLocaleDateString("uz")}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

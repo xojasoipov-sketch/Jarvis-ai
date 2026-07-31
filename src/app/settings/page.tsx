@@ -299,7 +299,12 @@ export default function SettingsPage() {
             <span className="flex-1 truncate">SUPABASE_ANON_KEY=eyJ...</span>
             <CopyBtn text="SUPABASE_ANON_KEY=eyJ..." />
           </div>
-          <p className="text-gray-500">Tasks/Projects sahifalari <code className="bg-gray-100 px-1 rounded">pari_tasks</code> va <code className="bg-gray-100 px-1 rounded">pari_projects</code> jadvallarida saqlanadi.</p>
+          <p className="text-gray-500">
+            Jadvallarni yaratish uchun Supabase SQL Editor&apos;da{" "}
+            <code className="bg-gray-100 px-1 rounded">supabase/migrations/001_init.sql</code> va{" "}
+            <code className="bg-gray-100 px-1 rounded">002_knowledge_conversations.sql</code> ni ishga tushiring
+            (pgvector, pari_knowledge, pari_conversations, pari_events jadvallarini yaratadi).
+          </p>
         </div>
       </div>
 
