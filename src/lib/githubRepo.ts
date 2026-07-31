@@ -13,7 +13,7 @@ export const repoConfigured = Boolean(TOKEN && REPO);
 export const vercelConfigured = Boolean(VERCEL_TOKEN);
 
 function api(path: string) {
-  return `https://api.github.com/repos/${REPO}/${path}`;
+  return path ? `https://api.github.com/repos/${REPO}/${path}` : `https://api.github.com/repos/${REPO}`;
 }
 
 function headers(extra: Record<string, string> = {}) {
@@ -176,23 +176,25 @@ export async function mergePullRequest(prNumber: number): Promise<{ merged: bool
 
 export async function vercelRedeploy(): Promise<{ url: string; id: string }> {
   if (!VERCEL_TOKEN) throw new Error("VERCEL_TOKEN sozlanmagan");
-  const res = await fetch(
-    `https://api.vercel.com/v13/deployments?teamId=${VERCEL_TEAM_ID}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${VERCEL_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: "pari-ai",
-        project: VERCEL_PROJECT_ID,
-        target: "production",
-        gitSource: { type: "github", repo: REPO, ref: BASE_BRANCH },
-      }),
-      signal: AbortSignal.timeout(15000),
-    }
-  );
+  const [org, repoName] = REPO.split("/");
+  const url = VERCEL_TEAM_ID
+    ? `https://api.vercel.com/v13/deployments?teamId=${VERCEL_TEAM_ID}`
+    : "https://api.vercel.com/v13/deployments";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${VERCEL_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: "pari-ai",
+      project: VERCEL_PROJECT_ID,
+      target: "production",
+      // Vercel's gitSource wants org/repo as separate fields, not "owner/repo"
+      gitSource: { type: "github", org, repo: repoName, ref: BASE_BRANCH },
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
   if (!res.ok) throw new Error(`Vercel redeploy xato: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return { url: `https://${data.url}`, id: data.id };
