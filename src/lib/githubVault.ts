@@ -1,12 +1,12 @@
 // GitHub-backed Obsidian vault — real cloud storage, no local server required.
-// Notes live at GITHUB_VAULT_REPO under GITHUB_VAULT_PATH (default: "vault").
+// Notes live at GITHUB_VAULT_REPO (default: same repo) under GITHUB_VAULT_PATH (default: "vault").
 
 const TOKEN =
   process.env.GITHUB_TOKEN ||
   process.env.GITHUB_PERSONAL_ACCESS_TOKEN ||
   process.env.GH_TOKEN ||
   "";
-const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "";
+const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
 const ROOT = (process.env.GITHUB_VAULT_PATH || "vault").replace(/^\/|\/$/g, "");
 
@@ -25,100 +25,113 @@ function headers(extra: Record<string, string> = {}) {
   };
 }
 
-function fullPath(notePath: string) {
-  const clean = notePath.replace(/^\/+/, "");
-  return `${ROOT}/${clean}`;
-}
-
-export type VaultFile = { path: string; type: "file" | "dir" };
-
-export async function listVault(dir = ""): Promise<VaultFile[]> {
-  const target = dir ? fullPath(dir) : ROOT;
-  const res = await fetch(api(`contents/${encodeURI(target)}?ref=${BRANCH}`), {
+export async function listVault(subPath = ""): Promise<{ name: string; path: string; type: "file" | "dir" }[]> {
+  const dir = subPath ? `${ROOT}/${subPath}` : ROOT;
+  const res = await fetch(api(`contents/${dir}?ref=${BRANCH}`), {
     headers: headers(),
     signal: AbortSignal.timeout(8000),
   });
-  if (res.status === 404) return [];
-  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+  if (!res.ok) return [];
   const data = await res.json();
-  const items = Array.isArray(data) ? data : [data];
-  return items.map((i: { path: string; type: string }) => ({
-    path: i.path.slice(ROOT.length + 1),
-    type: i.type === "dir" ? "dir" : "file",
+  if (!Array.isArray(data)) return [];
+  return data.map((item: { name: string; path: string; type: string }) => ({
+    name: item.name,
+    path: item.path,
+    type: item.type === "dir" ? "dir" : "file",
   }));
 }
 
-export async function readVaultFile(notePath: string): Promise<string> {
-  const res = await fetch(api(`contents/${encodeURI(fullPath(notePath))}?ref=${BRANCH}`), {
-    headers: headers({ Accept: "application/vnd.github.raw+json" }),
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-  return res.text();
-}
-
-async function getSha(notePath: string): Promise<string | undefined> {
-  const res = await fetch(api(`contents/${encodeURI(fullPath(notePath))}?ref=${BRANCH}`), {
+export async function readVaultFile(filePath: string): Promise<string | null> {
+  const res = await fetch(api(`contents/${filePath}?ref=${BRANCH}`), {
     headers: headers(),
     signal: AbortSignal.timeout(8000),
   });
-  if (!res.ok) return undefined;
+  if (!res.ok) return null;
   const data = await res.json();
-  return data.sha;
+  if (!data.content) return null;
+  return Buffer.from(data.content, "base64").toString("utf-8");
 }
 
-export async function writeVaultFile(notePath: string, content: string): Promise<void> {
-  const sha = await getSha(notePath);
-  const res = await fetch(api(`contents/${encodeURI(fullPath(notePath))}`), {
+export async function writeVaultFile(
+  filePath: string,
+  content: string,
+  message = "chore: update vault"
+): Promise<boolean> {
+  // Get current SHA if file exists
+  let sha: string | undefined;
+  const check = await fetch(api(`contents/${filePath}?ref=${BRANCH}`), {
+    headers: headers(),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (check.ok) {
+    const existing = await check.json();
+    sha = existing.sha;
+  }
+
+  const body: Record<string, string> = {
+    message,
+    content: Buffer.from(content, "utf-8").toString("base64"),
+    branch: BRANCH,
+  };
+  if (sha) body.sha = sha;
+
+  const res = await fetch(api(`contents/${filePath}`), {
     method: "PUT",
     headers: headers({ "Content-Type": "application/json" }),
-    body: JSON.stringify({
-      message: `pari-ai: update ${notePath}`,
-      content: Buffer.from(content, "utf-8").toString("base64"),
-      branch: BRANCH,
-      ...(sha ? { sha } : {}),
-    }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(8000),
   });
-  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+  return res.ok;
 }
 
-export async function deleteVaultFile(notePath: string): Promise<void> {
-  const sha = await getSha(notePath);
-  if (!sha) throw new Error("Fayl topilmadi");
-  const res = await fetch(api(`contents/${encodeURI(fullPath(notePath))}`), {
+export async function deleteVaultFile(
+  filePath: string,
+  message = "chore: delete vault file"
+): Promise<boolean> {
+  const check = await fetch(api(`contents/${filePath}?ref=${BRANCH}`), {
+    headers: headers(),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!check.ok) return false;
+  const existing = await check.json();
+
+  const res = await fetch(api(`contents/${filePath}`), {
     method: "DELETE",
     headers: headers({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ message: `pari-ai: delete ${notePath}`, sha, branch: BRANCH }),
+    body: JSON.stringify({ message, sha: existing.sha, branch: BRANCH }),
     signal: AbortSignal.timeout(8000),
   });
-  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+  return res.ok;
 }
 
-export async function walkVault(dir = ""): Promise<VaultFile[]> {
-  const entries = await listVault(dir);
-  const files: VaultFile[] = [];
-  for (const e of entries) {
-    if (e.type === "dir") files.push(...(await walkVault(e.path)));
-    else files.push(e);
+export async function walkVault(subPath = ""): Promise<string[]> {
+  const items = await listVault(subPath);
+  const files: string[] = [];
+  for (const item of items) {
+    if (item.type === "dir") {
+      const sub = await walkVault(item.path.replace(`${ROOT}/`, ""));
+      files.push(...sub);
+    } else {
+      files.push(item.path);
+    }
   }
   return files;
 }
 
-export async function searchVault(query: string): Promise<{ path: string; matches: string[] }[]> {
-  const files = (await walkVault("")).filter((f) => f.path.endsWith(".md"));
+export async function searchVault(query: string): Promise<{ path: string; excerpt: string }[]> {
+  const files = await walkVault();
+  const results: { path: string; excerpt: string }[] = [];
   const q = query.toLowerCase();
-  const results: { path: string; matches: string[] }[] = [];
-  for (const f of files) {
-    try {
-      const content = await readVaultFile(f.path);
-      if (content.toLowerCase().includes(q)) {
-        const lines = content.split("\n").filter((l) => l.toLowerCase().includes(q));
-        results.push({ path: f.path, matches: lines.slice(0, 3) });
-      }
-    } catch {
-      // skip unreadable file
-    }
+  for (const filePath of files) {
+    if (!filePath.endsWith(".md")) continue;
+    const content = await readVaultFile(filePath);
+    if (!content) continue;
+    const idx = content.toLowerCase().indexOf(q);
+    if (idx === -1) continue;
+    const start = Math.max(0, idx - 80);
+    const end = Math.min(content.length, idx + 160);
+    results.push({ path: filePath, excerpt: content.slice(start, end) });
+    if (results.length >= 10) break;
   }
   return results;
 }
