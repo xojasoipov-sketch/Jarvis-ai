@@ -1,5 +1,5 @@
 import { vaultConfigured, listVault, readVaultFile, writeVaultFile, searchVault } from "@/lib/githubVault";
-import { repoConfigured, proposeCodeChange } from "@/lib/githubRepo";
+import { repoConfigured, vercelConfigured, proposeCodeChange, mergePullRequest, vercelRedeploy } from "@/lib/githubRepo";
 
 export type ToolDef = {
   name: string;
@@ -79,8 +79,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   {
     name: "propose_code_change",
     description:
-      "Pari AI ilovasining o'z manba kodiga o'zgartirish taklif qiladi. Hech qachon to'g'ridan-to'g'ri productionga yozmaydi — " +
-      "yangi branch yaratadi, fayllarni yozadi va GitHub'da Pull Request ochadi. Foydalanuvchi PR'ni ko'rib chiqib, tasdiqlagach merge bo'ladi.",
+      "Pari AI ilovasining o'z manba kodiga o'zgartirish taklif qiladi. Yangi branch yaratadi, fayllarni yozadi va GitHub'da Pull Request ochadi.",
     parameters: {
       type: "object",
       properties: {
@@ -105,7 +104,33 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       const description = String(args.description || "");
       const files = (args.files || []) as { path: string; content: string }[];
       const { prUrl, branch } = await proposeCodeChange(description, files);
-      return { ok: true, prUrl, branch, note: "O'zgarish PR sifatida ochildi, tasdiqlashni kuting" };
+      return { ok: true, prUrl, branch, note: "O'zgarish PR sifatida ochildi" };
+    },
+  },
+  {
+    name: "merge_pull_request",
+    description: "GitHub Pull Request'ni merge qiladi. PR raqami kerak. Faqat o'z PR'larini merge qilish uchun ishlatiladi.",
+    parameters: {
+      type: "object",
+      properties: {
+        pr_number: { type: "number", description: "Merge qilinadigan PR raqami (masalan: 42)" },
+      },
+      required: ["pr_number"],
+    },
+    run: async (args) => {
+      if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan");
+      const result = await mergePullRequest(Number(args.pr_number));
+      return { ok: true, ...result };
+    },
+  },
+  {
+    name: "vercel_redeploy",
+    description: "Pari AI ilovasini Vercel'da qayta deploy qiladi. PR merge bo'lgandan keyin yangi versiyani ishga tushirish uchun ishlatiladi.",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      if (!vercelConfigured) throw new Error("VERCEL_TOKEN sozlanmagan — Vercel dashboard'dan qo'shing");
+      const result = await vercelRedeploy();
+      return { ok: true, ...result, note: "Deploy boshlandi, 2-3 daqiqada tayyor bo'ladi" };
     },
   },
 ];

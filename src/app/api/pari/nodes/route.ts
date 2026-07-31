@@ -12,7 +12,7 @@ export async function GET() {
   if (vaultConfigured) {
     try {
       const files = await walkVault("");
-      for (const f of files.slice(0, 150)) nodes.push({ label: f.path, type: "vault" });
+      for (const f of files.slice(0, 150)) nodes.push({ label: f, type: "vault" });
     } catch {
       // vault unreachable — skip, other sources still contribute
     }
