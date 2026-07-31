@@ -2,21 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { toolsAsOpenAIFunctions, runTool } from "@/lib/tools";
 import { getProviders, type Provider } from "@/lib/providers";
 import { log } from "@/lib/logger";
+import { supabase, dbConfigured } from "@/lib/supabase";
 
 const SYSTEM = `Sen Pari AI — Sadining shaxsiy AI yordamchisissan. Arxitektura:
-- Ko'p agentli tizim (CEO, Researcher, Coder, Analyst, Writer, Marketing, DevOps, Assistant)
-- Vositalar (tools): calculator, datetime, web_fetch, web_search (internetdan qidiruv),
-  vault_read/write/search/list (shaxsiy xotira),
-  va propose_code_change — o'z manba koding'ga o'zgartirish taklif qilish (Pull Request orqali, hech qachon to'g'ridan-to'g'ri emas)
+- Ko'p agentli tizim (18 ta agent: CEO, Researcher, Coder, Analyst, Writer, Marketing, DevOps, Assistant, Architect, Debug, Security, Database, Designer, Legal, Testing, Finance, Sales, HR)
+- Vositalar (tools): calculator, datetime, web_fetch, web_search, web_crawl,
+  vault_read/write/search/list (Obsidian xotira),
+  knowledge_search/knowledge_save (Supabase pgvector semantik xotira — RAG),
+  create_task (vazifa yaratish),
+  va propose_code_change — o'z manba koding'ga o'zgartirish taklif qilish (Pull Request orqali)
 - Kod yozish va tushuntirish, biznes strategiyasi, loyihalar
 
 Qoidalar:
 1. O'zbek tilida savol bo'lsa — o'zbek tilida javob ber
-2. Kerak bo'lganda vositalarni (tools) chaqir — taxmin qilmasdan haqiqiy ma'lumot ol (hozirgi voqealar/faktlar uchun web_search ishlat)
-3. Agar foydalanuvchi ilova kodini o'zgartirishni so'rasa — propose_code_change vositasidan foydalanib PR och, natijada PR havolasini ber
+2. Kerak bo'lganda vositalarni (tools) chaqir — taxmin qilmasdan haqiqiy ma'lumot ol
+   - Hozirgi voqealar/faktlar uchun: web_search
+   - Shaxsiy bilim bazasidan: knowledge_search (RAG)
+   - Muhim ma'lumotlarni eslab qolish uchun: knowledge_save
+3. Agar foydalanuvchi ilova kodini o'zgartirishni so'rasa — propose_code_change vositasidan foydalanib PR och
 4. Qisqa va aniq bo'l, lekin kerakli hollarda batafsil tushuntir
 5. Markdown formatidan foydalan
-6. Agar foydalanuvchi vizual/interaktiv narsa so'rasa (sahifa, komponent, o'yin, grafik, animatsiya) — to'liq mustaqil HTML kodini \`\`\`html fenced blok ichida ber (inline CSS/JS, tashqi resurslarsiz). Bu avtomatik ravishda alohida preview panelda ko'rsatiladi.`;
+6. Agar foydalanuvchi vizual/interaktiv narsa so'rasa (sahifa, komponent, o'yin, grafik, animatsiya) — to'liq mustaqil HTML kodini \`\`\`html fenced blok ichida ber (inline CSS/JS, tashqi resurslarsiz). Bu avtomatik ravishda alohida preview panelda ko'rsatiladi.
+7. Foydalanuvchi biror muhim ma'lumot aytsa (reja, qaror, ma'lumot) — knowledge_save bilan saqlash tavsiya qil`;
 
 type ChatMessage = {
   role: string;
@@ -60,6 +67,20 @@ async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise
     }
   }
   return "Kechirasiz, vositalar bilan ishlashda cheklovga yetdim. Qaytadan aniqroq so'rang.";
+}
+
+async function ragSearch(query: string): Promise<string> {
+  if (!dbConfigured) return "";
+  try {
+    const { data } = await supabase!
+      .from("pari_knowledge")
+      .select("title, content")
+      .or(`title.ilike.%${query.slice(0, 50)}%,content.ilike.%${query.slice(0, 50)}%`)
+      .limit(3);
+    if (!data?.length) return "";
+    const snippets = data.map(r => `[${r.title}]: ${r.content.slice(0, 300)}`).join("\n");
+    return `\n\n📚 **Bilim bazasidan (RAG):**\n${snippets}`;
+  } catch { return ""; }
 }
 
 async function webSearch(query: string): Promise<string> {
@@ -110,12 +131,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Web search heuristic kept for non-tool-capable providers
-  let searchContext = "";
+  // Context enrichment for non-tool-capable providers
   const lastMsg = messages[messages.length - 1]?.content || "";
-  const needsSearch = /hozir|bugun|yangi|oxirgi|so'ngi|qidiruv|search|latest|news|2024|2025|2026/i.test(lastMsg);
-  if (needsSearch) searchContext = await webSearch(lastMsg.slice(0, 100));
-  const sysMsg = searchContext ? baseSystem + `\n\nQo'shimcha kontekst:${searchContext}` : baseSystem;
+  const [ragCtx, searchCtx] = await Promise.all([
+    ragSearch(lastMsg.slice(0, 100)),
+    /hozir|bugun|yangi|oxirgi|so'ngi|qidiruv|search|latest|news|2024|2025|2026/i.test(lastMsg)
+      ? webSearch(lastMsg.slice(0, 100))
+      : Promise.resolve(""),
+  ]);
+  const extra = ragCtx + searchCtx;
+  const sysMsg = extra ? baseSystem + `\n\nQo'shimcha kontekst:${extra}` : baseSystem;
 
   const body = { model: "", messages: [{ role: "system", content: sysMsg }, ...messages], stream: true };
 
