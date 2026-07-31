@@ -1,23 +1,60 @@
 "use client";
-import { ShieldCheck, Key, Lock, AlertTriangle, CheckCircle2, User } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ShieldCheck, Key, Lock, AlertTriangle, CheckCircle2, Info } from "lucide-react";
+
+type KeyStatus = { name: string; set: boolean };
+type Checks = {
+  httpsEnforced: boolean;
+  secretsNotHardcoded: boolean;
+  botProtected: boolean;
+  rateLimiting: boolean;
+  authSystem: boolean;
+  auditLogs: boolean | "partial";
+};
+
+const CHECK_LABELS: Record<keyof Checks, { label: string; desc: string }> = {
+  httpsEnforced: { label: "HTTPS / TLS ulangan", desc: "Vercel har bir deploy uchun avtomatik SSL beradi" },
+  secretsNotHardcoded: { label: "Sirlar kodga hardcode qilinmagan", desc: "Barcha API kalitlar faqat environment variable orqali o'qiladi" },
+  botProtected: { label: "Telegram bot token muhofazalangan", desc: "TELEGRAM_BOT_TOKEN Vercel Environment Variables'da" },
+  rateLimiting: { label: "Rate limiting", desc: "Hali ulanmagan — Redis yoki Vercel Edge Config kerak" },
+  authSystem: { label: "Login / autentifikatsiya tizimi", desc: "Yo'q — bu bitta foydalanuvchi uchun ilova, URL'ni bilgan har kim to'liq kirish huquqiga ega" },
+  auditLogs: { label: "Audit loglar", desc: "Mavjud, lekin faqat xotirada (in-memory) — server qayta ishga tushsa yo'qoladi" },
+};
 
 export default function SecurityPage() {
+  const [keys, setKeys] = useState<KeyStatus[]>([]);
+  const [checks, setChecks] = useState<Checks | null>(null);
+
+  useEffect(() => {
+    fetch("/api/security/status")
+      .then((r) => r.json())
+      .then((d) => { setKeys(d.keys || []); setChecks(d.checks || null); })
+      .catch(() => {});
+  }, []);
+
+  const checkEntries = checks
+    ? (Object.keys(CHECK_LABELS) as (keyof Checks)[]).map((k) => ({ key: k, value: checks[k], ...CHECK_LABELS[k] }))
+    : [];
+  const passCount = checkEntries.filter((c) => c.value === true).length;
+  const score = checkEntries.length ? Math.round((passCount / checkEntries.length) * 100) : 0;
+
   return (
     <div className="fade-in max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Security</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Xavfsizlik sozlamalari va monitoring</p>
+        <p className="text-sm text-gray-500 mt-0.5">Xavfsizlik holati — kodni va konfiguratsiyani real tekshiruv asosida</p>
       </div>
 
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-100 p-6">
+      <div className={`bg-gradient-to-br rounded-2xl border p-6 ${score >= 70 ? "from-green-50 to-emerald-50 border-green-100" : "from-amber-50 to-orange-50 border-amber-100"}`}>
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-green-500 flex items-center justify-center flex-shrink-0">
+          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 ${score >= 70 ? "bg-green-500" : "bg-amber-500"}`}>
             <ShieldCheck size={28} strokeWidth={1.75} className="text-white" />
           </div>
           <div>
-            <p className="text-3xl font-bold text-gray-900">87<span className="text-lg text-gray-500">/100</span></p>
-            <p className="text-sm text-green-700 font-medium">Xavfsizlik bahosi — Yaxshi</p>
-            <p className="text-xs text-gray-500 mt-1">3 ta yaxshilash mumkin</p>
+            <p className="text-3xl font-bold text-gray-900">{score}<span className="text-lg text-gray-500">/100</span></p>
+            <p className={`text-sm font-medium ${score >= 70 ? "text-green-700" : "text-amber-700"}`}>
+              {passCount}/{checkEntries.length} tekshiruv o&apos;tdi
+            </p>
           </div>
         </div>
       </div>
@@ -25,23 +62,21 @@ export default function SecurityPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <p className="text-sm font-semibold text-gray-900 mb-4">Xavfsizlik tekshiruvi</p>
         <div className="space-y-3">
-          {[
-            { ok: true, label: "HTTPS / SSL ulangan", desc: "Railway avtomatik SSL beradi" },
-            { ok: true, label: "API kalitlar Railway Variables'da", desc: "Kalitlar .env ga commitlanmagan" },
-            { ok: true, label: "Bot token muhofazalangan", desc: "TELEGRAM_BOT_TOKEN Railway Variables'da" },
-            { ok: false, label: "Rate limiting", desc: "Redis bilan konfiguratsiya kerak" },
-            { ok: false, label: "MFA / Auth", desc: "JWT + OAuth2 hali ulanmagan" },
-            { ok: false, label: "Audit logs", desc: "Log tizimi konfiguratsiya kerak" },
-          ].map(({ ok, label, desc }) => (
-            <div key={label} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-              {ok
-                ? <CheckCircle2 size={16} strokeWidth={1.75} className="text-green-500 flex-shrink-0" />
-                : <AlertTriangle size={16} strokeWidth={1.75} className="text-yellow-500 flex-shrink-0" />}
+          {checkEntries.map(({ key, value, label, desc }) => (
+            <div key={key} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+              {value === true ? (
+                <CheckCircle2 size={16} strokeWidth={1.75} className="text-green-500 flex-shrink-0" />
+              ) : value === "partial" ? (
+                <Info size={16} strokeWidth={1.75} className="text-blue-500 flex-shrink-0" />
+              ) : (
+                <AlertTriangle size={16} strokeWidth={1.75} className="text-yellow-500 flex-shrink-0" />
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900">{label}</p>
                 <p className="text-xs text-gray-500">{desc}</p>
               </div>
-              {!ok && <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded-full font-medium flex-shrink-0">Sozlash</span>}
+              {value === false && <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded-full font-medium flex-shrink-0">Yo&apos;q</span>}
+              {value === "partial" && <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium flex-shrink-0">Qisman</span>}
             </div>
           ))}
         </div>
@@ -49,18 +84,10 @@ export default function SecurityPage() {
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <p className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Key size={15} strokeWidth={1.75} className="text-indigo-600" /> API Kalitlar
+          <Key size={15} strokeWidth={1.75} className="text-indigo-600" /> API Kalitlar holati
         </p>
         <div className="space-y-2">
-          {[
-            { name: "OPENROUTER_API_KEY", set: true },
-            { name: "MISTRAL_API_KEY", set: true },
-            { name: "GROQ_API_KEY", set: true },
-            { name: "TELEGRAM_BOT_TOKEN", set: true },
-            { name: "OBSIDIAN_URL", set: false },
-            { name: "OBSIDIAN_KEY", set: false },
-            { name: "HERMES_URL", set: false },
-          ].map(({ name, set }) => (
+          {keys.map(({ name, set }) => (
             <div key={name} className="flex items-center gap-3 py-2">
               <code className="flex-1 text-xs font-mono text-gray-700 bg-gray-50 px-2 py-1 rounded">{name}</code>
               <div className="flex items-center gap-1.5">
@@ -71,22 +98,8 @@ export default function SecurityPage() {
           ))}
         </div>
         <p className="text-xs text-gray-400 mt-4 flex items-center gap-1.5">
-          <Lock size={11} strokeWidth={1.75} /> Kalitlarni Railway Variables'dan o'rnating.
+          <Lock size={11} strokeWidth={1.75} /> Faqat mavjudligi tekshiriladi — qiymatlar hech qachon frontendga qaytarilmaydi.
         </p>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <p className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <User size={15} strokeWidth={1.75} className="text-indigo-600" /> Aktiv sessiyalar
-        </p>
-        <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">S</div>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-gray-900">Sadi Prime</p>
-            <p className="text-xs text-gray-500">Railway · Hozir faol</p>
-          </div>
-          <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">Joriy</span>
-        </div>
       </div>
     </div>
   );
