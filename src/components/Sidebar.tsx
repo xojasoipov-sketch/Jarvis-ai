@@ -29,7 +29,7 @@ const nav: NavEntry[] = [
 const devNav: NavEntry[] = [
   { label: "Code Editor", href: "/code", icon: Code2 },
   { label: "Databases", href: "/databases", icon: Database },
-  { label: "APIs & Integrations", href: "/apis", icon: Plug },
+  { label: "Connectors", href: "/apis", icon: Plug },
   { label: "Dev Tools", href: "/devtools", icon: Wrench },
 ];
 
