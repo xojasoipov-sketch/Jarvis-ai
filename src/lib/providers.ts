@@ -69,5 +69,8 @@ export function getProviders(): Provider[] {
   // 8. Mistral — $25 free credit
   list.push(...providerEntries("mistral", "MISTRAL_API_KEY", "https://api.mistral.ai/v1/chat/completions", "mistral-large-latest"));
 
+  // 9. OpenAI — paid, kept last since it's not free; gpt-4o-mini is the cheapest capable model
+  list.push(...providerEntries("openai", "OPENAI_API_KEY", "https://api.openai.com/v1/chat/completions", "gpt-4o-mini", { supportsTools: true }));
+
   return list;
 }
