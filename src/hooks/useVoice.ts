@@ -108,6 +108,7 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
       return;
     }
 
+    // Fallback: Web Speech API
     const w = window as SpeechWindow;
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!Ctor) return;
@@ -138,21 +139,14 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   return { listening, supported: supported || useGroq === true, toggle };
 }
 
-<<<<<<< HEAD
-// ─── Voice Output (ElevenLabs TTS via Web Audio API) ─────────────────
-=======
 // ─── Voice Output (ElevenLabs TTS via Web Audio API) ─────────────────────────
->>>>>>> be759ef (fix: responsive grids, butterfly voice reactivity, remove Obsidian, smm error handling, pari Tailwind values, ParticleCanvas responsive, ElevenLabs STT+TTS primary)
 export function useVoiceOutput() {
   const [enabled, setEnabled] = useState(false);
   const [supported] = useState(true);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-<<<<<<< HEAD
-=======
   // Create + unlock AudioContext on user gesture (volume toggle)
->>>>>>> be759ef (fix: responsive grids, butterfly voice reactivity, remove Obsidian, smm error handling, pari Tailwind values, ParticleCanvas responsive, ElevenLabs STT+TTS primary)
   const toggleEnabled = useCallback(() => {
     const next = !enabled;
     if (next && typeof window !== "undefined") {
@@ -162,10 +156,7 @@ export function useVoiceOutput() {
         const ctx = new AudioCtx();
         audioCtxRef.current = ctx;
         ctx.resume().catch(() => {});
-<<<<<<< HEAD
-=======
         // Silent buffer to fully unlock iOS audio output
->>>>>>> be759ef (fix: responsive grids, butterfly voice reactivity, remove Obsidian, smm error handling, pari Tailwind values, ParticleCanvas responsive, ElevenLabs STT+TTS primary)
         const buf = ctx.createBuffer(1, 1, 22050);
         const src = ctx.createBufferSource();
         src.buffer = buf;
@@ -188,10 +179,7 @@ export function useVoiceOutput() {
       .slice(0, 500);
     if (!clean) return;
 
-<<<<<<< HEAD
-=======
     // Stop previous audio
->>>>>>> be759ef (fix: responsive grids, butterfly voice reactivity, remove Obsidian, smm error handling, pari Tailwind values, ParticleCanvas responsive, ElevenLabs STT+TTS primary)
     try { sourceRef.current?.stop(); } catch {}
     sourceRef.current = null;
 
@@ -217,10 +205,7 @@ export function useVoiceOutput() {
       }
     }
 
-<<<<<<< HEAD
-=======
     // Fallback: speechSynthesis
->>>>>>> be759ef (fix: responsive grids, butterfly voice reactivity, remove Obsidian, smm error handling, pari Tailwind values, ParticleCanvas responsive, ElevenLabs STT+TTS primary)
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(clean);

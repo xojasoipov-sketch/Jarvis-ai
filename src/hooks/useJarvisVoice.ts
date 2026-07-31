@@ -45,7 +45,7 @@ async function speakText(text: string, audioCtx: AudioContext | null): Promise<v
           const src = audioCtx.createBufferSource();
           src.buffer = decoded;
           src.connect(audioCtx.destination);
-          src.onended = resolve;
+          src.onended = () => resolve();
           src.start(0);
         });
         return;
