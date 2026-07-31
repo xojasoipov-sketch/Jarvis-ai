@@ -1,7 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Minimal typings for the Web Speech API (not in default TS DOM lib)
 interface SpeechRecognitionResult {
   0: { transcript: string };
   isFinal: boolean;
@@ -20,45 +19,36 @@ interface SpeechRecognitionLike extends EventTarget {
   onerror: ((e: Event) => void) | null;
   onend: (() => void) | null;
 }
-
 type SpeechWindow = Window & {
   SpeechRecognition?: new () => SpeechRecognitionLike;
   webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  webkitAudioContext?: typeof AudioContext;
 };
 
-// Neural/premium voice preferred, then lang match
-function pickBestVoice(lang: string): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices.length) return null;
-
-  const score = (v: SpeechSynthesisVoice, target: string) => {
-    let s = 0;
-    const n = v.name.toLowerCase();
-    if (/neural|premium|enhanced|wavenet|journey|studio/.test(n)) s += 30;
-    if (v.lang === target) s += 100;
-    else if (v.lang.startsWith(target.split("-")[0])) s += 50;
-    if (v.localService) s += 5;
-    return s;
-  };
-
-  const candidates = ["uz-UZ", "ru-RU", "en-US"].map((l) => lang === l ? lang : l);
-  const pool = [lang, ...candidates];
-
-  let best: SpeechSynthesisVoice | null = null;
-  let bestScore = -1;
-  for (const target of pool) {
-    for (const v of voices) {
-      const s = score(v, target);
-      if (s > bestScore) { bestScore = s; best = v; }
-    }
-    if (best && best.lang.startsWith(target.split("-")[0])) break;
-  }
-  return best;
+// Short UI tone: mic on → ascending ping, mic off → descending
+function playMicTone(on: boolean) {
+  try {
+    const w = window as SpeechWindow;
+    const AudioCtx = window.AudioContext || w.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    const t = ctx.currentTime;
+    osc.frequency.setValueAtTime(on ? 660 : 880, t);
+    osc.frequency.exponentialRampToValueAtTime(on ? 990 : 440, t + 0.09);
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+    osc.start(t);
+    osc.stop(t + 0.13);
+    osc.onended = () => ctx.close().catch(() => {});
+  } catch { /* ignore */ }
 }
 
-// ─── Voice Input ──────────────────────────────────────────────────────────────
-// Tries Groq Whisper via /api/stt; falls back to Web Speech API if needed
-
+// ─── Voice Input ──────────────────────────────────────────────────────────────────────────────
 export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") {
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -68,7 +58,6 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   const [useGroq, setUseGroq] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Test if /api/stt is reachable (GROQ_API_KEY set)
     fetch("/api/stt", { method: "POST", body: new FormData() })
       .then((r) => setUseGroq(r.status !== 500))
       .catch(() => setUseGroq(false));
@@ -79,9 +68,11 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   const stopGroq = useCallback(() => {
     mediaRef.current?.stop();
     setListening(false);
+    playMicTone(false);
   }, []);
 
   const startGroq = useCallback(async () => {
+    playMicTone(true);
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     chunksRef.current = [];
     const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -113,11 +104,10 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     const hasMedia = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
     if (useGroq && hasMedia) {
       if (listening) { stopGroq(); return; }
-      startGroq().catch(() => setListening(false));
+      startGroq().catch(() => { setListening(false); playMicTone(false); });
       return;
     }
 
-    // Fallback: Web Speech API
     const w = window as SpeechWindow;
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!Ctor) return;
@@ -125,9 +115,11 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     if (listening) {
       recognitionRef.current?.stop();
       setListening(false);
+      playMicTone(false);
       return;
     }
 
+    playMicTone(true);
     const rec = new Ctor();
     rec.lang = lang;
     rec.continuous = false;
@@ -136,7 +128,7 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
       const transcript = Array.from({ length: e.results.length }, (_, i) => e.results[i][0].transcript).join(" ");
       onResult(transcript);
     };
-    rec.onerror = () => setListening(false);
+    rec.onerror = () => { setListening(false); playMicTone(false); };
     rec.onend = () => setListening(false);
     recognitionRef.current = rec;
     rec.start();
@@ -146,42 +138,82 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   return { listening, supported: supported || useGroq === true, toggle };
 }
 
-// ─── Voice Output ─────────────────────────────────────────────────────────────
+// ─── Voice Output (ElevenLabs TTS via Web Audio API) ─────────────────
 export function useVoiceOutput() {
   const [enabled, setEnabled] = useState(false);
-  const [supported, setSupported] = useState(false);
+  const [supported] = useState(true);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-  useEffect(() => {
-    setSupported(typeof window !== "undefined" && "speechSynthesis" in window);
-    // Warm up voice list
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.getVoices();
-      window.speechSynthesis.addEventListener("voiceschanged", () => window.speechSynthesis.getVoices());
+  const toggleEnabled = useCallback(() => {
+    const next = !enabled;
+    if (next && typeof window !== "undefined") {
+      const w = window as SpeechWindow;
+      const AudioCtx = window.AudioContext || w.webkitAudioContext;
+      if (AudioCtx && !audioCtxRef.current) {
+        const ctx = new AudioCtx();
+        audioCtxRef.current = ctx;
+        ctx.resume().catch(() => {});
+        const buf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(0);
+      } else if (audioCtxRef.current?.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
     }
-  }, []);
+    setEnabled(next);
+  }, [enabled]);
 
-  const speak = useCallback(
-    (text: string, lang = "uz-UZ") => {
-      if (!enabled || !supported) return;
+  const speak = useCallback(async (text: string) => {
+    if (!enabled) return;
+    const clean = text
+      .replace(/```[\s\S]*?```/g, " kod bloki ")
+      .replace(/[*_#`~]/g, "")
+      .replace(/\n+/g, ". ")
+      .trim()
+      .slice(0, 500);
+    if (!clean) return;
+
+    try { sourceRef.current?.stop(); } catch {}
+    sourceRef.current = null;
+
+    const lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru" : "uz";
+    const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
+
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state !== "closed") {
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const buf = await res.arrayBuffer();
+          const decoded = await ctx.decodeAudioData(buf);
+          const src = ctx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(ctx.destination);
+          sourceRef.current = src;
+          src.start(0);
+          return;
+        }
+      } catch (e) {
+        console.warn("ElevenLabs TTS Web Audio failed:", e);
+      }
+    }
+
+    if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
-      const clean = text.replace(/```[\s\S]*?```/g, " kod bloki ").replace(/[*_#`~]/g, "").replace(/\n+/g, ". ").trim();
-      if (!clean) return;
-
-      const utter = new SpeechSynthesisUtterance(clean.slice(0, 3000));
-      const voice = pickBestVoice(lang);
-      if (voice) { utter.voice = voice; utter.lang = voice.lang; }
-      else utter.lang = lang;
-      utter.rate = 1.05;
-      utter.pitch = 1.0;
-      utter.volume = 1.0;
+      const utter = new SpeechSynthesisUtterance(clean);
+      utter.lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru-RU" : "";
       window.speechSynthesis.speak(utter);
-    },
-    [enabled, supported]
-  );
+    }
+  }, [enabled]);
 
   const stop = useCallback(() => {
-    if (supported) window.speechSynthesis.cancel();
-  }, [supported]);
+    try { sourceRef.current?.stop(); } catch {}
+    sourceRef.current = null;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }, []);
 
-  return { enabled, setEnabled, supported, speak, stop };
+  return { enabled, setEnabled: toggleEnabled, supported, speak, stop };
 }
