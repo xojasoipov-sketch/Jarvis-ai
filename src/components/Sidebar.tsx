@@ -7,6 +7,7 @@ import {
   Wrench, Settings, ShieldCheck, CreditCard, ScrollText, LogOut, X, Radio, GitPullRequest, type LucideIcon,
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
+import NotificationBell from "./NotificationBell";
 
 type NavEntry = { label: string; href: string; icon: LucideIcon };
 
@@ -119,6 +120,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           <div className="flex-1 min-w-0 text-left">
             <p className="text-xs font-semibold text-gray-900 truncate">Sadi</p>
           </div>
+          <NotificationBell />
           <ThemeToggle />
           <LogoutButton />
         </div>

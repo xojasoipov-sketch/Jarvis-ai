@@ -1,5 +1,6 @@
 import { vaultConfigured, listVault, readVaultFile, writeVaultFile, searchVault } from "@/lib/githubVault";
 import { repoConfigured, vercelConfigured, proposeCodeChange, mergePullRequest, vercelRedeploy } from "@/lib/githubRepo";
+import { supabase, dbConfigured } from "@/lib/supabase";
 
 export type ToolDef = {
   name: string;
@@ -93,6 +94,112 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     run: async (args) => {
       if (!vaultConfigured) throw new Error("Vault sozlanmagan (GITHUB_TOKEN kerak)");
       return { files: await listVault(String(args.path || "")) };
+    },
+  },
+  {
+    name: "knowledge_search",
+    description: "Supabase Knowledge Hub'dan (pgvector semantic search) shaxsiy bilim bazasini qidiradi. Agentlarga kontekst, kerak bo'lgan ma'lumotlar va eslatmalar uchun ishlatiladi.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "Qidiruv so'rovi" } }, required: ["query"] },
+    run: async (args) => {
+      if (!dbConfigured) throw new Error("Supabase sozlanmagan");
+      const q = String(args.query || "");
+      const { data, error } = await supabase!
+        .from("pari_knowledge")
+        .select("id, title, content, tags, created_at")
+        .or(`title.ilike.%${q}%,content.ilike.%${q}%`)
+        .limit(5);
+      if (error) throw new Error(error.message);
+      return { query: q, results: (data || []).map(r => ({ title: r.title, content: r.content.slice(0, 400), tags: r.tags })) };
+    },
+  },
+  {
+    name: "knowledge_save",
+    description: "Yangi bilim, eslatma yoki muhim ma'lumotni Knowledge Hub'ga saqlaydi (Supabase pgvector).",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Sarlavha" },
+        content: { type: "string", description: "Saqlanadigan mazmun" },
+        tags: { type: "array", items: { type: "string" }, description: "Teglar" },
+      },
+      required: ["title", "content"],
+    },
+    run: async (args) => {
+      if (!dbConfigured) throw new Error("Supabase sozlanmagan");
+      const { data, error } = await supabase!
+        .from("pari_knowledge")
+        .insert({ title: String(args.title), content: String(args.content), tags: (args.tags as string[]) || [] })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      return { ok: true, id: data?.id, note: "Knowledge Hub'ga saqlandi" };
+    },
+  },
+  {
+    name: "create_task",
+    description: "Yangi vazifa (task) yaratadi va pari_tasks jadvaliga saqlaydi",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        description: { type: "string" },
+        priority: { type: "string", enum: ["low", "medium", "high"] },
+      },
+      required: ["title"],
+    },
+    run: async (args) => {
+      if (!dbConfigured) throw new Error("Supabase sozlanmagan");
+      const { data, error } = await supabase!
+        .from("pari_tasks")
+        .insert({ title: String(args.title), description: String(args.description || ""), priority: String(args.priority || "medium") })
+        .select("id, title")
+        .single();
+      if (error) throw new Error(error.message);
+      return { ok: true, task: data, note: "Vazifa yaratildi" };
+    },
+  },
+  {
+    name: "web_crawl",
+    description: "Berilgan URL'ning barcha ichki linklar orqali kontentini yig'adi (oddiy web crawler, max 5 sahifa)",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Boshlang'ich URL (masalan: https://example.com)" },
+        max_pages: { type: "number", description: "Maksimal sahifalar soni (default: 3, max: 5)" },
+      },
+      required: ["url"],
+    },
+    run: async (args) => {
+      const startUrl = String(args.url || "");
+      if (!/^https?:\/\//.test(startUrl)) throw new Error("To'g'ri URL kiriting");
+      const maxPages = Math.min(Number(args.max_pages) || 3, 5);
+      const visited = new Set<string>();
+      const results: { url: string; title: string; excerpt: string }[] = [];
+
+      async function crawl(url: string) {
+        if (visited.has(url) || visited.size >= maxPages) return;
+        visited.add(url);
+        try {
+          const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+          if (!res.ok) return;
+          const html = await res.text();
+          const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          const title = titleM?.[1]?.trim() || url;
+          const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 500);
+          results.push({ url, title, excerpt: text });
+
+          // Collect same-origin links
+          const base = new URL(url);
+          const links = [...html.matchAll(/href=["']([^"']+)["']/gi)]
+            .map(m => { try { return new URL(m[1], url).href; } catch { return ""; } })
+            .filter(h => h.startsWith(base.origin) && !visited.has(h))
+            .slice(0, 5);
+          for (const link of links) await crawl(link);
+        } catch {}
+      }
+
+      await crawl(startUrl);
+      return { pages_visited: results.length, results };
     },
   },
   {

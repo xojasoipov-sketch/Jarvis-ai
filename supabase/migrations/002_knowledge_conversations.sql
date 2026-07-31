@@ -72,6 +72,21 @@ create policy "service_role full access" on pari_events for all using (true) wit
 -- ── pari_agent_runs: add agent_id column if missing ──────────────────────────
 alter table pari_agent_runs add column if not exists agent_id text;
 
+-- ── In-app Notifications ─────────────────────────────────────────────────────
+create table if not exists pari_notifications (
+  id         bigint primary key generated always as identity,
+  title      text not null,
+  body       text,
+  type       text not null default 'info',  -- info | success | warning | error
+  read       boolean not null default false,
+  created_at timestamptz default now()
+);
+
+alter table pari_notifications enable row level security;
+create policy "service_role full access" on pari_notifications for all using (true) with check (true);
+
+create index if not exists idx_notifications_read on pari_notifications(read, created_at desc);
+
 -- ── Telegram sessions (persistent across server restarts) ────────────────────
 create table if not exists pari_tg_sessions (
   chat_id    bigint primary key,

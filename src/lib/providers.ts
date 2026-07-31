@@ -3,6 +3,19 @@
 // Each provider supports multiple keys (KEY, KEY2, KEY3, ...) — when one is rate-limited or
 // out of quota, the chat loop moves to the next key of the same provider, then the next provider.
 
+// Cost per 1M tokens (input+output average, USD) — used by Cost Optimizer
+export const PROVIDER_COSTS: Record<string, number> = {
+  pollinations: 0,
+  groq: 0.06,       // LLaMA 3.3 70B — $0.05 in + $0.08 out /1M
+  cerebras: 0,       // free tier
+  openrouter: 0,     // gemini-2.0-flash-exp:free
+  deepseek: 0.35,    // deepseek-chat $0.27/$0.11 per 1M
+  kimi: 0.20,
+  qwen: 0.40,
+  mistral: 2.0,      // mistral-large
+  openai: 0.30,      // gpt-4o-mini $0.15/$0.60 per 1M
+};
+
 export type Provider = {
   name: string;
   url: string;
@@ -10,6 +23,7 @@ export type Provider = {
   model: string;
   headers?: Record<string, string>;
   supportsTools: boolean;
+  costPer1M: number; // USD per 1M tokens (avg input+output)
 };
 
 // Collects BASE, BASE2, BASE3, ... env vars into an ordered list of keys.
@@ -37,14 +51,28 @@ function providerEntries(
     model,
     headers: opts.headers,
     supportsTools: opts.supportsTools ?? false,
+    costPer1M: PROVIDER_COSTS[name] ?? 0,
   }));
+}
+
+// Cost optimizer: given task complexity, pick the cheapest capable provider
+// "simple" = short Q&A; "complex" = code/analysis; "tools" = must support tool-calling
+export function getCheapestProvider(
+  providers: Provider[],
+  requirement: "free" | "tools" | "any" = "any"
+): Provider | null {
+  let candidates = providers.filter(p => p.key && p.key !== "dummy");
+  if (requirement === "free") candidates = candidates.filter(p => p.costPer1M === 0);
+  if (requirement === "tools") candidates = candidates.filter(p => p.supportsTools);
+  if (!candidates.length) return null;
+  return candidates.sort((a, b) => a.costPer1M - b.costPer1M)[0];
 }
 
 export function getProviders(): Provider[] {
   const list: Provider[] = [];
 
   // 1. Pollinations — no API key required, works immediately
-  list.push({ name: "pollinations", url: "https://text.pollinations.ai/openai", key: "dummy", model: "openai", supportsTools: false });
+  list.push({ name: "pollinations", url: "https://text.pollinations.ai/openai", key: "dummy", model: "openai", supportsTools: false, costPer1M: 0 });
 
   // 2. Groq — fastest, and the only provider wired for real tool-calling
   list.push(...providerEntries("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile", { supportsTools: true }));

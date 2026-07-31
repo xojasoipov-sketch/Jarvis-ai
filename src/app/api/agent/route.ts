@@ -32,10 +32,13 @@ export async function POST(req: NextRequest) {
 
   log("info", "agent", `${agent.name} vazifani bajardi: "${task.slice(0, 60)}"`);
   if (dbConfigured) {
-    await supabase!.from("pari_agent_runs").insert({ agent_id: agentId, agent_name: agent.name, task, result }).then(
-      () => {},
-      () => {}
-    );
+    void supabase!.from("pari_agent_runs").insert({ agent_id: agentId, agent_name: agent.name, task, result });
+    // Send in-app notification
+    void supabase!.from("pari_notifications").insert({
+      title: `${agent.icon} ${agent.name} vazifani bajardi`,
+      body: task.slice(0, 80),
+      type: "success",
+    });
   }
 
   return NextResponse.json({ agent: agent.name, icon: agent.icon, result, agentId });
