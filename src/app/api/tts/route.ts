@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY || "";
-// Rachel — natural, warm female voice
-const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
+// ELEVENLABS_VOICE_ID — must be your OWN voice (free plan can't use library voices)
+const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "";
 
 async function elevenLabsTTS(text: string): Promise<ArrayBuffer | null> {
-  if (!ELEVENLABS_KEY) return null;
+  // Skip if no key or no custom voice ID (free plan blocks library voices)
+  if (!ELEVENLABS_KEY || !VOICE_ID) return null;
   try {
     const res = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`,
