@@ -26,22 +26,23 @@ function getBestMime(): string {
   return "";
 }
 
-// Play TTS via Web Audio API (works on iOS in async context) with <audio> fallback
+// Play TTS via Web Audio API (works on iOS in async context) with speechSynthesis fallback
 async function speakText(text: string, audioCtx: AudioContext | null): Promise<void> {
   const clean = text.replace(/[*_#`>~[\]]/g, "").replace(/\n+/g, " ").slice(0, 500);
   if (!clean) return;
 
-  const lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru" : "uz";
+  const isRu = /[а-яёА-ЯЁ]/.test(clean);
+  const lang = isRu ? "ru" : "uz";
   const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
 
-  // Method 1: Web Audio API — iOS Safari compatible even in async chains
+  // Method 1: Web Audio API — only reliable method on iOS in async chains
   if (audioCtx && audioCtx.state !== "closed") {
     try {
+      if (audioCtx.state === "suspended") await audioCtx.resume();
       const res = await fetch(url);
       if (res.ok) {
         const buf = await res.arrayBuffer();
         const decoded = await audioCtx.decodeAudioData(buf);
-        // Re-unlock context in case iOS suspended it after inactivity
         if (audioCtx.state === "suspended") await audioCtx.resume();
         await new Promise<void>((resolve) => {
           const src = audioCtx.createBufferSource();
@@ -53,36 +54,25 @@ async function speakText(text: string, audioCtx: AudioContext | null): Promise<v
         return;
       }
     } catch (e) {
-      console.warn("Web Audio TTS failed, trying fallback:", e);
+      console.warn("Web Audio TTS failed:", e);
     }
   }
 
-  // Method 2: <audio> element fallback (desktop / non-iOS)
-  await new Promise<void>((resolve) => {
-    const audio = new Audio(url);
-    audio.volume = 1.0;
-    let done = false;
-    const finish = () => { if (!done) { done = true; resolve(); } };
-
-    audio.onended = finish;
-    audio.onerror = () => {
-      // Method 3: speechSynthesis last resort
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(clean);
-        utter.lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru-RU" : "";
-        utter.onend = finish;
-        utter.onerror = finish;
-        window.speechSynthesis.speak(utter);
-      } else {
-        finish();
-      }
-    };
-
-    const wordCount = clean.split(/\s+/).length;
-    setTimeout(finish, Math.max(8000, wordCount * 500));
-    audio.play().catch(() => audio.onerror?.(new Event("error")));
-  });
+  // Method 2: speechSynthesis (better than <audio> on iOS in async chains)
+  if ("speechSynthesis" in window) {
+    await new Promise<void>((resolve) => {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(clean);
+      utter.lang = isRu ? "ru-RU" : "en-US";
+      utter.rate = 0.95;
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      utter.onend = finish;
+      utter.onerror = finish;
+      setTimeout(finish, Math.max(6000, clean.split(/\s+/).length * 450));
+      window.speechSynthesis.speak(utter);
+    });
+  }
 }
 
 async function callVoiceAPI(blob: Blob): Promise<{ transcript: string; reply: string }> {
