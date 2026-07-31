@@ -50,7 +50,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Jami so'rovlar", value: totalMessages, icon: MessageSquare, change: "+23%", up: true },
           { label: "Faol agentlar", value: 8, icon: Bot, change: "Hammasi faol", up: true },

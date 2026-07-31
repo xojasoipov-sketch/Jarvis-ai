@@ -30,6 +30,7 @@ async function transcribeGroq(audio: File, lang: string): Promise<string | null>
       body.append("file", audio, "audio.webm");
       body.append("model", "whisper-large-v3");
       body.append("response_format", "json");
+      // No language forced — auto-detect works better for Uzbek
       const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}` },

@@ -61,18 +61,23 @@ export default function SmmPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [chRes, postRes, statRes] = await Promise.all([
-      fetch("/api/smm/channels"),
-      fetch(`/api/smm/posts${selectedChannel !== "all" ? `?channel_id=${selectedChannel}` : ""}`),
-      fetch(`/api/smm/stats${selectedChannel !== "all" ? `?channel_id=${selectedChannel}` : ""}`),
-    ]);
-    const chData = await chRes.json();
-    const postData = await postRes.json();
-    const statData = await statRes.json();
-    setChannels(chData.channels || []);
-    setPosts(postData.posts || []);
-    setStats(statData.stats || null);
-    setLoading(false);
+    try {
+      const [chRes, postRes, statRes] = await Promise.all([
+        fetch("/api/smm/channels"),
+        fetch(`/api/smm/posts${selectedChannel !== "all" ? `?channel_id=${selectedChannel}` : ""}`),
+        fetch(`/api/smm/stats${selectedChannel !== "all" ? `?channel_id=${selectedChannel}` : ""}`),
+      ]);
+      const chData = await chRes.json();
+      const postData = await postRes.json();
+      const statData = await statRes.json();
+      setChannels(chData.channels || []);
+      setPosts(postData.posts || []);
+      setStats(statData.stats || null);
+    } catch {
+      // silently ignore network errors on load
+    } finally {
+      setLoading(false);
+    }
   }, [selectedChannel]);
 
   useEffect(() => { load(); }, [load]);
