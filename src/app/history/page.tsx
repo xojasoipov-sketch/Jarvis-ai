@@ -9,11 +9,12 @@ export default function HistoryPage() {
   const [conversations, setConversations] = useState<ConvSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [configured, setConfigured] = useState(true);
 
   useEffect(() => {
     fetch("/api/conversations")
       .then(r => r.json())
-      .then(data => { setConversations(data.conversations || []); setLoading(false); })
+      .then(data => { setConversations(data.conversations || []); setConfigured(Boolean(data.configured)); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
@@ -42,6 +43,12 @@ export default function HistoryPage() {
         <h1 className="text-2xl font-bold text-gray-900">Chat History</h1>
         <p className="text-sm text-gray-500 mt-0.5">Barcha saqlangan suhbatlar</p>
       </div>
+
+      {!configured && !loading && (
+        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-800">
+          Supabase ulanmagan — suhbatlar saqlanmaydi. Connectors sahifasidan sozlang.
+        </div>
+      )}
 
       <div className="relative">
         <Search size={15} strokeWidth={1.75} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
