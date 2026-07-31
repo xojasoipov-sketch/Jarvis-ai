@@ -231,6 +231,13 @@ export default function ApisPage() {
         setErrors((e) => ({ ...e, [id]: d.ok ? d.info : d.error || "Kirish rad etildi" }));
         return;
       }
+      if (id === "telegram") {
+        const r = await fetch("/api/telegram/debug", { signal: AbortSignal.timeout(8000) });
+        const d = await r.json();
+        setStatuses((s) => ({ ...s, [id]: d.ok ? "ok" : "error" }));
+        setErrors((e) => ({ ...e, [id]: d.ok ? `@${d.telegram?.result?.username || "bot"}` : d.telegram?.description || d.error || "Token noto'g'ri" }));
+        return;
+      }
       const endpoint = endpoints[id] || "";
       const r = await fetch(endpoint, { signal: AbortSignal.timeout(5000) });
       const d = await r.json().catch(() => ({}));
@@ -251,9 +258,7 @@ export default function ApisPage() {
   }
 
   const endpoints: Record<string, string> = {
-    obsidian: "/api/obsidian",
     hermes: "/api/mcp",
-    telegram: "/api/telegram/debug",
     supabase: "/api/tasks",
   };
 

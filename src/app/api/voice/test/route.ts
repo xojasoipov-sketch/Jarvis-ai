@@ -32,17 +32,19 @@ export async function GET(req: NextRequest) {
   if (provider === "groq-stt") {
     if (!GROQ_KEY) return NextResponse.json({ ok: false, error: "GROQ_API_KEY o'rnatilmagan" });
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${GROQ_KEY}` },
-        body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: "ping" }], max_tokens: 4 }),
+      // Check the actual Whisper model is available for this key, not just generic chat access
+      const res = await fetch("https://api.groq.com/openai/v1/models", {
+        headers: { Authorization: `Bearer ${GROQ_KEY}` },
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         return NextResponse.json({ ok: false, error: `HTTP ${res.status}: ${txt.slice(0, 150)}` });
       }
-      return NextResponse.json({ ok: true });
+      const data = await res.json();
+      const hasWhisper = (data.data || []).some((m: { id: string }) => m.id.includes("whisper"));
+      if (!hasWhisper) return NextResponse.json({ ok: false, error: "Key ishlayapti, lekin Whisper modeli topilmadi" });
+      return NextResponse.json({ ok: true, info: "Whisper (STT) modeli mavjud" });
     } catch (e) {
       return NextResponse.json({ ok: false, error: (e as Error).message });
     }
