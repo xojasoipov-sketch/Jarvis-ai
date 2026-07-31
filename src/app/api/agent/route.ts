@@ -6,7 +6,7 @@ import { AGENTS, callAI } from "@/lib/agents";
 async function fetchMemoryContext(task: string): Promise<string> {
   try {
     const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const res = await fetch(`${base}/api/memory?q=${encodeURIComponent(task.slice(0, 100))}`);
+    const res = await fetch(`${base}/api/knowledge?q=${encodeURIComponent(task.slice(0, 100))}`);
     if (!res.ok) return "";
     const data = await res.json();
     const items = data.items || data.results || [];
