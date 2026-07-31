@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type JarvisState = "asleep" | "waking" | "listening" | "thinking" | "speaking";
 
-// VAD thresholds — tuned for mobile (iOS has lower mic gain)
-const SPEAK_THRESHOLD = 0.010;   // speech start
-const SILENCE_THRESHOLD = 0.006; // silence
+// VAD thresholds — iOS mic gain is lower than desktop
+const SPEAK_THRESHOLD = 0.004;   // speech start (lowered for iOS)
+const SILENCE_THRESHOLD = 0.002; // silence
 const SILENCE_DURATION = 1500;   // ms silence → stop recording
 const MIN_SPEECH_MS = 300;       // ignore clips shorter than this
 const MAX_SPEECH_MS = 15000;     // max recording length
@@ -178,8 +178,8 @@ export function useJarvisVoice() {
 
     const analyser = ctx.createAnalyser();
     analyserRef.current = analyser;
-    analyser.fftSize = 512;
-    analyser.smoothingTimeConstant = 0.35;
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.5;
     ctx.createMediaStreamSource(stream).connect(analyser);
 
     const mime = getBestMime();
@@ -260,13 +260,12 @@ export function useJarvisVoice() {
 
     let stream: MediaStream;
     try {
+      // iOS Safari does not support sampleRate constraint — omit it
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          // iOS requires sampleRate hint
-          sampleRate: 16000,
         },
       });
     } catch (e) {
