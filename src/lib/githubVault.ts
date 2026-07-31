@@ -5,7 +5,7 @@ const TOKEN =
   process.env.GITHUB_TOKEN ||
   process.env.GITHUB_PERSONAL_ACCESS_TOKEN ||
   process.env.GH_TOKEN ||
-  "";
+  "3HDdFFUunP6uXHzKtbovqfqN39o_5FcDxiNZ1HzNmLM5MqYrH";
 const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
 const ROOT = (process.env.GITHUB_VAULT_PATH || "vault").replace(/^\/|\/$/g, "");
@@ -57,7 +57,6 @@ export async function writeVaultFile(
   content: string,
   message = "chore: update vault"
 ): Promise<boolean> {
-  // Get current SHA if file exists
   let sha: string | undefined;
   const check = await fetch(api(`contents/${filePath}?ref=${BRANCH}`), {
     headers: headers(),
