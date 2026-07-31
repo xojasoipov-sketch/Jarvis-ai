@@ -231,8 +231,12 @@ function ChatInner() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: newMessages.map(({ role, content }) => ({ role, content })) }),
+        signal: AbortSignal.timeout(25000),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error || `HTTP ${res.status}`);
+      }
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let full = "";
@@ -251,8 +255,11 @@ function ChatInner() {
         setConvId(savedId);
         router.replace(`/chat?id=${savedId}`, { scroll: false });
       }
-    } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Xato yuz berdi. Qayta urinib ko'ring.", ts: Date.now() }]);
+    } catch (err) {
+      const msg = err instanceof Error && err.message && err.message !== "Failed to fetch"
+        ? `Xato: ${err.message}. Qayta urinib ko'ring.`
+        : "Xato yuz berdi. Qayta urinib ko'ring.";
+      setMessages(prev => [...prev, { role: "assistant", content: msg, ts: Date.now() }]);
       setStreaming("");
     }
     setLoading(false);
