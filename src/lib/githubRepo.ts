@@ -1,13 +1,13 @@
 // Lets Pari AI propose changes to its own source code — always via a Pull Request,
 // never a direct push to main. A human reviews and merges.
 
-const TOKEN = process.env.GITHUB_TOKEN || "3HDdFFUunP6uXHzKtbovqfqN39o_5FcDxiNZ1HzNmLM5MqYrH";
+const TOKEN = process.env.GITHUB_TOKEN || "";
 const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BASE_BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN || "";
-const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || "prj_iEajDtI1L3a7C6YSK2mHD4NPYVsj";
-const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID || "team_F67wb0TNbm7glKpVBkXSHJN3";
+const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || "";
+const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID || "";
 
 export const repoConfigured = Boolean(TOKEN && REPO);
 export const vercelConfigured = Boolean(VERCEL_TOKEN);
