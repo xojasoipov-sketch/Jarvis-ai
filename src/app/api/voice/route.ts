@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
 const GROQ_KEY = process.env.GROQ_API_KEY || "";
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
 const PARI_SYSTEM = `Sen Pari — Sadining shaxsiy ovozli AI yordamchisissan.
 Qoidalar:
