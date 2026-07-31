@@ -15,7 +15,7 @@ Qoidalar:
 
 // ── 1. Gemini 1.5 Flash (STT + AI, bitta chaqiruv) ──────────────────────────
 async function tryGemini(audioBuffer: Buffer, mimeType: string): Promise<{ transcript: string; reply: string } | null> {
-  if (!GEMINI_KEY || !GEMINI_KEY.startsWith("AIza")) return null;
+  if (!GEMINI_KEY) return null;
 
   const b64 = audioBuffer.toString("base64");
   const safeMime = normalizeMime(mimeType);
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
 // Quick diagnostic — GET /api/voice returns provider status
 export async function GET() {
   return NextResponse.json({
-    gemini: GEMINI_KEY ? (GEMINI_KEY.startsWith("AIza") ? "✅ key set" : "⚠️ wrong format (must start with AIza)") : "❌ not set",
+    gemini: GEMINI_KEY ? `✅ key set (${GEMINI_KEY.slice(0, 8)}...)` : "❌ not set",
     groq: GROQ_KEY ? "✅ key set" : "❌ not set",
     base_url: BASE_URL,
   });
