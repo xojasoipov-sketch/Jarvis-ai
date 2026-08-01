@@ -5,7 +5,7 @@ import { History } from "lucide-react";
 import {
   Briefcase, Microscope, Code2, BarChart3, PenLine, Megaphone,
   Settings2, Target, Bot, Play, Zap, Building2, Bug, Shield, Database,
-  Palette, Scale, FlaskConical, DollarSign, Handshake, Users, type LucideIcon,
+  Palette, Scale, FlaskConical, DollarSign, Handshake, Users, Search, type LucideIcon,
 } from "lucide-react";
 
 const AGENTS: { id: string; name: string; icon: LucideIcon; desc: string; color: string; tags: string[] }[] = [
@@ -31,7 +31,7 @@ const AGENTS: { id: string; name: string; icon: LucideIcon; desc: string; color:
 
 type Result = { agent: string; icon: string; result: string };
 type RunHistory = { id: number; agent_name: string; task: string; result: string; created_at: string };
-type Mode = "manual" | "parallel" | "hermes";
+type Mode = "manual" | "parallel" | "hermes" | "research";
 
 function AgentsInner() {
   const searchParams = useSearchParams();
@@ -43,6 +43,7 @@ function AgentsInner() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [history, setHistory] = useState<RunHistory[]>([]);
   const [routingReason, setRoutingReason] = useState("");
+  const [synthesis, setSynthesis] = useState("");
   const multiMode = mode === "parallel";
 
   const loadHistory = useCallback(async () => {
@@ -63,6 +64,7 @@ function AgentsInner() {
       setLoading(true);
       setResults([]);
       setRoutingReason("");
+      setSynthesis("");
       runHermes(fromDashboard).then((res) => { setResults(res); setLoading(false); loadHistory(); });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,9 +87,33 @@ function AgentsInner() {
     });
     const data = await res.json();
     setRoutingReason(data.routing?.reason || "");
+    setSynthesis(data.synthesis || "");
     return (data.results || []).map((r: { agent: string; icon: string; result: string }) => ({
       agent: r.agent, icon: r.icon, result: r.result,
     }));
+  }
+
+  async function runResearch(query: string): Promise<Result[]> {
+    const res = await fetch("/api/research", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const data = await res.json();
+    const sources = (data.sources || [])
+      .map((s: { id: number; type: string; title: string }) => `[${s.id}] ${s.type}: ${s.title}`)
+      .join("\n");
+    setRoutingReason(
+      data.meta
+        ? `Deep Research — ${data.meta.source_count} manba, ${data.meta.latency_ms}ms`
+        : "Deep Research"
+    );
+    setSynthesis("");
+    return [{
+      agent: "Deep Research",
+      icon: "🔬",
+      result: `${data.report || data.error || "Natija yo'q"}${sources ? "\n\n### Manbalar\n" + sources : ""}`,
+    }];
   }
 
   async function handleRun() {
@@ -95,8 +121,11 @@ function AgentsInner() {
     setLoading(true);
     setResults([]);
     setRoutingReason("");
+    setSynthesis("");
 
-    if (mode === "hermes") {
+    if (mode === "research") {
+      setResults(await runResearch(task));
+    } else if (mode === "hermes") {
       setResults(await runHermes(task));
     } else if (mode === "parallel" && selectedIds.length > 0) {
       const promises = selectedIds.map(id => runAgent(id, task));
@@ -126,16 +155,17 @@ function AgentsInner() {
 
   return (
     <div className="fade-in max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">AI Agents</h1>
           <p className="text-sm text-gray-500 mt-0.5">Ixtisoslashgan agentlar — har biri o'z sohasida mutaxassis</p>
         </div>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 flex-wrap">
           {([
             { id: "manual", label: "Qo'lda" },
             { id: "parallel", label: "Parallel" },
             { id: "hermes", label: "Hermes" },
+            { id: "research", label: "Research" },
           ] as { id: Mode; label: string }[]).map((m) => (
             <button
               key={m.id}
@@ -145,6 +175,7 @@ function AgentsInner() {
               }`}
             >
               {m.id === "hermes" && <Zap size={12} strokeWidth={2} />}
+              {m.id === "research" && <Search size={12} strokeWidth={2} />}
               {m.label}
             </button>
           ))}
@@ -153,12 +184,18 @@ function AgentsInner() {
 
       {mode === "hermes" && (
         <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-xs text-indigo-700">
-          Hermes rejimi — vazifangizni yozing, u qaysi agent(lar) mos kelishini avtomatik aniqlab, ularni ishga tushiradi.
+          Hermes — vazifani tahlil qilib agent(lar)ni tanlaydi, xotiradan kontekst oladi va bir nechta javobni sintez qiladi (OpenJarvis orchestrator uslubi).
         </div>
       )}
 
-      {/* Agent cards — hidden in Hermes mode since selection is automatic */}
-      {mode !== "hermes" && (
+      {mode === "research" && (
+        <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3 text-xs text-purple-700">
+          Deep Research — Knowledge Hub + web qidiruv orqali multi-hop tadqiqot va manbali hisobot (OpenJarvis deep_research ilhomida).
+        </div>
+      )}
+
+      {/* Agent cards — hidden in Hermes/Research mode since selection is automatic */}
+      {mode !== "hermes" && mode !== "research" && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {AGENTS.map(a => {
           const isActive = multiMode ? selectedIds.includes(a.id) : selected?.id === a.id;
@@ -194,7 +231,11 @@ function AgentsInner() {
       {/* Task input */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-3">
-          {mode === "hermes" ? (
+          {mode === "research" ? (
+            <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Search size={15} strokeWidth={1.75} className="text-purple-600" /> Tadqiqot savolini yozing
+            </p>
+          ) : mode === "hermes" ? (
             <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
               <Zap size={15} strokeWidth={1.75} className="text-indigo-600" /> Hermes vazifani tahlil qiladi
             </p>
@@ -212,14 +253,18 @@ function AgentsInner() {
           value={task}
           onChange={e => setTask(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleRun())}
-          placeholder="Vazifani yozing... (masalan: 'Pari AI uchun marketing strategiyasini ishlab chiq')"
+          placeholder={
+            mode === "research"
+              ? "Masalan: O'zbekistonda AI startaplar bozori 2026..."
+              : "Vazifani yozing... (masalan: 'Pari AI uchun marketing strategiyasini ishlab chiq')"
+          }
           rows={3}
           className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all"
         />
         <div className="flex justify-end mt-3">
           <button
             onClick={handleRun}
-            disabled={loading || !task.trim() || (mode !== "hermes" && !selected && selectedIds.length === 0)}
+            disabled={loading || !task.trim() || (mode !== "hermes" && mode !== "research" && !selected && selectedIds.length === 0)}
             className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-all"
           >
             {loading ? (
@@ -237,7 +282,19 @@ function AgentsInner() {
         {routingReason && (
           <div className="flex items-center gap-2 text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5">
             <Zap size={12} strokeWidth={2} className="flex-shrink-0" />
-            <span><strong>Hermes yo&apos;naltirdi:</strong> {routingReason}</span>
+            <span><strong>Yo'naltirish:</strong> {routingReason}</span>
+          </div>
+        )}
+        {synthesis && (
+          <div className="fade-in bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-indigo-100">
+              <Zap size={16} strokeWidth={1.75} className="text-indigo-600" />
+              <p className="text-sm font-semibold text-gray-900">Orchestrator sintezi</p>
+            </div>
+            <div
+              className="text-sm text-gray-700 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: formatResult(synthesis) }}
+            />
           </div>
         )}
         <div className={`grid gap-4 ${results.length > 1 ? "md:grid-cols-2" : ""}`}>
@@ -270,7 +327,7 @@ function AgentsInner() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <History size={15} strokeWidth={1.75} className="text-gray-400" />
-            <h2 className="text-sm font-semibold text-gray-900">So&apos;nggi ishga tushirishlar</h2>
+            <h2 className="text-sm font-semibold text-gray-900">So'nggi ishga tushirishlar</h2>
           </div>
           <div className="space-y-3">
             {history.slice(0, 6).map((h) => (
