@@ -1,0 +1,1 @@
+Kichik chqaloq tugildi. Video uchun kontent tayyorlash kerak.
