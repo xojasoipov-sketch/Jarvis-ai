@@ -26,13 +26,28 @@ function getBestMime(): string {
   return "";
 }
 
+/** Detect language: Russian → ru, everything else → uz (prefer Uzbek) */
+function detectLang(text: string): "ru" | "uz" {
+  return /[а-яёА-ЯЁ]/.test(text) ? "ru" : "uz";
+}
+
+/** Best speechSynthesis lang for fallback */
+function speechSynthLang(lang: "ru" | "uz"): string {
+  if (lang === "ru") return "ru-RU";
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.some((v) => v.lang.toLowerCase().startsWith("uz"))) return "uz-UZ";
+    if (voices.some((v) => v.lang.toLowerCase().startsWith("tr"))) return "tr-TR";
+  }
+  return "tr-TR"; // Turkish is phonetically closest to Uzbek
+}
+
 // Play TTS via Web Audio API (works on iOS in async context) with speechSynthesis fallback
 async function speakText(text: string, audioCtx: AudioContext | null): Promise<void> {
   const clean = text.replace(/[*_#`>~[\]]/g, "").replace(/\n+/g, " ").slice(0, 500);
   if (!clean) return;
 
-  const isRu = /[а-яёА-ЯЁ]/.test(clean);
-  const lang = isRu ? "ru" : "uz";
+  const lang = detectLang(clean);
   const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
 
   // Method 1: Web Audio API — only reliable method on iOS in async chains
@@ -58,12 +73,12 @@ async function speakText(text: string, audioCtx: AudioContext | null): Promise<v
     }
   }
 
-  // Method 2: speechSynthesis (better than <audio> on iOS in async chains)
+  // Method 2: speechSynthesis with better Uzbek support
   if ("speechSynthesis" in window) {
     await new Promise<void>((resolve) => {
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(clean);
-      utter.lang = isRu ? "ru-RU" : "en-US";
+      utter.lang = speechSynthLang(lang);
       utter.rate = 0.95;
       let done = false;
       const finish = () => { if (!done) { done = true; resolve(); } };
