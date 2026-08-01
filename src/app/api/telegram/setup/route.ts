@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-production.up.railway.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL
+  || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://pari-ai-ten.vercel.app");
 
 function api(path: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -58,12 +59,16 @@ export async function POST(req: NextRequest) {
       await tgPost("setMyCommands", {
         commands: [
           { command: "start", description: "Botni ishga tushirish" },
-          { command: "agents", description: "Agent tanlash" },
           { command: "chat", description: "Chat rejimi" },
-          { command: "app", description: "Pari AI ilovasini ochish" },
+          { command: "agents", description: "Agent tanlash" },
+          { command: "smm", description: "SMM boshqaruvi" },
+          { command: "kanallar", description: "Ulangan kanallar ro'yxati" },
+          { command: "generate", description: "AI bilan post yaratish (masalan: /generate mavzu)" },
+          { command: "post", description: "Kanalga post yuborish (/post matn)" },
           { command: "clear", description: "Suhbatni tozalash" },
           { command: "status", description: "Tizim holati" },
-          { command: "help", description: "Yordam" },
+          { command: "app", description: "Pari AI ilovasini ochish" },
+          { command: "help", description: "Yordam va buyruqlar" },
         ],
       });
 
