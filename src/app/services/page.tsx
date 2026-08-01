@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Plus, Trash2, RefreshCw, Package, Users, DollarSign,
   CheckCircle2, Clock, XCircle, Circle, Edit2, X, TrendingUp, Flame,
-  Filter,
+  Filter, Handshake,
 } from "lucide-react";
 
 type ServiceCategory = "smm" | "content" | "dev" | "design" | "consulting" | "automation" | "general";
@@ -12,8 +12,10 @@ type OrderStatus = "new" | "in_progress" | "delivered" | "paid" | "cancelled";
 
 type Service = {
   id: number; category: ServiceCategory; name: string; description: string;
-  price: number; currency: string; billing_cycle: BillingCycle; delivery_days: number;
-  features: string[]; active: boolean; is_trending?: boolean; demand_score?: number; created_at: string;
+  price: number; price_display?: string; price_negotiable?: boolean;
+  currency: string; billing_cycle: BillingCycle; delivery_days: number;
+  features: string[]; active: boolean; is_trending?: boolean; demand_score?: number;
+  sort_order?: number; created_at: string;
 };
 
 type Order = {
@@ -25,12 +27,12 @@ type Stats = { total: number; new: number; in_progress: number; delivered: numbe
 
 const CATEGORIES: { key: ServiceCategory | "all"; label: string }[] = [
   { key: "all", label: "Barchasi" },
-  { key: "smm", label: "SMM" },
-  { key: "content", label: "Kontent" },
-  { key: "automation", label: "Avtomatlashtirish" },
+  { key: "automation", label: "AI & Avtomat" },
   { key: "dev", label: "Dasturlash" },
+  { key: "smm", label: "SMM & Marketing" },
+  { key: "content", label: "Kontent" },
   { key: "consulting", label: "Konsultatsiya" },
-  { key: "design", label: "Dizayn" },
+  { key: "design", label: "Dizayn & Media" },
 ];
 
 const CAT_COLORS: Record<string, string> = {
@@ -124,8 +126,17 @@ function ServiceCard({
 
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50">
         <div>
-          <p className="text-base font-bold text-gray-900">{fmtPrice(s.price, s.currency)}</p>
-          <p className="text-[10px] text-gray-400">{CYCLE_LABEL[s.billing_cycle]} · {s.delivery_days} kunda</p>
+          <p className="text-base font-bold text-gray-900">
+            {s.price_display || fmtPrice(s.price, s.currency)}
+          </p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <p className="text-[10px] text-gray-400">{CYCLE_LABEL[s.billing_cycle]} · {s.delivery_days} kunda</p>
+            {s.price_negotiable && (
+              <span className="flex items-center gap-0.5 text-[10px] text-teal-600 font-medium">
+                <Handshake size={9} strokeWidth={2.5} /> kelishiladi
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -278,11 +289,13 @@ export default function ServicesPage() {
   const trendingServices = services.filter((s) => s.is_trending && s.active)
     .sort((a, b) => (b.demand_score || 0) - (a.demand_score || 0));
 
-  const filteredServices = services.filter((s) => {
-    if (catFilter !== "all" && s.category !== catFilter) return false;
-    if (showTrendingOnly && !s.is_trending) return false;
-    return true;
-  });
+  const filteredServices = services
+    .filter((s) => {
+      if (catFilter !== "all" && s.category !== catFilter) return false;
+      if (showTrendingOnly && !s.is_trending) return false;
+      return true;
+    })
+    .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
 
   const cardProps = { orderingFor, setOrderingFor, clientName, setClientName, clientContact, setClientContact };
 

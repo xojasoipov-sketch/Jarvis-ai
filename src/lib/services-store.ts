@@ -11,6 +11,8 @@ export type Service = {
   name: string;
   description: string;
   price: number;
+  price_display?: string;
+  price_negotiable?: boolean;
   currency: string;
   billing_cycle: BillingCycle;
   delivery_days: number;
@@ -18,6 +20,7 @@ export type Service = {
   active: boolean;
   is_trending?: boolean;
   demand_score?: number;
+  sort_order?: number;
   created_at: string;
 };
 
@@ -43,7 +46,7 @@ let nextOrderId = 1;
 // ──────────────────────────────────────────────
 export async function listServices(activeOnly = false): Promise<Service[]> {
   if (dbConfigured && supabase) {
-    let q = supabase.from("pari_services").select("*").order("category").order("price");
+    let q = supabase.from("pari_services").select("*").order("sort_order", { ascending: true }).order("created_at");
     if (activeOnly) q = q.eq("active", true);
     const { data } = await q;
     return data || [];
