@@ -1,9 +1,10 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Plus, Trash2, RefreshCw, Package, Users, DollarSign,
   CheckCircle2, Clock, XCircle, Circle, Edit2, X, TrendingUp, Flame,
-  Filter, Handshake,
+  Filter, Handshake, Play,
 } from "lucide-react";
 
 type ServiceCategory = "smm" | "content" | "dev" | "design" | "consulting" | "automation" | "general";
@@ -284,7 +285,16 @@ export default function ServicesPage() {
     load();
   }
 
+  const router = useRouter();
   const serviceMap = Object.fromEntries(services.map((s) => [s.id, s]));
+
+  function startWork(o: Order) {
+    const svc = o.service_id ? serviceMap[o.service_id] : null;
+    const prompt = svc
+      ? encodeURIComponent(`${svc.name} — mijoz: ${o.client_name}${o.client_contact ? ", " + o.client_contact : ""}. Ishni boshlaylik.`)
+      : encodeURIComponent(`Buyurtma #${o.id} — ${o.client_name} uchun ish boshlaylik.`);
+    router.push(`/chat?q=${prompt}`);
+  }
 
   const trendingServices = services.filter((s) => s.is_trending && s.active)
     .sort((a, b) => (b.demand_score || 0) - (a.demand_score || 0));
@@ -471,7 +481,11 @@ export default function ServicesPage() {
                   )}
                   <p className="text-[10px] text-gray-300 mt-1.5">{new Date(o.created_at).toLocaleString("uz-UZ")}</p>
                 </div>
-                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
+                  <button onClick={() => startWork(o)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-gray-700 transition-colors whitespace-nowrap">
+                    <Play size={10} strokeWidth={2.5} /> Ishni boshlash
+                  </button>
                   <select value={o.status} onChange={(e) => setOrderStatus(o.id, e.target.value as OrderStatus)}
                     className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-gray-400">
                     {Object.entries(STATUS_META).map(([key, meta]) => (
@@ -479,7 +493,7 @@ export default function ServicesPage() {
                     ))}
                   </select>
                   <button onClick={() => removeOrder(o.id)}
-                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors self-end">
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
                     <Trash2 size={13} strokeWidth={1.75} />
                   </button>
                 </div>
