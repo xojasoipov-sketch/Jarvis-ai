@@ -1,6 +1,5 @@
-// Shared free/cheap AI provider fallback chain + local-first (OpenJarvis uslubida).
-// Local (Ollama / LM Studio) birinchi — LOCAL_LLM_URL yoki OLLAMA_BASE_URL bo'lsa.
-// Keyin cloud: Pollinations → Groq → ... → OpenAI.
+// Provider chain: local-first (Railway Ollama / LM Studio) → free cloud → paid.
+// Railway: Ollama service + private network → LOCAL_LLM_URL=http://ollama.railway.internal:11434/v1/chat/completions
 
 export const PROVIDER_COSTS: Record<string, number> = {
   local: 0,
@@ -65,36 +64,53 @@ export function getCheapestProvider(
   return candidates.sort((a, b) => a.costPer1M - b.costPer1M)[0];
 }
 
-/** Local-first: Ollama / LM Studio / har qanday OpenAI-compatible local server */
+/** Local OpenAI-compatible URL (Ollama / LM Studio / vLLM) */
+function resolveLocalChatUrl(): string {
+  // 1) To'liq URL (tavsiya)
+  if (process.env.LOCAL_LLM_URL) return process.env.LOCAL_LLM_URL.replace(/\/$/, "");
+
+  // 2) OLLAMA_BASE_URL = http://host:11434  →  .../v1/chat/completions
+  const base = (process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
+  if (base) {
+    if (base.includes("/v1/chat/completions")) return base;
+    if (base.endsWith("/v1")) return `${base}/chat/completions`;
+    return `${base}/v1/chat/completions`;
+  }
+
+  // 3) Railway private DNS qisqa yozuv: OLLAMA_SERVICE=ollama → http://ollama.railway.internal:11434/...
+  const svc = process.env.OLLAMA_SERVICE || process.env.RAILWAY_OLLAMA_SERVICE;
+  if (svc) {
+    const host = svc.includes(".") ? svc : `${svc}.railway.internal`;
+    const port = process.env.OLLAMA_PORT || "11434";
+    return `http://${host}:${port}/v1/chat/completions`;
+  }
+
+  return "";
+}
+
 function getLocalProviders(): Provider[] {
-  const list: Provider[] = [];
-  // LOCAL_LLM_URL=http://127.0.0.1:11434/v1/chat/completions  yoki to'liq path
-  const localUrl =
-    process.env.LOCAL_LLM_URL ||
-    (process.env.OLLAMA_BASE_URL
-      ? `${process.env.OLLAMA_BASE_URL.replace(/\/$/, "")}/v1/chat/completions`
-      : "");
-  if (localUrl) {
-    list.push({
+  const url = resolveLocalChatUrl();
+  if (!url) return [];
+  return [
+    {
       name: "local",
-      url: localUrl,
+      url,
       key: process.env.LOCAL_LLM_KEY || "ollama",
       model: process.env.LOCAL_LLM_MODEL || process.env.OLLAMA_MODEL || "llama3.2",
       supportsTools: process.env.LOCAL_LLM_TOOLS === "1",
       costPer1M: 0,
       local: true,
-    });
-  }
-  return list;
+    },
+  ];
 }
 
 export function getProviders(): Provider[] {
   const list: Provider[] = [];
 
-  // 0. Local-first (OpenJarvis) — faqat env sozlangan bo'lsa
+  // 0. Local-first (Railway Ollama yoki boshqa)
   list.push(...getLocalProviders());
 
-  // 1. Pollinations — no API key
+  // 1. Pollinations
   list.push({
     name: "pollinations",
     url: "https://text.pollinations.ai/openai",
@@ -104,7 +120,7 @@ export function getProviders(): Provider[] {
     costPer1M: 0,
   });
 
-  // 2. Groq — tool-calling
+  // 2. Groq
   list.push(
     ...providerEntries(
       "groq",
@@ -125,7 +141,10 @@ export function getProviders(): Provider[] {
     )
   );
 
-  // 4. OpenRouter free
+  // 4. OpenRouter
+  const site = process.env.SITE_URL || process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : "https://pari-ai.up.railway.app";
   list.push(
     ...providerEntries(
       "openrouter",
@@ -134,14 +153,13 @@ export function getProviders(): Provider[] {
       "google/gemini-2.0-flash-exp:free",
       {
         headers: {
-          "HTTP-Referer": "https://pari-ai.up.railway.app",
+          "HTTP-Referer": site,
           "X-Title": "Pari AI",
         },
       }
     )
   );
 
-  // 5–9 cloud
   list.push(
     ...providerEntries(
       "deepseek",
@@ -187,7 +205,6 @@ export function getProviders(): Provider[] {
   return list;
 }
 
-/** Faqat local providerlar (diagnostika uchun) */
 export function getLocalOnly(): Provider[] {
   return getLocalProviders();
 }
