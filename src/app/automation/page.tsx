@@ -2,11 +2,11 @@
 import { useState } from "react";
 import {
   Plus, Clock, KeyRound, Play, Bot, MessageSquare, Bell,
-  Zap, CheckCircle2, Loader2, X, type LucideIcon,
+  Zap, CheckCircle2, Loader2, X, Sun, type LucideIcon,
 } from "lucide-react";
 
 type Trigger = "schedule" | "keyword" | "manual";
-type Action = "agent" | "chat" | "notify";
+type Action = "agent" | "chat" | "notify" | "digest";
 
 type Flow = {
   id: number;
@@ -21,14 +21,16 @@ type Flow = {
 };
 
 const INIT_FLOWS: Flow[] = [
-  { id: 1, name: "Kunlik hisobot", trigger: "schedule", triggerValue: "Har kuni 09:00", action: "agent", actionValue: "analyst", active: true, runs: 14, lastRun: "Bugun 09:00" },
-  { id: 2, name: "Yangi loyiha tahlili", trigger: "keyword", triggerValue: "yangi loyiha", action: "agent", actionValue: "ceo", active: true, runs: 6, lastRun: "Kecha" },
-  { id: 3, name: "Haftalik strategiya", trigger: "schedule", triggerValue: "Har dushanba 08:00", action: "agent", actionValue: "ceo", active: false, runs: 3, lastRun: "5 kun oldin" },
+  { id: 1, name: "Kunlik brifing (Morning Digest)", trigger: "schedule", triggerValue: "Har kuni 09:00", action: "digest", actionValue: "digest", active: true, runs: 0, lastRun: undefined },
+  { id: 2, name: "Kunlik hisobot", trigger: "schedule", triggerValue: "Har kuni 09:00", action: "agent", actionValue: "analyst", active: true, runs: 14, lastRun: "Bugun 09:00" },
+  { id: 3, name: "Yangi loyiha tahlili", trigger: "keyword", triggerValue: "yangi loyiha", action: "agent", actionValue: "ceo", active: true, runs: 6, lastRun: "Kecha" },
+  { id: 4, name: "Haftalik strategiya", trigger: "schedule", triggerValue: "Har dushanba 08:00", action: "agent", actionValue: "ceo", active: false, runs: 3, lastRun: "5 kun oldin" },
 ];
 
 const TRIGGER_ICONS: Record<Trigger, LucideIcon> = { schedule: Clock, keyword: KeyRound, manual: Play };
-const ACTION_ICONS: Record<Action, LucideIcon> = { agent: Bot, chat: MessageSquare, notify: Bell };
+const ACTION_ICONS: Record<Action, LucideIcon> = { agent: Bot, chat: MessageSquare, notify: Bell, digest: Sun };
 const AGENT_NAMES: Record<string, string> = {
+  digest: "Morning Digest",
   ceo: "CEO Agent", researcher: "Research Agent", coder: "Coding Agent",
   analyst: "Data Analyst", writer: "Content Writer", marketing: "Marketing Agent",
   devops: "DevOps Agent", assistant: "Personal Assistant",
@@ -52,22 +54,34 @@ export default function AutomationPage() {
     setRunning(flow.id);
     setResult(null);
     try {
-      const task = flow.triggerValue || flow.name;
-      const res = await fetch("/api/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: flow.actionValue, task }),
-      });
-      const data = await res.json();
-      setFlows(p => p.map(f => f.id === flow.id ? { ...f, runs: f.runs + 1, lastRun: "Hozir" } : f));
-      setResult({ id: flow.id, text: data.result });
+      if (flow.action === "digest") {
+        const res = await fetch("/api/digest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ focus: flow.triggerValue || "" }),
+        });
+        const data = await res.json();
+        setFlows(p => p.map(f => f.id === flow.id ? { ...f, runs: f.runs + 1, lastRun: "Hozir" } : f));
+        setResult({ id: flow.id, text: data.digest || data.error || "Brifing tayyor emas" });
+      } else {
+        const task = flow.triggerValue || flow.name;
+        const res = await fetch("/api/agent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentId: flow.actionValue, task }),
+        });
+        const data = await res.json();
+        setFlows(p => p.map(f => f.id === flow.id ? { ...f, runs: f.runs + 1, lastRun: "Hozir" } : f));
+        setResult({ id: flow.id, text: data.result });
+      }
     } catch { setResult({ id: flow.id, text: "Xato yuz berdi." }); }
     setRunning(null);
   }
 
   function addFlow() {
     if (!newFlow.name.trim()) return;
-    setFlows(p => [...p, { ...newFlow, id: Date.now(), active: true, runs: 0 }]);
+    const actionValue = newFlow.action === "digest" ? "digest" : newFlow.actionValue;
+    setFlows(p => [...p, { ...newFlow, actionValue, id: Date.now(), active: true, runs: 0 }]);
     setNewFlow({ name: "", trigger: "manual", triggerValue: "", action: "agent", actionValue: "assistant" });
     setShowNew(false);
   }
@@ -128,14 +142,34 @@ export default function AutomationPage() {
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Agent</label>
-              <select value={newFlow.actionValue} onChange={e => setNewFlow(p => ({ ...p, actionValue: e.target.value }))}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
-                {Object.entries(AGENT_NAMES).map(([id, name]) => (
-                  <option key={id} value={id}>{name}</option>
-                ))}
+              <label className="text-xs text-gray-500 mb-1 block">Harakat</label>
+              <select
+                value={newFlow.action}
+                onChange={e => {
+                  const action = e.target.value as Action;
+                  setNewFlow(p => ({
+                    ...p,
+                    action,
+                    actionValue: action === "digest" ? "digest" : p.actionValue === "digest" ? "assistant" : p.actionValue,
+                  }));
+                }}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none"
+              >
+                <option value="agent">Agent</option>
+                <option value="digest">Morning Digest</option>
               </select>
             </div>
+            {newFlow.action !== "digest" && (
+              <div className="col-span-2">
+                <label className="text-xs text-gray-500 mb-1 block">Agent</label>
+                <select value={newFlow.actionValue} onChange={e => setNewFlow(p => ({ ...p, actionValue: e.target.value }))}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
+                  {Object.entries(AGENT_NAMES).filter(([id]) => id !== "digest").map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Bekor</button>
@@ -154,13 +188,13 @@ export default function AutomationPage() {
                   <p className="text-sm font-semibold text-gray-900">{flow.name}</p>
                   {flow.active && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
                 </div>
-                <div className="flex items-center gap-4 text-xs text-gray-500">
+                <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
                   <span className="flex items-center gap-1.5">
                     {(() => { const Icon = TRIGGER_ICONS[flow.trigger]; return <Icon size={12} strokeWidth={1.75} />; })()} {flow.triggerValue || "Qo'lda"}
                   </span>
                   <span className="text-gray-300">→</span>
                   <span className="flex items-center gap-1.5">
-                    {(() => { const Icon = ACTION_ICONS[flow.action]; return <Icon size={12} strokeWidth={1.75} />; })()} {AGENT_NAMES[flow.actionValue] || flow.actionValue}
+                    {(() => { const Icon = ACTION_ICONS[flow.action] || Bot; return <Icon size={12} strokeWidth={1.75} />; })()} {AGENT_NAMES[flow.actionValue] || flow.actionValue}
                   </span>
                   {flow.lastRun && <span className="text-gray-400">· Oxirgi: {flow.lastRun}</span>}
                   <span className="text-gray-400">· {flow.runs} marta</span>
