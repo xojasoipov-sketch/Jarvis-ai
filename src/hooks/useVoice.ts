@@ -25,6 +25,23 @@ type SpeechWindow = Window & {
   webkitAudioContext?: typeof AudioContext;
 };
 
+/** Detect language from text: Russian → ru, else prefer Uzbek */
+function detectLang(text: string): "ru" | "uz" {
+  return /[а-яёА-ЯЁ]/.test(text) ? "ru" : "uz";
+}
+
+/** Best speechSynthesis lang code for the detected language */
+function speechSynthLang(lang: "ru" | "uz"): string {
+  if (lang === "ru") return "ru-RU";
+  // Prefer uz-UZ if browser has it, otherwise Turkish (closest), then en-US
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.some((v) => v.lang.toLowerCase().startsWith("uz"))) return "uz-UZ";
+    if (voices.some((v) => v.lang.toLowerCase().startsWith("tr"))) return "tr-TR";
+  }
+  return "tr-TR"; // Turkish is phonetically closest to Uzbek
+}
+
 // Short UI tone: mic on → ascending ping, mic off → descending
 function playMicTone(on: boolean) {
   try {
@@ -88,7 +105,7 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
       if (blob.size < 500) return;
       const form = new FormData();
       form.append("audio", blob, "audio.webm");
-      form.append("lang", lang.split("-")[0]);
+      form.append("lang", lang.split("-")[0] || "uz");
       try {
         const res = await fetch("/api/stt", { method: "POST", body: form });
         if (!res.ok) return;
@@ -122,7 +139,7 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
 
     playMicTone(true);
     const rec = new Ctor();
-    rec.lang = lang;
+    rec.lang = lang; // default uz-UZ
     rec.continuous = false;
     rec.interimResults = false;
     rec.onresult = (e) => {
@@ -183,7 +200,7 @@ export function useVoiceOutput() {
     try { sourceRef.current?.stop(); } catch {}
     sourceRef.current = null;
 
-    const lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru" : "uz";
+    const lang = detectLang(clean);
     const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
 
     const ctx = audioCtxRef.current;
@@ -207,11 +224,11 @@ export function useVoiceOutput() {
       }
     }
 
-    // Fallback: speechSynthesis
+    // Fallback: speechSynthesis with better Uzbek support
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(clean);
-      utter.lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru-RU" : "en-US";
+      utter.lang = speechSynthLang(lang);
       utter.rate = 0.95;
       window.speechSynthesis.speak(utter);
     }
