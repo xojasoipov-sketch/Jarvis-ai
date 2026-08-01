@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authConfigured, verifySessionToken } from "@/lib/auth";
 
-// Sliding window rate limiter — in-memory (per Edge invocation)
-// For production, replace with Upstash Redis (same API, durable across invocations)
 const ratemap = new Map<string, { count: number; reset: number }>();
 
 function rateLimit(
@@ -30,7 +28,6 @@ function rateLimit(
   return null;
 }
 
-// Clean up stale entries every ~100 requests (cheap enough for edge)
 let cleanupCounter = 0;
 function maybeCleanup() {
   if (++cleanupCounter < 100) return;
@@ -45,33 +42,48 @@ export async function middleware(req: NextRequest) {
   maybeCleanup();
   const path = req.nextUrl.pathname;
 
-  // Per-route rate limits
+  // Login / static / auth hech qachon qayta yo'naltirilmasin (reload loop oldini olish)
+  if (
+    path === "/login" ||
+    path.startsWith("/_next") ||
+    path.startsWith("/api/auth") ||
+    path === "/favicon.ico" ||
+    path === "/icon" ||
+    path.startsWith("/logo")
+  ) {
+    return NextResponse.next();
+  }
+
   if (path.startsWith("/api/chat")) {
-    const limited = rateLimit(req, 60, 60_000); // 60 req/min
+    const limited = rateLimit(req, 60, 60_000);
     if (limited) return limited;
   }
   if (path.startsWith("/api/agent")) {
-    const limited = rateLimit(req, 30, 60_000); // 30 req/min (agent calls are heavier)
+    const limited = rateLimit(req, 30, 60_000);
     if (limited) return limited;
   }
   if (path.startsWith("/api/hermes")) {
-    const limited = rateLimit(req, 20, 60_000); // 20 req/min
+    const limited = rateLimit(req, 20, 60_000);
     if (limited) return limited;
   }
   if (path.startsWith("/api/tts") || path.startsWith("/api/stt") || path.startsWith("/api/voice")) {
-    const limited = rateLimit(req, 10, 60_000); // 10 req/min (ElevenLabs quota)
+    const limited = rateLimit(req, 30, 60_000); // ElevenLabs uchun biroz kengaytirildi
     if (limited) return limited;
   }
 
-  // Password gate — opt-in via APP_PASSWORD env var
   if (authConfigured) {
     const session = req.cookies.get("pari_session")?.value;
-    if (!(await verifySessionToken(session))) {
+    const ok = await verifySessionToken(session);
+    if (!ok) {
       if (path.startsWith("/api/")) {
         return NextResponse.json({ error: "Autentifikatsiya talab qilinadi" }, { status: 401 });
       }
+      // Allaqachon login'da bo'lsa qayta redirect qilma
+      if (path === "/login") return NextResponse.next();
       const loginUrl = new URL("/login", req.url);
-      loginUrl.searchParams.set("next", path);
+      // next ichida /login bo'lmasin — loop oldini oladi
+      const nextPath = path.startsWith("/login") ? "/" : path;
+      loginUrl.searchParams.set("next", nextPath);
       return NextResponse.redirect(loginUrl);
     }
   }
@@ -81,6 +93,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon|login|api/auth/login|api/telegram|monitoring).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon|login|api/auth/login|api/telegram|monitoring|logo.png).*)",
   ],
 };

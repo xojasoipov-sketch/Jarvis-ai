@@ -1,10 +1,18 @@
 "use client";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const path = usePathname();
+
+  // Login sahifasida sidebar/header yo'q — reload/redirect loop oldini oladi
+  if (path === "/login") {
+    return <>{children}</>;
+  }
+
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "#f8f9fc" }}>
       {open && (

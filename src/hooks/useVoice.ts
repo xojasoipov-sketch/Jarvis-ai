@@ -25,24 +25,10 @@ type SpeechWindow = Window & {
   webkitAudioContext?: typeof AudioContext;
 };
 
-/** Detect language from text: Russian → ru, else prefer Uzbek */
 function detectLang(text: string): "ru" | "uz" {
   return /[а-яёА-ЯЁ]/.test(text) ? "ru" : "uz";
 }
 
-/** Best speechSynthesis lang code for the detected language */
-function speechSynthLang(lang: "ru" | "uz"): string {
-  if (lang === "ru") return "ru-RU";
-  // Prefer uz-UZ if browser has it, otherwise Turkish (closest), then en-US
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.some((v) => v.lang.toLowerCase().startsWith("uz"))) return "uz-UZ";
-    if (voices.some((v) => v.lang.toLowerCase().startsWith("tr"))) return "tr-TR";
-  }
-  return "tr-TR"; // Turkish is phonetically closest to Uzbek
-}
-
-// Short UI tone: mic on → ascending ping, mic off → descending
 function playMicTone(on: boolean) {
   try {
     const w = window as SpeechWindow;
@@ -65,7 +51,6 @@ function playMicTone(on: boolean) {
   } catch { /* ignore */ }
 }
 
-// ─── Voice Input ──────────────────────────────────────────────────────────────
 export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") {
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -79,7 +64,13 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
       .then((r) => setUseGroq(r.status !== 500))
       .catch(() => setUseGroq(false));
     const w = window as SpeechWindow;
-    setSupported(Boolean(navigator.mediaDevices?.getUserMedia || w.SpeechRecognition || w.webkitSpeechRecognition));
+    setSupported(
+      Boolean(
+        navigator.mediaDevices?.getUserMedia ||
+          w.SpeechRecognition ||
+          w.webkitSpeechRecognition
+      )
+    );
   }, []);
 
   const stopGroq = useCallback(() => {
@@ -98,7 +89,9 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     const rec = new MediaRecorder(stream, { mimeType });
     mediaRef.current = rec;
 
-    rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    rec.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
     rec.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
       const blob = new Blob(chunksRef.current, { type: mimeType });
@@ -118,14 +111,20 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   }, [lang, onResult]);
 
   const toggle = useCallback(() => {
-    const hasMedia = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
+    const hasMedia =
+      typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
     if (useGroq && hasMedia) {
-      if (listening) { stopGroq(); return; }
-      startGroq().catch(() => { setListening(false); playMicTone(false); });
+      if (listening) {
+        stopGroq();
+        return;
+      }
+      startGroq().catch(() => {
+        setListening(false);
+        playMicTone(false);
+      });
       return;
     }
 
-    // Fallback: Web Speech API
     const w = window as SpeechWindow;
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!Ctor) return;
@@ -139,14 +138,20 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
 
     playMicTone(true);
     const rec = new Ctor();
-    rec.lang = lang; // default uz-UZ
+    rec.lang = lang;
     rec.continuous = false;
     rec.interimResults = false;
     rec.onresult = (e) => {
-      const transcript = Array.from({ length: e.results.length }, (_, i) => e.results[i][0].transcript).join(" ");
+      const transcript = Array.from(
+        { length: e.results.length },
+        (_, i) => e.results[i][0].transcript
+      ).join(" ");
       onResult(transcript);
     };
-    rec.onerror = () => { setListening(false); playMicTone(false); };
+    rec.onerror = () => {
+      setListening(false);
+      playMicTone(false);
+    };
     rec.onend = () => setListening(false);
     recognitionRef.current = rec;
     rec.start();
@@ -156,14 +161,14 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   return { listening, supported: supported || useGroq === true, toggle };
 }
 
-// ─── Voice Output (ElevenLabs TTS via Web Audio API) ─────────────────────────
+/** ElevenLabs TTS (server) — brauzer speechSynthesis ishlatilmaydi (o'zbek uchun yomon) */
 export function useVoiceOutput() {
   const [enabled, setEnabled] = useState(false);
   const [supported] = useState(true);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
 
-  // Create + unlock AudioContext on user gesture (volume toggle)
   const toggleEnabled = useCallback(() => {
     const next = !enabled;
     if (next && typeof window !== "undefined") {
@@ -173,7 +178,6 @@ export function useVoiceOutput() {
         const ctx = new AudioCtx();
         audioCtxRef.current = ctx;
         ctx.resume().catch(() => {});
-        // Silent buffer to fully unlock iOS audio output
         const buf = ctx.createBuffer(1, 1, 22050);
         const src = ctx.createBufferSource();
         src.buffer = buf;
@@ -186,57 +190,88 @@ export function useVoiceOutput() {
     setEnabled(next);
   }, [enabled]);
 
-  const speak = useCallback(async (text: string) => {
-    if (!enabled) return;
-    const clean = text
-      .replace(/```[\s\S]*?```/g, " kod bloki ")
-      .replace(/[*_#`~]/g, "")
-      .replace(/\n+/g, ". ")
-      .trim()
-      .slice(0, 500);
-    if (!clean) return;
+  const speak = useCallback(
+    async (text: string) => {
+      if (!enabled) return;
+      const clean = text
+        .replace(/```[\s\S]*?```/g, " kod bloki ")
+        .replace(/[*_#`~]/g, "")
+        .replace(/\n+/g, ". ")
+        .trim()
+        .slice(0, 2000);
+      if (!clean) return;
 
-    // Stop previous audio
-    try { sourceRef.current?.stop(); } catch {}
-    sourceRef.current = null;
-
-    const lang = detectLang(clean);
-    const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
-
-    const ctx = audioCtxRef.current;
-    if (ctx && ctx.state !== "closed") {
       try {
-        if (ctx.state === "suspended") await ctx.resume();
-        const res = await fetch(url);
+        sourceRef.current?.stop();
+      } catch {}
+      sourceRef.current = null;
+      if (audioElRef.current) {
+        audioElRef.current.pause();
+        audioElRef.current = null;
+      }
+
+      const lang = detectLang(clean);
+
+      // POST — uzun matn, ElevenLabs
+      try {
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: clean, lang }),
+        });
         if (res.ok) {
-          const buf = await res.arrayBuffer();
-          const decoded = await ctx.decodeAudioData(buf);
-          if (ctx.state === "suspended") await ctx.resume();
-          const src = ctx.createBufferSource();
-          src.buffer = decoded;
-          src.connect(ctx.destination);
-          sourceRef.current = src;
-          src.start(0);
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+
+          const ctx = audioCtxRef.current;
+          if (ctx && ctx.state !== "closed") {
+            try {
+              if (ctx.state === "suspended") await ctx.resume();
+              const ab = await blob.arrayBuffer();
+              const decoded = await ctx.decodeAudioData(ab.slice(0));
+              const src = ctx.createBufferSource();
+              src.buffer = decoded;
+              src.connect(ctx.destination);
+              sourceRef.current = src;
+              src.start(0);
+              src.onended = () => URL.revokeObjectURL(url);
+              return;
+            } catch {
+              /* HTMLAudio fallback */
+            }
+          }
+
+          const audio = new Audio(url);
+          audioElRef.current = audio;
+          await audio.play();
+          audio.onended = () => URL.revokeObjectURL(url);
           return;
         }
       } catch (e) {
-        console.warn("TTS Web Audio failed:", e);
+        console.warn("ElevenLabs TTS client error:", e);
       }
-    }
 
-    // Fallback: speechSynthesis with better Uzbek support
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(clean);
-      utter.lang = speechSynthLang(lang);
-      utter.rate = 0.95;
-      window.speechSynthesis.speak(utter);
-    }
-  }, [enabled]);
+      // Oxirgi chora — speechSynthesis (sifat past, lekin ovoz chiqadi)
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(clean);
+        utter.lang = lang === "ru" ? "ru-RU" : "tr-TR";
+        utter.rate = 0.95;
+        window.speechSynthesis.speak(utter);
+      }
+    },
+    [enabled]
+  );
 
   const stop = useCallback(() => {
-    try { sourceRef.current?.stop(); } catch {}
+    try {
+      sourceRef.current?.stop();
+    } catch {}
     sourceRef.current = null;
+    if (audioElRef.current) {
+      audioElRef.current.pause();
+      audioElRef.current = null;
+    }
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
 
