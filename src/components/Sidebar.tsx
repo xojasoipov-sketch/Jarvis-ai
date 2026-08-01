@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutGrid, MessageSquare, History, Bot, CheckSquare, FolderKanban, BookOpen, Brain,
   Zap, Calendar, FolderOpen, BarChart3, Code2, Database, Plug, Sparkles,
-  Wrench, Settings, ShieldCheck, CreditCard, ScrollText, LogOut, X, Radio, GitPullRequest, Briefcase, type LucideIcon,
+  Wrench, Settings, ShieldCheck, CreditCard, ScrollText, LogOut, X, Radio, GitPullRequest, Briefcase, ShoppingBag, type LucideIcon,
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
@@ -26,6 +26,7 @@ const nav: NavEntry[] = [
   { label: "Files", href: "/files", icon: FolderOpen },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "SMM", href: "/smm", icon: Radio },
+  { label: "Xizmatlar", href: "/services", icon: ShoppingBag },
   { label: "Biznes Modullari", href: "/business", icon: Briefcase },
 ];
 

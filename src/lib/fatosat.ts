@@ -10,6 +10,7 @@ export type Intent =
   | { type: "knowledge_search"; query: string }
   | { type: "calendar"; action: "list" | "create"; title?: string }
   | { type: "files" }
+  | { type: "services" }
   | { type: "navigate"; page: string };
 
 // Matnni tozalash
@@ -30,6 +31,11 @@ export function classifyFast(text: string): Intent | null {
     if (/knowledge|bilim/.test(t)) return { type: "navigate", page: "/knowledge" };
     if (/analytic|analiz/.test(t)) return { type: "navigate", page: "/analytics" };
     if (/settings|sozlama/.test(t)) return { type: "navigate", page: "/settings" };
+  }
+
+  // --- Xizmatlar / narxlar / buyurtma ---
+  if (/\b(xizmat|narx|narxlar|buyurtma|sotib ol|xarid|paket|price|service|order)\b/.test(t)) {
+    return { type: "services" };
   }
 
   // --- Vazifa yaratish ---
@@ -128,6 +134,8 @@ export function intentToContext(intent: Intent): string {
       return `[Foydalanuvchi bilim bazasidan qidirmoqchi: "${intent.query}"]`;
     case "calendar":
       return `[Foydalanuvchi kalendardan foydalanmoqchi]`;
+    case "services":
+      return `[Foydalanuvchi sotiladigan xizmatlar/narxlar bilan qiziqmoqda — /xizmatlar katalogini yoki Xizmatlar sahifasini taklif qil]`;
     default:
       return "";
   }

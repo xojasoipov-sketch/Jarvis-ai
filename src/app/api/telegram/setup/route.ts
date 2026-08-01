@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
           { command: "chat", description: "Chat rejimi" },
           { command: "agents", description: "Agent tanlash" },
           { command: "smm", description: "SMM boshqaruvi" },
+          { command: "xizmatlar", description: "Sotiladigan xizmatlar katalogi" },
           { command: "kanallar", description: "Ulangan kanallar ro'yxati" },
           { command: "generate", description: "AI bilan post yaratish (masalan: /generate mavzu)" },
           { command: "post", description: "Kanalga post yuborish (/post matn)" },

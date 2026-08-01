@@ -4,6 +4,7 @@ import {
   cleanMarkdown, AGENT_KEYBOARD, downloadVoice, getFileUrl,
 } from "@/lib/telegram";
 import { listChannels, createPost, listPosts, getChannel } from "@/lib/smm-store";
+import { listServices, getService, createOrder } from "@/lib/services-store";
 import { loadSession, getSession, updateSession, addToHistory, clearHistory } from "@/lib/session-store";
 import { classifyFast, normalizeUzbek } from "@/lib/fatosat";
 import { log } from "@/lib/logger";
@@ -21,6 +22,7 @@ const MAIN_KEYBOARD = {
       { text: "📋 Vazifalar", callback_data: "menu:tasks" },
       { text: "📊 SMM", callback_data: "menu:smm" },
     ],
+    [{ text: "🛍️ Xizmatlar", callback_data: "menu:services" }],
     [{ text: "🚀 Pari AI ni ochish", web_app: { url: APP_URL } }],
   ],
 };
@@ -123,6 +125,7 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
       `/kanallar — Ulangan kanallar\n` +
       `/generate [mavzu] — AI post yaratish\n` +
       `/post [matn] — Kanalga post yuborish\n` +
+      `/xizmatlar — Sotiladigan xizmatlar katalogi\n` +
       `/clear — Suhbatni tozalash\n` +
       `/status — Tizim holati\n` +
       `/app — Ilovani ochish\n\n` +
@@ -162,6 +165,11 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
         }
       );
     }
+    return;
+  }
+
+  if (cmd === "/xizmatlar") {
+    await sendServiceCatalog(chatId);
     return;
   }
 
@@ -273,6 +281,42 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
     return;
   }
 
+  if (fastIntent?.type === "services") {
+    await sendServiceCatalog(chatId);
+    return;
+  }
+
+  // Service order mode: waiting for client name
+  if (session.mode === "service_order" && session.orderServiceId && !session.orderClientName) {
+    const service = await getService(session.orderServiceId);
+    updateSession(chatId, { orderClientName: text.trim() });
+    await sendMessage(chatId,
+      `Rahmat, *${text.trim()}*!\n\nEndi kontakt ma'lumotingizni yozing (telefon yoki @username), Sadi tez orada bog'lanadi.\n\n_Xizmat: ${service?.name || "?"}_`
+    );
+    return;
+  }
+
+  if (session.mode === "service_order" && session.orderServiceId && session.orderClientName) {
+    const service = await getService(session.orderServiceId);
+    const order = await createOrder({
+      service_id: session.orderServiceId,
+      client_name: session.orderClientName,
+      client_contact: text.trim(),
+      status: "new",
+      price: service?.price,
+      notes: `Telegram orqali: @${firstName}`,
+    });
+    updateSession(chatId, { mode: "chat", orderServiceId: undefined, orderClientName: undefined });
+    await sendMessage(chatId,
+      `✅ *Buyurtma qabul qilindi!*\n\n` +
+      `Xizmat: *${service?.name || "?"}*\n` +
+      `Buyurtma raqami: #${order.id}\n\n` +
+      `Sadi tez orada siz bilan bog'lanadi. Rahmat!`,
+      MAIN_KEYBOARD
+    );
+    return;
+  }
+
   // SMM mode: waiting for content
   if (session.mode === "smm_post" && session.smmChannelId) {
     updateSession(chatId, { smmContent: text });
@@ -339,6 +383,31 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
   await regularChat(chatId, text, session.history);
 }
 
+const CATEGORY_LABEL: Record<string, string> = {
+  smm: "SMM", content: "Kontent", dev: "Dasturlash", design: "Dizayn",
+  consulting: "Konsultatsiya", automation: "Avtomatlashtirish", general: "Umumiy",
+};
+
+async function sendServiceCatalog(chatId: number) {
+  const services = await listServices(true);
+  if (services.length === 0) {
+    await sendMessage(chatId, "🛍️ Hozircha xizmatlar katalogi bo'sh.");
+    return;
+  }
+  await sendMessage(chatId, `🛍️ *Sotiladigan xizmatlar*\n\nQuyidagi xizmatlardan birini tanlang:`);
+  for (const s of services) {
+    const cycleLabel = s.billing_cycle === "monthly" ? "/oy" : s.billing_cycle === "weekly" ? "/hafta" : "";
+    const features = s.features.slice(0, 4).map((f) => `• ${f}`).join("\n");
+    await sendMessage(chatId,
+      `*${s.name}* _(${CATEGORY_LABEL[s.category] || s.category})_\n\n` +
+      `${s.description}\n\n` +
+      (features ? `${features}\n\n` : "") +
+      `💰 *${s.price.toLocaleString()} ${s.currency}${cycleLabel}* · 🕐 ${s.delivery_days} kunda tayyor`,
+      { inline_keyboard: [[{ text: "🛒 Buyurtma berish", callback_data: `svc:order:${s.id}` }]] }
+    );
+  }
+}
+
 async function regularChat(chatId: number, text: string, history: Array<{ role: "user" | "assistant"; content: string }>) {
   await sendChatAction(chatId);
   addToHistory(chatId, "user", text);
@@ -396,6 +465,18 @@ async function handleCallback(callbackId: string, chatId: number, data: string, 
 
   if (data === "menu:help") { await handleMessage(chatId, "/help", firstName); return; }
   if (data === "menu:smm") { await handleMessage(chatId, "/smm", firstName); return; }
+  if (data === "menu:services") { await sendServiceCatalog(chatId); return; }
+
+  if (data.startsWith("svc:order:")) {
+    const serviceId = parseInt(data.split(":")[2], 10);
+    const service = await getService(serviceId);
+    if (!service) { await sendMessage(chatId, "Xizmat topilmadi."); return; }
+    updateSession(chatId, { mode: "service_order", orderServiceId: serviceId, orderClientName: undefined });
+    await sendMessage(chatId,
+      `🛒 *${service.name}* uchun buyurtma\n\nIsmingizni yozing:`
+    );
+    return;
+  }
 
   if (data === "smm:aiwrite") {
     updateSession(chatId, { mode: "smm_post" });
