@@ -27,10 +27,13 @@ export type Service = {
 export type ServiceOrder = {
   id: number;
   service_id: number | null;
+  service_name?: string;   // joined from pari_services
   client_name: string;
   client_contact?: string;
   status: OrderStatus;
   price?: number;
+  amount?: number;         // alias used in UI
+  currency?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -96,10 +99,18 @@ export async function deleteService(id: number): Promise<void> {
 // ──────────────────────────────────────────────
 export async function listOrders(status?: OrderStatus): Promise<ServiceOrder[]> {
   if (dbConfigured && supabase) {
-    let q = supabase.from("pari_service_orders").select("*").order("created_at", { ascending: false });
+    let q = supabase
+      .from("pari_service_orders")
+      .select("*, pari_services(name)")
+      .order("created_at", { ascending: false });
     if (status) q = q.eq("status", status);
     const { data } = await q;
-    return data || [];
+    // Flatten service name from join
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data || []).map((o: any) => ({
+      ...o,
+      service_name: (o.pari_services as { name?: string } | null)?.name ?? undefined,
+    })) as ServiceOrder[];
   }
   const orders = status ? memOrders.filter((o) => o.status === status) : [...memOrders];
   return orders.sort((a, b) => b.created_at.localeCompare(a.created_at));
