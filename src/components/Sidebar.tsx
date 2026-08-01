@@ -64,7 +64,7 @@ const mainNav: NavGroup[] = [
   { label: "Knowledge Hub",  icon: BookOpen,        href: "/knowledge" },
   { label: "Analytics",      icon: BarChart3,       href: "/analytics" },
   { label: "Finance",        icon: Wallet,          href: "/billing" },
-  { label: "Marketplace",    icon: Store,           href: "/marketplace", badge: "Soon" },
+  { label: "Marketplace",    icon: Store,           href: "/marketplace" },
   {
     label: "Settings",       icon: Settings,        href: "/settings",
     items: [
