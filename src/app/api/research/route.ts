@@ -49,9 +49,15 @@ Qoidalar:
 export async function POST(req: NextRequest) {
   const start = Date.now();
   try {
-    const { query, depth } = await req.json();
+    const body = await req.json();
+    // query yoki topic — ikkalasi ham qabul qilinadi (UI/agent mosligi)
+    const { query, topic, depth } = body as {
+      query?: string;
+      topic?: string;
+      depth?: number;
+    };
     const q = String(query || topic || "").trim();
-    if (!q) return NextResponse.json({ error: "query kerak" }, { status: 400 });
+    if (!q) return NextResponse.json({ error: "query yoki topic kerak" }, { status: 400 });
 
     // Parallel gather (multi-hop step 1)
     const [kb, web] = await Promise.all([knowledgeHits(q), webHits(q)]);
@@ -63,6 +69,26 @@ export async function POST(req: NextRequest) {
     }
     for (const w of web.slice(0, 5)) {
       sources.push({ id: srcId++, type: "web", title: w.slice(0, 80), excerpt: w });
+    }
+
+    // depth >= 2 bo'lsa — ikkinchi qidiruv (follow-up queries)
+    if (Number(depth) >= 2 && sources.length > 0) {
+      const followRaw = await callAI(
+        "Qisqa qidiruv so'rovlarini JSON massiv sifatida qaytar. Faqat JSON: [\"so'rov1\", \"so'rov2\"]",
+        `Asosiy savol: ${q}\nTopilgan manbalar: ${sources.map((s) => s.title).join("; ")}\nYana 1-2 ta aniqroq qidiruv so'rovi yoz.`
+      );
+      try {
+        const m = followRaw.match(/\[[\s\S]*\]/);
+        const queries: string[] = JSON.parse(m ? m[0] : "[]");
+        for (const fq of queries.slice(0, 2)) {
+          const more = await webHits(String(fq));
+          for (const w of more.slice(0, 2)) {
+            sources.push({ id: srcId++, type: "web", title: w.slice(0, 80), excerpt: w });
+          }
+        }
+      } catch {
+        /* follow-up ixtiyoriy */
+      }
     }
 
     const contextBlock = sources.length
@@ -79,7 +105,7 @@ export async function POST(req: NextRequest) {
       query: q,
       report,
       sources,
-      meta: { latency_ms: ms, source_count: sources.length },
+      meta: { latency_ms: ms, source_count: sources.length, depth: Number(depth) || 1 },
     });
   } catch (e) {
     log("error", "research", String(e));
@@ -90,7 +116,8 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    description: "Deep Research — multi-hop tadqiqot (knowledge + web → sintez + manbalar). OpenJarvis deep_research ilhomida.",
-    usage: { method: "POST", body: { query: "string" } },
+    description:
+      "Deep Research — multi-hop tadqiqot (knowledge + web → sintez + manbalar). OpenJarvis deep_research ilhomida.",
+    usage: { method: "POST", body: { query: "string", topic: "string (ixtiyoriy alias)", depth: "1|2 (ixtiyoriy)" } },
   });
 }
