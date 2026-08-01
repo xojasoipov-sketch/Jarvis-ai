@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase, dbConfigured } from "@/lib/supabase";
 import { log } from "@/lib/logger";
 import { AGENTS, callAI, type AgentId } from "@/lib/agents";
+import { experienceContext, saveTrace } from "@/lib/trace-memory";
 
 const AGENT_IDS = Object.keys(AGENTS) as AgentId[];
 
@@ -12,20 +13,14 @@ Mavjud agentlar:
 ${AGENT_IDS.map((id) => `- ${id}: ${AGENTS[id].name} — ${AGENTS[id].prompt.split("\n")[0]}`).join("\n")}
 
 Qoidalar:
-1. Vazifa bir nechta sohaga tegishli bo'lsa, bir nechta agent tanla (masalan kod + deploy → coder va devops)
-2. Oddiy suhbat yoki umumiy savol bo'lsa — "assistant" ni tanla
-3. Chuqur tadqiqot so'ralsa — researcher + analyst
-4. Faqat quyidagi JSON formatda javob ber, boshqa hech narsa yozma:
-{"agents": ["id1", "id2"], "reason": "qisqa izoh nima uchun shu agent(lar) tanlandi"}`;
+1. Vazifa bir nechta sohaga tegishli bo'lsa, bir nechta agent tanla
+2. Oddiy suhbat — "assistant"
+3. Chuqur tadqiqot — researcher + analyst
+4. Faqat JSON: {"agents": ["id1"], "reason": "..."}`;
 
 const SYNTH_PROMPT = `Sen orchestrator sintez agentisan.
-Bir nechta ixtisoslashgan agent javoblarini birlashtirib, foydalanuvchi uchun bitta aniq, amaliy xulosa yoz.
-Qoidalar:
-- O'zbek tilida (agar vazifa o'zbekcha bo'lsa)
-- Takrorlarni olib tashla
-- Ziddiyatlarni ochiq ayt
-- Oxirida aniq keyingi qadamlar ber
-- Markdown ishlat`;
+Bir nechta agent javoblarini birlashtirib, bitta aniq xulosa yoz.
+O'zbek tilida (agar vazifa o'zbekcha). Markdown. Keyingi qadamlar ber.`;
 
 async function fetchMemoryContext(task: string): Promise<string> {
   if (!dbConfigured) return "";
@@ -50,10 +45,10 @@ async function routeTask(task: string): Promise<{ agents: AgentId[]; reason: str
     const agents = (parsed.agents || []).filter((id: string): id is AgentId =>
       AGENT_IDS.includes(id as AgentId)
     );
-    if (!agents.length) return { agents: ["assistant"], reason: parsed.reason || "Standart agent tanlandi" };
+    if (!agents.length) return { agents: ["assistant"], reason: parsed.reason || "Standart" };
     return { agents: agents.slice(0, 4), reason: parsed.reason || "" };
   } catch {
-    return { agents: ["assistant"], reason: "Yo'naltirishda xato — standart agent ishlatildi" };
+    return { agents: ["assistant"], reason: "Yo'naltirishda xato" };
   }
 }
 
@@ -65,10 +60,18 @@ export async function POST(req: NextRequest) {
   }
 
   const trimmed = task.trim();
-  const memCtx = await fetchMemoryContext(trimmed);
-  const enrichedTask = memCtx
-    ? `Kontekst (xotira):\n${memCtx}\n\nVazifa: ${trimmed}`
-    : trimmed;
+  const [memCtx, expCtx] = await Promise.all([
+    fetchMemoryContext(trimmed),
+    experienceContext(trimmed),
+  ]);
+
+  const enrichedTask = [
+    memCtx ? `Kontekst (xotira):\n${memCtx}` : "",
+    expCtx ? `O'xshash tajriba:\n${expCtx}` : "",
+    `Vazifa: ${trimmed}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const { agents: agentIds, reason } = await routeTask(trimmed);
 
@@ -80,20 +83,26 @@ export async function POST(req: NextRequest) {
     })
   );
 
-  // Multi-agent bo'lsa — OpenJarvis orchestrator kabi yakuniy sintez
   let synthesis: string | null = null;
   if (synthesize && results.length > 1) {
-    const bundle = results
-      .map((r) => `### ${r.agent}\n${r.result}`)
-      .join("\n\n");
-    synthesis = await callAI(
-      SYNTH_PROMPT,
-      `Asl vazifa: ${trimmed}\n\nAgent javoblari:\n${bundle}`
-    );
+    const bundle = results.map((r) => `### ${r.agent}\n${r.result}`).join("\n\n");
+    synthesis = await callAI(SYNTH_PROMPT, `Asl vazifa: ${trimmed}\n\nAgent javoblari:\n${bundle}`);
   }
 
+  // Trace memory — keyingi o'xshash vazifalar uchun
+  await saveTrace({
+    task: trimmed,
+    steps: [
+      ...agentIds.map((id) => ({ type: "agent" as const, agent: id })),
+      ...(synthesis ? [{ type: "final" as const, content: synthesis.slice(0, 500) }] : []),
+    ],
+    answer: synthesis || results[0]?.result,
+    success: true,
+    source: "hermes",
+  });
+
   const ms = Date.now() - start;
-  log("info", "hermes", `Yo'naltirildi → [${agentIds.join(", ")}] (${ms}ms) — "${trimmed.slice(0, 60)}"`);
+  log("info", "hermes", `→ [${agentIds.join(", ")}] (${ms}ms) exp=${!!expCtx}`);
 
   if (dbConfigured) {
     for (const r of results) {
@@ -108,7 +117,11 @@ export async function POST(req: NextRequest) {
     routing: { agents: agentIds, reason },
     results,
     synthesis,
-    meta: { latency_ms: ms, memory_used: !!memCtx },
+    meta: {
+      latency_ms: ms,
+      memory_used: !!memCtx,
+      experience_used: !!expCtx,
+    },
   });
 }
 
@@ -116,7 +129,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     description:
-      "Hermes — vazifani tavsifiga qarab tegishli agent(lar)ga avtomatik yo'naltiradi + xotira konteksti + multi-agent sintez (OpenJarvis orchestrator ilhomida)",
+      "Hermes — agent orkestrator + xotira + experience memory (OpenJarvis). Local-first provider chain getProviders() orqali.",
     agents: AGENT_IDS.map((id) => ({ id, name: AGENTS[id].name, icon: AGENTS[id].icon })),
   });
 }

@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAI } from "@/lib/agents";
-import { runTool, BUILTIN_TOOLS } from "@/lib/tools";
+import { getAllTools, runAnyTool } from "@/lib/mcp-tools";
+import { experienceContext, saveTrace, type TraceStep } from "@/lib/trace-memory";
 import { log } from "@/lib/logger";
 
 /**
- * Multi-step ReAct agent loop — OpenJarvis'dan moslashtirilgan.
- * Thought → Action (tool) → Observation → ... → Final Answer
- * Mavjud chat/hermes oqimini buzmaydi — alohida endpoint.
+ * Multi-step ReAct + Experience Memory + MCP tools
+ * OpenJarvis: Thought → Action → Observation → Final + tajribadan o'rganish
  */
 
-const TOOL_NAMES = BUILTIN_TOOLS.map((t) => t.name);
-const TOOL_LIST = BUILTIN_TOOLS.map(
-  (t) => `- ${t.name}: ${t.description}`
-).join("\n");
+const ALL_TOOLS = () => getAllTools();
+const TOOL_NAMES = () => ALL_TOOLS().map((t) => t.name);
+const TOOL_LIST = () => ALL_TOOLS().map((t) => `- ${t.name}: ${t.description}`).join("\n");
 
-const REACT_SYSTEM = `Sen ReAct agentisan (Reason + Act).
+function buildSystem() {
+  return `Sen ReAct agentisan (Reason + Act).
 Har qadamda FAQAT quyidagi formatlardan BIRINI yoz:
 
 Thought: <qisqa fikr>
@@ -26,20 +26,15 @@ Thought: <yakuniy fikr>
 Final Answer: <foydalanuvchiga to'liq javob>
 
 Mavjud tool'lar:
-${TOOL_LIST}
+${TOOL_LIST()}
 
 Qoidalar:
-1. Kerak bo'lsa tool chaqir, keyin Observation'ni kut
+1. Kerak bo'lsa tool chaqir
 2. Maksimal 4 tool chaqiruv
 3. O'zbek tilida javob ber (agar savol o'zbekcha bo'lsa)
-4. Action Input faqat haqiqiy JSON bo'lsin
+4. Action Input faqat haqiqiy JSON
 5. Noma'lum tool ishlatma`;
-
-type Step =
-  | { type: "thought"; content: string }
-  | { type: "action"; tool: string; input: Record<string, unknown> }
-  | { type: "observation"; content: string }
-  | { type: "final"; content: string };
+}
 
 function parseReact(raw: string): {
   thought?: string;
@@ -71,13 +66,18 @@ export async function POST(req: NextRequest) {
     const goal = String(task || "").trim();
     if (!goal) return NextResponse.json({ error: "task kerak" }, { status: 400 });
 
-    const steps: Step[] = [];
-    let transcript = `Foydalanuvchi vazifasi: ${goal}\n\n`;
+    // Experience memory — o'xshash muvaffaqiyatli zanjir
+    const exp = await experienceContext(goal);
+    const steps: TraceStep[] = [];
+    let transcript =
+      `Foydalanuvchi vazifasi: ${goal}\n\n` +
+      (exp ? `--- O'XSHASH TAJRIBA (o'rganish) ---\n${exp}\n--- /TAJRIBA ---\n\n` : "");
     let finalAnswer = "";
     const limit = Math.min(Number(max_steps) || 4, 6);
+    const names = TOOL_NAMES();
 
     for (let i = 0; i < limit; i++) {
-      const raw = await callAI(REACT_SYSTEM, transcript + "Keyingi qadamni yoz.");
+      const raw = await callAI(buildSystem(), transcript + "Keyingi qadamni yoz.");
       const parsed = parseReact(raw);
 
       if (parsed.thought) {
@@ -91,14 +91,14 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      if (parsed.action && TOOL_NAMES.includes(parsed.action)) {
+      if (parsed.action && names.includes(parsed.action)) {
         const input = parsed.actionInput || {};
         steps.push({ type: "action", tool: parsed.action, input });
         transcript += `Action: ${parsed.action}\nAction Input: ${JSON.stringify(input)}\n`;
 
         let observation: string;
         try {
-          const result = await runTool(parsed.action, input);
+          const result = await runAnyTool(parsed.action, input);
           observation = JSON.stringify(result).slice(0, 2000);
         } catch (e) {
           observation = `Xato: ${String(e)}`;
@@ -106,12 +106,13 @@ export async function POST(req: NextRequest) {
         steps.push({ type: "observation", content: observation });
         transcript += `Observation: ${observation}\n\n`;
       } else if (parsed.action) {
-        const obs = `Noma'lum tool: ${parsed.action}. Mavjud: ${TOOL_NAMES.join(", ")}`;
+        const obs = `Noma'lum tool: ${parsed.action}. Mavjud: ${names.join(", ")}`;
         steps.push({ type: "observation", content: obs });
         transcript += `Observation: ${obs}\n\n`;
       } else {
-        // Model formatni buzsa — qolgan matnni final deb ol
-        finalAnswer = raw.replace(/^Thought:[\s\S]*?(?=Final Answer:|$)/i, "").replace(/Final Answer:\s*/i, "").trim() || raw;
+        finalAnswer =
+          raw.replace(/^Thought:[\s\S]*?(?=Final Answer:|$)/i, "").replace(/Final Answer:\s*/i, "").trim() ||
+          raw;
         steps.push({ type: "final", content: finalAnswer });
         break;
       }
@@ -119,20 +120,34 @@ export async function POST(req: NextRequest) {
 
     if (!finalAnswer) {
       finalAnswer = await callAI(
-        "Qisqa va aniq yakuniy javob yoz. O'zbek tilida (agar savol o'zbekcha bo'lsa).",
-        `Vazifa: ${goal}\n\nJarayon:\n${transcript}\n\nYuqoridan foydalanib Final Answer yoz.`
+        "Qisqa va aniq yakuniy javob yoz.",
+        `Vazifa: ${goal}\n\nJarayon:\n${transcript}\n\nFinal Answer yoz.`
       );
       steps.push({ type: "final", content: finalAnswer });
     }
 
+    // Trace saqlash (tajribadan o'rganish)
+    await saveTrace({
+      task: goal,
+      steps,
+      answer: finalAnswer,
+      success: true,
+      source: "react",
+    });
+
     const ms = Date.now() - start;
-    log("info", "react", `ReAct (${ms}ms, ${steps.length} steps): "${goal.slice(0, 50)}"`);
+    log("info", "react", `ReAct (${ms}ms, ${steps.length} steps, exp=${!!exp}): "${goal.slice(0, 50)}"`);
 
     return NextResponse.json({
       task: goal,
       answer: finalAnswer,
       steps,
-      meta: { latency_ms: ms, step_count: steps.length },
+      meta: {
+        latency_ms: ms,
+        step_count: steps.length,
+        experience_used: !!exp,
+        tools_available: names.length,
+      },
     });
   } catch (e) {
     log("error", "react", String(e));
@@ -144,8 +159,8 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     description:
-      "Multi-step ReAct agent (Thought → Action → Observation → Final). OpenJarvis uslubida, mavjud tool'lar bilan.",
-    tools: TOOL_NAMES,
-    usage: { method: "POST", body: { task: "string", max_steps: "number (default 4, max 6)" } },
+      "Multi-step ReAct + Experience Memory + MCP tools. OpenJarvis uslubida.",
+    tools: TOOL_NAMES(),
+    usage: { method: "POST", body: { task: "string", max_steps: "number" } },
   });
 }
