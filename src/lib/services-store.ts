@@ -16,6 +16,8 @@ export type Service = {
   delivery_days: number;
   features: string[];
   active: boolean;
+  is_trending?: boolean;
+  demand_score?: number;
   created_at: string;
 };
 
