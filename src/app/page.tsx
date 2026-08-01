@@ -45,7 +45,7 @@ export default function Dashboard() {
       const [obs, mcp, tg, tasksRes, projectsRes, agentsRes] = await Promise.all([
         fetch("/api/obsidian").then(r => r.json()).catch(() => ({ configured: false })),
         fetch("/api/mcp").then(r => r.json()).catch(() => ({ configured: false })),
-        fetch("/api/telegram/debug").then(r => r.ok).catch(() => false),
+        fetch("/api/telegram/debug").then(r => r.json()).then(d => Boolean(d.ok)).catch(() => false),
         fetch("/api/tasks").then(r => r.json()).catch(() => ({ tasks: [], configured: false })),
         fetch("/api/projects").then(r => r.json()).catch(() => ({ projects: [], configured: false })),
         fetch("/api/agent").then(r => r.json()).catch(() => ({ agents: [] })),

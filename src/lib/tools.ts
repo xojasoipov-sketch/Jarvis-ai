@@ -1,6 +1,9 @@
 import { vaultConfigured, listVault, readVaultFile, writeVaultFile, searchVault } from "@/lib/githubVault";
 import { repoConfigured, vercelConfigured, proposeCodeChange, mergePullRequest, vercelRedeploy } from "@/lib/githubRepo";
 import { supabase, dbConfigured } from "@/lib/supabase";
+import { listServices, listOrders, getOrderStats } from "@/lib/services-store";
+import { listModules, listIdeas, MODULE_DEFS } from "@/lib/business-store";
+import { listChannels, listPosts } from "@/lib/smm-store";
 
 export type ToolDef = {
   name: string;
@@ -156,6 +159,80 @@ export const BUILTIN_TOOLS: ToolDef[] = [
         .single();
       if (error) throw new Error(error.message);
       return { ok: true, task: data, note: "Vazifa yaratildi" };
+    },
+  },
+  {
+    name: "list_services",
+    description: "Sotiladigan xizmatlar katalogini qaytaradi (nom, narx, tavsif, kategoriya). Foydalanuvchi narxlar, xizmatlar yoki taklif haqida so'rasa ishlatiladi.",
+    parameters: { type: "object", properties: { active_only: { type: "boolean", description: "Faqat faol xizmatlarni qaytarish (default: true)" } } },
+    run: async (args) => {
+      const services = await listServices(args.active_only !== false);
+      return {
+        services: services.map((s) => ({
+          id: s.id, name: s.name, category: s.category, description: s.description,
+          price: s.price, currency: s.currency, billing_cycle: s.billing_cycle, active: s.active,
+        })),
+      };
+    },
+  },
+  {
+    name: "list_service_orders",
+    description: "Xizmat buyurtmalari ro'yxati va statistikasini qaytaradi (mijozlar, holat, daromad). Biznes holati, buyurtmalar yoki daromad haqida so'ralsa ishlatiladi.",
+    parameters: { type: "object", properties: { status: { type: "string", enum: ["new", "in_progress", "delivered", "paid", "cancelled"] } } },
+    run: async (args) => {
+      const [orders, stats] = await Promise.all([
+        listOrders(args.status as never),
+        getOrderStats(),
+      ]);
+      return {
+        stats,
+        orders: orders.slice(0, 20).map((o) => ({
+          id: o.id, client_name: o.client_name, status: o.status, price: o.price, created_at: o.created_at,
+        })),
+      };
+    },
+  },
+  {
+    name: "list_business_modules",
+    description: "5 ta biznes yo'nalishi (Faceless YouTube, SMM boshqaruvi, Onlayn kurs, Blogging/Affiliate, AI vositalar)ning holati va yaratilgan g'oyalarini qaytaradi.",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const modules = await listModules();
+      const withIdeas = await Promise.all(
+        modules.map(async (m) => ({
+          key: m.module_key,
+          name: MODULE_DEFS[m.module_key].name,
+          status: m.status,
+          revenue: m.revenue,
+          ideas_count: (await listIdeas(m.module_key)).length,
+        }))
+      );
+      return { modules: withIdeas };
+    },
+  },
+  {
+    name: "get_business_overview",
+    description: "Sadining butun biznesi haqida umumiy ko'rinish beradi: xizmatlar, buyurtmalar/daromad, biznes modullari holati va SMM kanallar/postlar statistikasi. Foydalanuvchi 'biznesim qalay' yoki umumiy holat haqida so'raganda ishlatiladi.",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const [services, orderStats, modules, channels, posts] = await Promise.all([
+        listServices(true),
+        getOrderStats(),
+        listModules(),
+        listChannels(),
+        listPosts(),
+      ]);
+      return {
+        services_count: services.length,
+        service_orders: orderStats,
+        business_modules: modules.map((m) => ({ name: MODULE_DEFS[m.module_key].name, status: m.status, revenue: m.revenue })),
+        smm: {
+          channels_count: channels.length,
+          posts_total: posts.length,
+          posts_sent: posts.filter((p) => p.status === "sent").length,
+          posts_scheduled: posts.filter((p) => p.status === "scheduled").length,
+        },
+      };
     },
   },
   {

@@ -33,8 +33,10 @@ export function classifyFast(text: string): Intent | null {
     if (/settings|sozlama/.test(t)) return { type: "navigate", page: "/settings" };
   }
 
-  // --- Xizmatlar / narxlar / buyurtma ---
-  if (/\b(xizmat|narx|narxlar|buyurtma|sotib ol|xarid|paket|price|service|order)\b/.test(t)) {
+  // --- Xizmatlar katalogi / narxlar (faqat ko'rish-xarid niyati) ---
+  // "nechta buyurtmam bor", "biznesim qalay" kabi so'rovlar bu yerda ushlanmaydi —
+  // ular tool-loop orqali haqiqiy ma'lumot (list_service_orders/get_business_overview) bilan javob topadi
+  if (/\b(xizmatlar(ing|im)?iz|narxlar(ing)?iz|qanday xizmat|xizmat.*ko[''']rsat|sotib ol|xarid qil|paket(lar)?ingiz)\b/.test(t)) {
     return { type: "services" };
   }
 

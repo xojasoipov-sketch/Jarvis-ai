@@ -7,7 +7,18 @@ import { listChannels, createPost, listPosts, getChannel } from "@/lib/smm-store
 import { listServices, getService, createOrder } from "@/lib/services-store";
 import { loadSession, getSession, updateSession, addToHistory, clearHistory } from "@/lib/session-store";
 import { classifyFast, normalizeUzbek } from "@/lib/fatosat";
+import { getProviders } from "@/lib/providers";
+import { runToolLoop, type ChatMessage } from "@/lib/toolloop";
 import { log } from "@/lib/logger";
+
+const TG_SYSTEM = `Sen Pari AI — Sadining shaxsiy AI yordamchisisan, Telegram orqali gaplashyapsan.
+Qisqa, tabiiy va aniq javob ber. Kerak bo'lganda vositalarni (tools) chaqir — taxmin qilmasdan haqiqiy ma'lumot ol:
+- Biznes holati, daromad, buyurtmalar haqida so'ralsa: get_business_overview yoki list_service_orders
+- Xizmatlar/narxlar haqida so'ralsa: list_services
+- Biznes modullari (YouTube, SMM, kurs, blog, AI vositalar) haqida so'ralsa: list_business_modules
+- Shaxsiy bilim bazasidan: knowledge_search
+- Vazifa yaratish kerak bo'lsa: create_task
+Markdown ishlatma — Telegram uchun oddiy matn yoz.`;
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL
   || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://pari-ai-ten.vercel.app");
@@ -408,13 +419,25 @@ async function sendServiceCatalog(chatId: number) {
   }
 }
 
-async function regularChat(chatId: number, text: string, history: Array<{ role: "user" | "assistant"; content: string }>) {
+async function regularChat(chatId: number, text: string, _history: Array<{ role: "user" | "assistant"; content: string }>) {
   await sendChatAction(chatId);
   addToHistory(chatId, "user", text);
+
+  const providers = getProviders();
+  const toolProvider = providers.find((p) => p.supportsTools && p.key !== "dummy");
+
   try {
-    const reply = await callAI(getSession(chatId).history,
-      `Sen Pari AI — Sadining shaxsiy AI yordamchisisan. O'zbek tilida qisqa va aniq javob ber.`
-    );
+    let reply: string;
+    if (toolProvider) {
+      try {
+        const convo: ChatMessage[] = [{ role: "system", content: TG_SYSTEM }, ...getSession(chatId).history];
+        reply = await runToolLoop(toolProvider, convo);
+      } catch {
+        reply = await callAI(getSession(chatId).history, TG_SYSTEM);
+      }
+    } else {
+      reply = await callAI(getSession(chatId).history, TG_SYSTEM);
+    }
     addToHistory(chatId, "assistant", reply);
     await sendMessage(chatId, cleanMarkdown(reply));
   } catch {

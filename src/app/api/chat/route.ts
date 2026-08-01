@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { toolsAsOpenAIFunctions, runTool } from "@/lib/tools";
-import { getProviders, type Provider } from "@/lib/providers";
+import { getProviders } from "@/lib/providers";
+import { runToolLoop, type ChatMessage } from "@/lib/toolloop";
 import { log } from "@/lib/logger";
 import { supabase, dbConfigured } from "@/lib/supabase";
 import { classifyFast, normalizeUzbek, intentToContext } from "@/lib/fatosat";
@@ -11,6 +11,9 @@ const SYSTEM = `Sen Pari AI — Sadining shaxsiy AI yordamchisissan. Arxitektura
   vault_read/write/search/list (Obsidian xotira),
   knowledge_search/knowledge_save (Supabase pgvector semantik xotira — RAG),
   create_task (vazifa yaratish),
+  list_services / list_service_orders (sotiladigan xizmatlar va buyurtmalar),
+  list_business_modules (5 ta biznes yo'nalishi holati),
+  get_business_overview (butun biznes haqida umumiy ko'rinish),
   va propose_code_change — o'z manba koding'ga o'zgartirish taklif qilish (Pull Request orqali)
 - Kod yozish va tushuntirish, biznes strategiyasi, loyihalar
 
@@ -20,55 +23,12 @@ Qoidalar:
    - Hozirgi voqealar/faktlar uchun: web_search
    - Shaxsiy bilim bazasidan: knowledge_search (RAG)
    - Muhim ma'lumotlarni eslab qolish uchun: knowledge_save
+   - Biznes, xizmatlar, narxlar, buyurtmalar yoki daromad haqida so'ralsa: get_business_overview, list_services yoki list_service_orders
 3. Agar foydalanuvchi ilova kodini o'zgartirishni so'rasa — propose_code_change vositasidan foydalanib PR och
 4. Qisqa va aniq bo'l, lekin kerakli hollarda batafsil tushuntir
 5. Markdown formatidan foydalan
 6. Agar foydalanuvchi vizual/interaktiv narsa so'rasa (sahifa, komponent, o'yin, grafik, animatsiya) — to'liq mustaqil HTML kodini \`\`\`html fenced blok ichida ber (inline CSS/JS, tashqi resurslarsiz). Bu avtomatik ravishda alohida preview panelda ko'rsatiladi.
 7. Foydalanuvchi biror muhim ma'lumot aytsa (reja, qaror, ma'lumot) — knowledge_save bilan saqlash tavsiya qil`;
-
-type ChatMessage = {
-  role: string;
-  content: string | null;
-  tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string } }[];
-  tool_call_id?: string;
-};
-
-// Run a real function-calling loop against a tool-capable provider (Groq).
-// Returns the final assistant text once the model stops calling tools.
-async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise<string> {
-  const tools = toolsAsOpenAIFunctions();
-  const convo = [...messages];
-
-  for (let i = 0; i < 4; i++) {
-    const res = await fetch(provider.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.key}` },
-      body: JSON.stringify({ model: provider.model, messages: convo, tools, tool_choice: "auto", stream: false }),
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!res.ok) throw new Error(`Provider error ${res.status}`);
-    const data = await res.json();
-    const msg = data.choices?.[0]?.message;
-    if (!msg) throw new Error("Bo'sh javob");
-
-    if (!msg.tool_calls?.length) {
-      return msg.content || "";
-    }
-
-    convo.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
-    for (const call of msg.tool_calls) {
-      let result: unknown;
-      try {
-        const args = JSON.parse(call.function.arguments || "{}");
-        result = await runTool(call.function.name, args);
-      } catch (err) {
-        result = { error: (err as Error).message };
-      }
-      convo.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
-    }
-  }
-  return "Kechirasiz, vositalar bilan ishlashda cheklovga yetdim. Qaytadan aniqroq so'rang.";
-}
 
 async function ragSearch(query: string): Promise<string> {
   if (!dbConfigured) return "";
