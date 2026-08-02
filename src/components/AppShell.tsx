@@ -3,24 +3,19 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
-import CommandPalette from "@/components/CommandPalette";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
 
-  if (path === "/login") {
+  if (path === "/pari" || path === "/login") {
     return <>{children}</>;
   }
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "#f8f9fc" }}>
-      <CommandPalette />
       {open && (
-        <div
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
-          onClick={() => setOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setOpen(false)} />
       )}
       <div
         className={`fixed lg:static inset-y-0 left-0 z-40 transition-transform duration-200 ease-in-out lg:translate-x-0 ${
