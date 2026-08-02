@@ -1,7 +1,8 @@
 import { ENV } from "@/lib/env";
 
 const TOKEN = ENV.github();
-const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
+const REPO =
+  process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
 const ROOT = (process.env.GITHUB_VAULT_PATH || "vault").replace(/^\/|\/$/g, "");
 
@@ -20,7 +21,9 @@ function headers(extra: Record<string, string> = {}) {
   };
 }
 
-export async function listVault(subPath = ""): Promise<{ name: string; path: string; type: "file" | "dir" }[]> {
+export async function listVault(
+  subPath = ""
+): Promise<{ name: string; path: string; type: "file" | "dir" }[]> {
   const dir = subPath ? `${ROOT}/${subPath}` : ROOT;
   const res = await fetch(api(`contents/${dir}?ref=${BRANCH}`), {
     headers: headers(),
@@ -71,6 +74,26 @@ export async function writeVaultFile(
     method: "PUT",
     headers: headers({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8000),
+  });
+  return res.ok;
+}
+
+export async function deleteVaultFile(filePath: string): Promise<boolean> {
+  const check = await fetch(api(`contents/${filePath}?ref=${BRANCH}`), {
+    headers: headers(),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!check.ok) return false;
+  const existing = await check.json();
+  const res = await fetch(api(`contents/${filePath}`), {
+    method: "DELETE",
+    headers: headers({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      message: `chore: delete ${filePath}`,
+      sha: existing.sha,
+      branch: BRANCH,
+    }),
     signal: AbortSignal.timeout(8000),
   });
   return res.ok;
