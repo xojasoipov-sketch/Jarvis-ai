@@ -1,5 +1,5 @@
 import { vaultConfigured, listVault, readVaultFile, writeVaultFile, searchVault } from "@/lib/githubVault";
-import { repoConfigured, vercelConfigured, proposeCodeChange, mergePullRequest, vercelRedeploy } from "@/lib/githubRepo";
+import { repoConfigured, proposeCodeChange, mergePullRequest } from "@/lib/githubRepo";
 import { supabase, dbConfigured } from "@/lib/supabase";
 
 export type ToolDef = {
@@ -9,11 +9,46 @@ export type ToolDef = {
   run: (args: Record<string, unknown>) => Promise<unknown>;
 };
 
+/** HTML dan toza matn */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function fetchHtml(url: string, timeoutMs = 12000): Promise<string> {
+  if (!/^https?:\/\//.test(url)) throw new Error("To'g'ri URL kiriting (https://...)");
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (compatible; PariAI/1.0; +https://github.com/xojasoipov-sketch/Jarvis-ai)",
+      Accept: "text/html,application/xhtml+xml",
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
 export const BUILTIN_TOOLS: ToolDef[] = [
   {
     name: "calculator",
     description: "Matematik ifodani hisoblaydi",
-    parameters: { type: "object", properties: { expression: { type: "string", description: "Masalan: (12+8)*3" } }, required: ["expression"] },
+    parameters: {
+      type: "object",
+      properties: { expression: { type: "string", description: "Masalan: (12+8)*3" } },
+      required: ["expression"],
+    },
     run: async (args) => {
       const expr = String(args.expression || "");
       if (!/^[0-9+\-*/().\s%]+$/.test(expr)) throw new Error("Faqat sonlar va +-*/()% belgilariga ruxsat");
@@ -34,15 +69,13 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
     run: async (args) => {
       const url = String(args.url || "");
-      if (!/^https?:\/\//.test(url)) throw new Error("To'g'ri URL kiriting");
-      const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-      const text = await res.text();
-      return { url, status: res.status, content: text.slice(0, 5000) };
+      const html = await fetchHtml(url);
+      return { url, content: stripHtml(html).slice(0, 5000) };
     },
   },
   {
     name: "web_search",
-    description: "Internetdan qidiruv qiladi (DuckDuckGo Instant Answer) — hozirgi voqealar, faktlar, ta'riflar uchun",
+    description: "Internetdan qidiruv qiladi (DuckDuckGo Instant Answer)",
     parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
     run: async (args) => {
       const query = String(args.query || "");
@@ -59,9 +92,214 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       return { query, results };
     },
   },
+
+  // ── Ultimate Web Scraper ilhomidagi extractorlar ──────────────────────────
+  {
+    name: "extract_emails",
+    description:
+      "Sahifadan email manzillarini topadi (Ultimate Web Scraper / Email Extractor uslubida). Lead generation uchun.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Sahifa URL" },
+        max: { type: "number", description: "Maksimal email soni (default 50)" },
+      },
+      required: ["url"],
+    },
+    run: async (args) => {
+      const url = String(args.url || "");
+      const max = Math.min(Number(args.max) || 50, 200);
+      const html = await fetchHtml(url);
+      const re = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+      const found = [...new Set((html.match(re) || []).map((e) => e.toLowerCase()))]
+        .filter((e) => !e.endsWith(".png") && !e.endsWith(".jpg") && !e.endsWith(".gif") && !e.includes("example.com"))
+        .slice(0, max);
+      return { url, count: found.length, emails: found };
+    },
+  },
+  {
+    name: "extract_social_links",
+    description:
+      "Sahifadan ijtimoiy tarmoq linklarini topadi (Telegram, Instagram, Twitter/X, LinkedIn, YouTube, Facebook, TikTok).",
+    parameters: {
+      type: "object",
+      properties: { url: { type: "string" } },
+      required: ["url"],
+    },
+    run: async (args) => {
+      const url = String(args.url || "");
+      const html = await fetchHtml(url);
+      const platforms: Record<string, string[]> = {
+        telegram: [],
+        instagram: [],
+        twitter: [],
+        linkedin: [],
+        youtube: [],
+        facebook: [],
+        tiktok: [],
+      };
+      const patterns: [keyof typeof platforms, RegExp][] = [
+        ["telegram", /href=["'](https?:\/\/(?:t\.me|telegram\.me)\/[^"'\s]+)["']/gi],
+        ["instagram", /href=["'](https?:\/\/(?:www\.)?instagram\.com\/[^"'\s]+)["']/gi],
+        ["twitter", /href=["'](https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/[^"'\s]+)["']/gi],
+        ["linkedin", /href=["'](https?:\/\/(?:www\.)?linkedin\.com\/[^"'\s]+)["']/gi],
+        ["youtube", /href=["'](https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\/[^"'\s]+)["']/gi],
+        ["facebook", /href=["'](https?:\/\/(?:www\.)?facebook\.com\/[^"'\s]+)["']/gi],
+        ["tiktok", /href=["'](https?:\/\/(?:www\.)?tiktok\.com\/[^"'\s]+)["']/gi],
+      ];
+      for (const [name, re] of patterns) {
+        const set = new Set<string>();
+        for (const m of html.matchAll(re)) set.add(m[1].replace(/&amp;/g, "&"));
+        platforms[name] = [...set].slice(0, 20);
+      }
+      const total = Object.values(platforms).reduce((a, b) => a + b.length, 0);
+      return { url, total, platforms };
+    },
+  },
+  {
+    name: "extract_images",
+    description: "Sahifadan rasm URL larini oladi (Image Downloader uslubida).",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        max: { type: "number", description: "Default 30" },
+      },
+      required: ["url"],
+    },
+    run: async (args) => {
+      const pageUrl = String(args.url || "");
+      const max = Math.min(Number(args.max) || 30, 100);
+      const html = await fetchHtml(pageUrl);
+      const base = new URL(pageUrl);
+      const set = new Set<string>();
+      for (const m of html.matchAll(/(?:src|data-src)=["']([^"']+\.(?:jpg|jpeg|png|webp|gif|svg)[^"']*)["']/gi)) {
+        try {
+          set.add(new URL(m[1], base).href);
+        } catch {}
+      }
+      for (const m of html.matchAll(/url\(["']?([^"')]+\.(?:jpg|jpeg|png|webp|gif))["']?\)/gi)) {
+        try {
+          set.add(new URL(m[1], base).href);
+        } catch {}
+      }
+      const images = [...set].slice(0, max);
+      return { url: pageUrl, count: images.length, images };
+    },
+  },
+  {
+    name: "extract_page_text",
+    description:
+      "Sahifadan toza matn + title + meta description oladi (Page Text Extractor). Knowledge Hub ga saqlash uchun qulay.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        max_chars: { type: "number", description: "Default 8000" },
+      },
+      required: ["url"],
+    },
+    run: async (args) => {
+      const url = String(args.url || "");
+      const maxChars = Math.min(Number(args.max_chars) || 8000, 20000);
+      const html = await fetchHtml(url);
+      const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      const descM =
+        html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i) ||
+        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
+      const text = stripHtml(html).slice(0, maxChars);
+      return {
+        url,
+        title: titleM?.[1]?.trim() || "",
+        description: descM?.[1]?.trim() || "",
+        text,
+        chars: text.length,
+      };
+    },
+  },
+  {
+    name: "extract_list",
+    description:
+      "Sahifadan ro'yxat elementlarini oladi (List Extractor): <li>, jadval qatorlari yoki takrorlanuvchi bloklar.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        max: { type: "number", description: "Default 50" },
+      },
+      required: ["url"],
+    },
+    run: async (args) => {
+      const url = String(args.url || "");
+      const max = Math.min(Number(args.max) || 50, 200);
+      const html = await fetchHtml(url);
+      const items: string[] = [];
+      for (const m of html.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)) {
+        const t = stripHtml(m[1]).slice(0, 300);
+        if (t.length > 2) items.push(t);
+        if (items.length >= max) break;
+      }
+      if (items.length < 5) {
+        for (const m of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+          const t = stripHtml(m[1]).slice(0, 300);
+          if (t.length > 2) items.push(t);
+          if (items.length >= max) break;
+        }
+      }
+      return { url, count: items.length, items: items.slice(0, max) };
+    },
+  },
+
+  {
+    name: "web_crawl",
+    description: "Berilgan URL'ning ichki linklari orqali kontent yig'adi (max 5 sahifa)",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        max_pages: { type: "number", description: "Default 3, max 5" },
+      },
+      required: ["url"],
+    },
+    run: async (args) => {
+      const startUrl = String(args.url || "");
+      if (!/^https?:\/\//.test(startUrl)) throw new Error("To'g'ri URL kiriting");
+      const maxPages = Math.min(Number(args.max_pages) || 3, 5);
+      const visited = new Set<string>();
+      const results: { url: string; title: string; excerpt: string }[] = [];
+
+      async function crawl(url: string) {
+        if (visited.has(url) || visited.size >= maxPages) return;
+        visited.add(url);
+        try {
+          const html = await fetchHtml(url, 6000);
+          const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          const title = titleM?.[1]?.trim() || url;
+          const text = stripHtml(html).slice(0, 500);
+          results.push({ url, title, excerpt: text });
+          const base = new URL(url);
+          const links = [...html.matchAll(/href=["']([^"']+)["']/gi)]
+            .map((m) => {
+              try {
+                return new URL(m[1], url).href;
+              } catch {
+                return "";
+              }
+            })
+            .filter((h) => h.startsWith(base.origin) && !visited.has(h))
+            .slice(0, 5);
+          for (const link of links) await crawl(link);
+        } catch {}
+      }
+
+      await crawl(startUrl);
+      return { pages_visited: results.length, results };
+    },
+  },
+
   {
     name: "vault_read",
-    description: "Obsidian vault'dan (shaxsiy xotira) faylni o'qiydi",
+    description: "Obsidian vault'dan faylni o'qiydi",
     parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
     run: async (args) => {
       if (!vaultConfigured) throw new Error("Vault sozlanmagan (GITHUB_TOKEN kerak)");
@@ -70,8 +308,12 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "vault_write",
-    description: "Obsidian vault'ga (shaxsiy xotira) fayl yozadi yoki eslatma saqlaydi",
-    parameters: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } }, required: ["path", "content"] },
+    description: "Obsidian vault'ga fayl yozadi",
+    parameters: {
+      type: "object",
+      properties: { path: { type: "string" }, content: { type: "string" } },
+      required: ["path", "content"],
+    },
     run: async (args) => {
       if (!vaultConfigured) throw new Error("Vault sozlanmagan (GITHUB_TOKEN kerak)");
       await writeVaultFile(String(args.path || ""), String(args.content || ""));
@@ -80,7 +322,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "vault_search",
-    description: "Obsidian vault ichida (shaxsiy xotirada) qidiradi",
+    description: "Obsidian vault ichida qidiradi",
     parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
     run: async (args) => {
       if (!vaultConfigured) throw new Error("Vault sozlanmagan (GITHUB_TOKEN kerak)");
@@ -98,8 +340,13 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "knowledge_search",
-    description: "Supabase Knowledge Hub'dan (pgvector semantic search) shaxsiy bilim bazasini qidiradi. Agentlarga kontekst, kerak bo'lgan ma'lumotlar va eslatmalar uchun ishlatiladi.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "Qidiruv so'rovi" } }, required: ["query"] },
+    description:
+      "Knowledge Hub'dan qidiradi (Supabase). Katta corpus uchun kelajakda turbovec (TurboQuant) vector index ulanishi mumkin — hozir ilike + tags.",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
     run: async (args) => {
       if (!dbConfigured) throw new Error("Supabase sozlanmagan");
       const q = String(args.query || "");
@@ -109,18 +356,25 @@ export const BUILTIN_TOOLS: ToolDef[] = [
         .or(`title.ilike.%${q}%,content.ilike.%${q}%`)
         .limit(5);
       if (error) throw new Error(error.message);
-      return { query: q, results: (data || []).map(r => ({ title: r.title, content: r.content.slice(0, 400), tags: r.tags })) };
+      return {
+        query: q,
+        results: (data || []).map((r) => ({
+          title: r.title,
+          content: r.content.slice(0, 400),
+          tags: r.tags,
+        })),
+      };
     },
   },
   {
     name: "knowledge_save",
-    description: "Yangi bilim, eslatma yoki muhim ma'lumotni Knowledge Hub'ga saqlaydi (Supabase pgvector).",
+    description: "Bilim / eslatmani Knowledge Hub'ga saqlaydi",
     parameters: {
       type: "object",
       properties: {
-        title: { type: "string", description: "Sarlavha" },
-        content: { type: "string", description: "Saqlanadigan mazmun" },
-        tags: { type: "array", items: { type: "string" }, description: "Teglar" },
+        title: { type: "string" },
+        content: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
       },
       required: ["title", "content"],
     },
@@ -128,16 +382,20 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       if (!dbConfigured) throw new Error("Supabase sozlanmagan");
       const { data, error } = await supabase!
         .from("pari_knowledge")
-        .insert({ title: String(args.title), content: String(args.content), tags: (args.tags as string[]) || [] })
+        .insert({
+          title: String(args.title),
+          content: String(args.content),
+          tags: (args.tags as string[]) || [],
+        })
         .select("id")
         .single();
       if (error) throw new Error(error.message);
-      return { ok: true, id: data?.id, note: "Knowledge Hub'ga saqlandi" };
+      return { ok: true, id: data?.id };
     },
   },
   {
     name: "create_task",
-    description: "Yangi vazifa (task) yaratadi va pari_tasks jadvaliga saqlaydi",
+    description: "Yangi vazifa yaratadi",
     parameters: {
       type: "object",
       properties: {
@@ -151,74 +409,29 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       if (!dbConfigured) throw new Error("Supabase sozlanmagan");
       const { data, error } = await supabase!
         .from("pari_tasks")
-        .insert({ title: String(args.title), description: String(args.description || ""), priority: String(args.priority || "medium") })
+        .insert({
+          title: String(args.title),
+          description: String(args.description || ""),
+          priority: String(args.priority || "medium"),
+        })
         .select("id, title")
         .single();
       if (error) throw new Error(error.message);
-      return { ok: true, task: data, note: "Vazifa yaratildi" };
-    },
-  },
-  {
-    name: "web_crawl",
-    description: "Berilgan URL'ning barcha ichki linklar orqali kontentini yig'adi (oddiy web crawler, max 5 sahifa)",
-    parameters: {
-      type: "object",
-      properties: {
-        url: { type: "string", description: "Boshlang'ich URL (masalan: https://example.com)" },
-        max_pages: { type: "number", description: "Maksimal sahifalar soni (default: 3, max: 5)" },
-      },
-      required: ["url"],
-    },
-    run: async (args) => {
-      const startUrl = String(args.url || "");
-      if (!/^https?:\/\//.test(startUrl)) throw new Error("To'g'ri URL kiriting");
-      const maxPages = Math.min(Number(args.max_pages) || 3, 5);
-      const visited = new Set<string>();
-      const results: { url: string; title: string; excerpt: string }[] = [];
-
-      async function crawl(url: string) {
-        if (visited.has(url) || visited.size >= maxPages) return;
-        visited.add(url);
-        try {
-          const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
-          if (!res.ok) return;
-          const html = await res.text();
-          const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-          const title = titleM?.[1]?.trim() || url;
-          const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 500);
-          results.push({ url, title, excerpt: text });
-
-          // Collect same-origin links
-          const base = new URL(url);
-          const links = [...html.matchAll(/href=["']([^"']+)["']/gi)]
-            .map(m => { try { return new URL(m[1], url).href; } catch { return ""; } })
-            .filter(h => h.startsWith(base.origin) && !visited.has(h))
-            .slice(0, 5);
-          for (const link of links) await crawl(link);
-        } catch {}
-      }
-
-      await crawl(startUrl);
-      return { pages_visited: results.length, results };
+      return { ok: true, task: data };
     },
   },
   {
     name: "propose_code_change",
-    description:
-      "Pari AI ilovasining o'z manba kodiga o'zgartirish taklif qiladi. Yangi branch yaratadi, fayllarni yozadi va GitHub'da Pull Request ochadi.",
+    description: "O'z kodiga PR orqali o'zgartirish taklif qiladi",
     parameters: {
       type: "object",
       properties: {
-        description: { type: "string", description: "O'zgarish nima uchun va nima qilishini qisqacha tushuntirish" },
+        description: { type: "string" },
         files: {
           type: "array",
-          description: "O'zgartiriladigan yoki qo'shiladigan fayllar ro'yxati",
           items: {
             type: "object",
-            properties: {
-              path: { type: "string", description: "Repo ichidagi to'liq fayl yo'li, masalan src/app/page.tsx" },
-              content: { type: "string", description: "Faylning to'liq yangi tarkibi" },
-            },
+            properties: { path: { type: "string" }, content: { type: "string" } },
             required: ["path", "content"],
           },
         },
@@ -226,38 +439,37 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       required: ["description", "files"],
     },
     run: async (args) => {
-      if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan — kod o'zgartirish imkonsiz");
+      if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan");
       const description = String(args.description || "");
       const files = (args.files || []) as { path: string; content: string }[];
       const { prUrl, branch } = await proposeCodeChange(description, files);
-      return { ok: true, prUrl, branch, note: "O'zgarish PR sifatida ochildi" };
+      return { ok: true, prUrl, branch };
     },
   },
   {
     name: "merge_pull_request",
-    description: "GitHub Pull Request'ni merge qiladi. PR raqami kerak. Faqat o'z PR'larini merge qilish uchun ishlatiladi.",
+    description: "GitHub PR ni merge qiladi",
     parameters: {
       type: "object",
-      properties: {
-        pr_number: { type: "number", description: "Merge qilinadigan PR raqami (masalan: 42)" },
-      },
+      properties: { pr_number: { type: "number" } },
       required: ["pr_number"],
     },
     run: async (args) => {
       if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan");
-      const result = await mergePullRequest(Number(args.pr_number));
-      return { ok: true, ...result };
+      return { ok: true, ...(await mergePullRequest(Number(args.pr_number))) };
     },
   },
   {
-    name: "vercel_redeploy",
-    description: "Pari AI ilovasini Vercel'da qayta deploy qiladi. PR merge bo'lgandan keyin yangi versiyani ishga tushirish uchun ishlatiladi.",
+    name: "railway_info",
+    description:
+      "Deploy platformasi haqida ma'lumot. App Railway da ishlaydi; redeploy GitHub push yoki Railway dashboard orqali.",
     parameters: { type: "object", properties: {} },
-    run: async () => {
-      if (!vercelConfigured) throw new Error("VERCEL_TOKEN sozlanmagan — Vercel dashboard'dan qo'shing");
-      const result = await vercelRedeploy();
-      return { ok: true, ...result, note: "Deploy boshlandi, 2-3 daqiqada tayyor bo'ladi" };
-    },
+    run: async () => ({
+      platform: "Railway",
+      public_domain: process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL || null,
+      environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "unknown",
+      note: "Redeploy: git push main yoki Railway → Deployments → Redeploy. Vercel ishlatilmaydi.",
+    }),
   },
 ];
 
