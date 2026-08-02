@@ -1,11 +1,7 @@
-// GitHub-backed Obsidian vault — real cloud storage, no local server required.
-// Notes live at GITHUB_VAULT_REPO (default: same repo) under GITHUB_VAULT_PATH (default: "vault").
+// GitHub-backed Obsidian vault — Railway env aliases (Github_token, GH_TOKEN, ...)
+import { ENV } from "@/lib/env";
 
-const TOKEN =
-  process.env.GITHUB_TOKEN ||
-  process.env.GITHUB_PERSONAL_ACCESS_TOKEN ||
-  process.env.GH_TOKEN ||
-  "";
+const TOKEN = ENV.github();
 const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
 const ROOT = (process.env.GITHUB_VAULT_PATH || "vault").replace(/^\/|\/$/g, "");
