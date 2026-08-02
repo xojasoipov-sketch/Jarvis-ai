@@ -1,24 +1,45 @@
-# Railway deploy + Local-first (Ollama)
+# Railway deploy (asosiy platforma)
 
-Pari AI **Vercel** va **Railway**da ishlaydi. Local model (OpenJarvis local-first) uchun eng qulay joy — **Railway**.
+Pari AI **Railway**da ishlash uchun sozlangan. `railway.toml` + `nixpacks.toml` bor.
 
 ## 1. Asosiy app (Next.js)
 
-1. New Project → Deploy from GitHub → `Jarvis-ai`
-2. Root / build: Next.js default
-3. Variables — Vercel’dagi bilan bir xil kalitlarni qo‘ying:
+1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub** → `Jarvis-ai`
+2. Root / build: avtomatik (Nixpacks)
+3. **Variables** — quyidagilarni qo‘ying:
 
 ```
-GROQ_API_KEY=
-OPENAI_API_KEY=
+# Kamida bitta LLM
+GEMINI_API_KEY=
+# yoki GROQ_API_KEY= / OPENAI_API_KEY= / OPENROUTER_API_KEY=
+
+# Supabase (ixtiyoriy)
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
-# ixtiyoriy
+
+# Telegram
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_USERS=
+
+# Ixtiyoriy
 OPENROUTER_API_KEY=
 DEEPSEEK_API_KEY=
 CEREBRAS_API_KEY=
+ELEVENLABS_API_KEY=
 MCP_TOOLS_JSON=
 ```
+
+4. Deploy → public domain oling (`xxx.up.railway.app`)
+
+### Telegram webhook
+
+Deploy dan keyin:
+
+```bash
+curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://YOUR_APP.up.railway.app/api/telegram"
+```
+
+Yoki Settings → Telegram setup API orqali.
 
 ## 2. Ollama (local LLM) — ixtiyoriy, lekin tavsiya
 
@@ -30,17 +51,15 @@ MCP_TOOLS_JSON=
 OLLAMA_HOST=0.0.0.0:11434
 ```
 
-4. Model tortish (bir marta):
+4. Model tortish (bir marta, Ollama service shell da):
 
 ```bash
 ollama pull llama3.2
-# yoki
-curl -X POST http://localhost:11434/api/pull -d '{"name":"llama3.2"}'
 ```
 
 5. **Pari AI service** Variables:
 
-**Variant A — service nomi orqali (eng oson):**
+**Variant A — service nomi (eng oson):**
 ```
 OLLAMA_SERVICE=ollama
 OLLAMA_MODEL=llama3.2
@@ -53,11 +72,6 @@ LOCAL_LLM_MODEL=llama3.2
 LOCAL_LLM_KEY=ollama
 ```
 
-**Variant C — public Ollama URL** (tavsiya etilmaydi):
-```
-OLLAMA_BASE_URL=https://your-ollama.up.railway.app
-```
-
 Private network (`*.railway.internal`) faqat **bir xil Railway project/environment** ichida ishlaydi.
 
 ## 3. Provider tartibi
@@ -67,9 +81,9 @@ Private network (`*.railway.internal`) faqat **bir xil Railway project/environme
 3. Groq, Cerebras, OpenRouter, …
 4. OpenAI
 
-Local ishlamasa avtomatik cloud’ga o‘tadi — hech narsa buzilmaydi.
+Local ishlamasa avtomatik cloud’ga o‘tadi.
 
-## 4. MCP tool’lar (Railway yoki Vercel)
+## 4. MCP tool’lar
 
 ```
 MCP_TOOLS_JSON=[{"name":"mytool","description":"...","url":"https://my-tool.up.railway.app/run"}]
@@ -77,9 +91,7 @@ MCP_TOOLS_JSON=[{"name":"mytool","description":"...","url":"https://my-tool.up.r
 
 Tekshirish: `GET /api/mcp`
 
-## 5. Experience memory
-
-Supabase’da (ixtiyoriy):
+## 5. Experience memory (Supabase)
 
 ```sql
 create table if not exists pari_traces (
@@ -94,28 +106,38 @@ create table if not exists pari_traces (
 );
 ```
 
-Jadval bo‘lmasa ham in-memory ishlaydi (redeployda tozalanadi).
+Jadval bo‘lmasa in-memory ishlaydi (redeployda tozalanadi).
 
-## 6. Vercel + Railway birga
+## 6. Build / Start
 
-| Vazifa | Qayerda |
-|--------|---------|
-| Frontend / asosiy UI | Vercel yoki Railway |
-| Local LLM (Ollama) | **Railway** (RAM kerak) |
-| Vercel’dan local model | Ollama’ni **public** URL qilib `LOCAL_LLM_URL` qo‘ying |
-| Railway app → Ollama | `OLLAMA_SERVICE=ollama` (private, tez, bepul ichki trafik) |
+| | |
+|--|--|
+| Builder | Nixpacks |
+| Install | `npm ci` yoki `npm install --include=dev` |
+| Build | `npm run build` |
+| Start | `npm start` (`next start`, `PORT` avtomatik) |
+| Healthcheck | `GET /` |
 
 ## 7. Tekshirish
 
 ```bash
 # Providerlar
-curl https://YOUR_APP/api/hermes
+curl https://YOUR_APP.up.railway.app/api/hermes
 
 # ReAct + local
-curl -X POST https://YOUR_APP/api/react \
+curl -X POST https://YOUR_APP.up.railway.app/api/react \
   -H 'Content-Type: application/json' \
   -d '{"task":"2+2 nechchi?"}'
 
-# MCP ro'yxat
-curl https://YOUR_APP/api/mcp
+# MCP
+curl https://YOUR_APP.up.railway.app/api/mcp
 ```
+
+## 8. Vercel dan chiqish
+
+Agar avval Vercel da ishlagan bo‘lsangiz:
+
+1. Vercel project ni o‘chiring yoki disconnect qiling
+2. GitHub Actions dagi eski Vercel deploy workflow o‘chirilgan / almashtirilgan
+3. Barcha env varlarni Railway Variables ga ko‘chiring
+4. Telegram webhook URL ni yangi Railway domain ga o‘zgartiring
