@@ -1,22 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProviders, type Provider } from "@/lib/providers";
 import { log } from "@/lib/logger";
-import { supabase, dbConfigured } from "@/lib/supabase";
 import { buildBrainContext } from "@/lib/connections";
 import { toolsAsOpenAIFunctionsAll, runAnyTool } from "@/lib/mcp-tools";
+import { internetSearch, fetchUrl } from "@/lib/web";
 
-const SYSTEM_BASE = `Sen Pari AI — Sadining AI Business Factory OS miyasi (AI Brain).
-
-Vazifang: foydalanuvchiga yordam berish va MAVJUD tool/ulanishlardan foydalanish.
+const SYSTEM_BASE = `Sen Pari AI — AI Brain.
+Internet va tool lar mavjud: web_search, web_fetch, extract_emails, extract_social_links, extract_images, extract_page_text, extract_list, list_connections, mcp_list_servers, mcp_call.
 
 Qoidalar:
-1. O'zbek tilida savol → o'zbek tilida javob
-2. "Nima ulangan?", "qanday tool bor?", "Supabase ishlayaptimi?" → list_connections tool chaqir
-3. Kerak bo'lganda tool chaqir — taxmin qilma
-4. Ulanmagan xizmatni ishlatma yoki "bor" deb aytma
-5. Qisqa, aniq; Markdown OK
-6. Vizual/HTML so'ralsa — \`\`\`html fenced blok
-7. Muhim ma'lumot → knowledge_save (Supabase ulangan bo'lsa)`;
+1. O'zbek savol → o'zbek javob
+2. Internet / yangilik / fakt → web_search yoki web_fetch ISHLAT
+3. Sahifadan email/social/rasm → extract_* tool
+4. MCP → mcp_list_servers keyin mcp_call
+5. Taxmin qilma — tool natijasiga tayyan
+6. Markdown OK`;
 
 type ChatMessage = {
   role: string;
@@ -25,11 +23,71 @@ type ChatMessage = {
   tool_call_id?: string;
 };
 
+/** When model has no tools — still gather internet/context server-side */
+async function autoContext(userText: string): Promise<string> {
+  const parts: string[] = [];
+  const t = userText.toLowerCase();
+
+  const wantsNet =
+    /internet|qidir|search|yangilik|hozir|bugun|nima bo'ldi|who is|what is|http|www\.|sayt|website|scrape|email|extract/i.test(
+      userText
+    );
+
+  const urlM = userText.match(/https?:\/\/[^\s]+/i);
+  if (urlM) {
+    try {
+      if (/email/i.test(t)) {
+        const r = await runAnyTool("extract_emails", { url: urlM[0] });
+        parts.push(`\n[extract_emails]\n${JSON.stringify(r).slice(0, 3000)}`);
+      } else if (/social|telegram|instagram|linkedin/i.test(t)) {
+        const r = await runAnyTool("extract_social_links", { url: urlM[0] });
+        parts.push(`\n[extract_social_links]\n${JSON.stringify(r).slice(0, 3000)}`);
+      } else if (/rasm|image|img/i.test(t)) {
+        const r = await runAnyTool("extract_images", { url: urlM[0] });
+        parts.push(`\n[extract_images]\n${JSON.stringify(r).slice(0, 3000)}`);
+      } else if (/list|ro'yxat|roʻyxat/i.test(t)) {
+        const r = await runAnyTool("extract_list", { url: urlM[0] });
+        parts.push(`\n[extract_list]\n${JSON.stringify(r).slice(0, 3000)}`);
+      } else {
+        const page = await fetchUrl(urlM[0]);
+        parts.push(`\n[web_fetch ${page.url}]\n${page.title}\n${page.text.slice(0, 4000)}`);
+      }
+    } catch (e) {
+      parts.push(`\n[fetch xato] ${String(e)}`);
+    }
+  } else if (wantsNet) {
+    try {
+      const s = await internetSearch(userText.slice(0, 200));
+      if (s.hits.length) {
+        parts.push(
+          `\n[web_search backends=${s.backends.join(",")}]\n` +
+            s.hits
+              .map((h, i) => `${i + 1}. ${h.title}\n   ${h.url}\n   ${h.snippet}`)
+              .join("\n")
+        );
+      } else {
+        parts.push("\n[web_search] natija topilmadi");
+      }
+    } catch (e) {
+      parts.push(`\n[web_search xato] ${String(e)}`);
+    }
+  }
+
+  if (/ulan|connect|tool|mcp|nima bor/i.test(t)) {
+    try {
+      const r = await runAnyTool("list_connections", {});
+      parts.push(`\n[list_connections]\n${JSON.stringify(r).slice(0, 2500)}`);
+    } catch {}
+  }
+
+  return parts.join("\n");
+}
+
 async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise<string> {
   const tools = toolsAsOpenAIFunctionsAll();
   const convo = [...messages];
 
-  for (let i = 0; i < 6; i++) {
+  for (let round = 0; round < 8; round++) {
     const res = await fetch(provider.url, {
       method: "POST",
       headers: {
@@ -44,16 +102,17 @@ async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise
         tool_choice: "auto",
         stream: false,
       }),
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(45000),
     });
-    if (!res.ok) throw new Error(`Provider error ${res.status}`);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`Provider ${res.status}: ${errText.slice(0, 200)}`);
+    }
     const data = await res.json();
     const msg = data.choices?.[0]?.message;
     if (!msg) throw new Error("Bo'sh javob");
 
-    if (!msg.tool_calls?.length) {
-      return msg.content || "";
-    }
+    if (!msg.tool_calls?.length) return msg.content || "";
 
     convo.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
     for (const call of msg.tool_calls) {
@@ -64,52 +123,23 @@ async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise
       } catch (err) {
         result = { error: (err as Error).message };
       }
-      convo.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+      convo.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result).slice(0, 12000),
+      });
     }
   }
-  return "Vositalar bilan ishlashda cheklov. Aniqroq so'rang yoki list_connections bilan holatni tekshiring.";
-}
-
-async function ragSearch(query: string): Promise<string> {
-  if (!dbConfigured) return "";
-  try {
-    const { data } = await supabase!
-      .from("pari_knowledge")
-      .select("title, content")
-      .or(`title.ilike.%${query.slice(0, 50)}%,content.ilike.%${query.slice(0, 50)}%`)
-      .limit(3);
-    if (!data?.length) return "";
-    const snippets = data.map((r) => `[${r.title}]: ${r.content.slice(0, 300)}`).join("\n");
-    return `\n\n📚 Bilim bazasi:\n${snippets}`;
-  } catch {
-    return "";
-  }
-}
-
-async function webSearch(query: string): Promise<string> {
-  try {
-    const res = await fetch(
-      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
-    );
-    const data = await res.json();
-    const parts: string[] = [];
-    if (data.AbstractText) parts.push(`**${data.Heading}**: ${data.AbstractText}`);
-    for (const t of (data.RelatedTopics || []).slice(0, 4)) {
-      if (t.Text) parts.push(`- ${t.Text}`);
-    }
-    return parts.length ? `\n\n🔍 Web:\n${parts.join("\n")}` : "";
-  } catch {
-    return "";
-  }
+  return "Tool limit. Qayta so'rang.";
 }
 
 function textStream(text: string): Response {
   const enc = new TextEncoder();
   return new Response(
     new ReadableStream({
-      start(ctrl) {
-        ctrl.enqueue(enc.encode(text));
-        ctrl.close();
+      start(c) {
+        c.enqueue(enc.encode(text));
+        c.close();
       },
     }),
     { headers: { "Content-Type": "text/plain; charset=utf-8" } }
@@ -121,41 +151,40 @@ export async function POST(req: NextRequest) {
   const { messages, system } = await req.json();
   const list = getProviders();
   if (!list.length) {
-    log("error", "chat-api", "hech qanday provider yo'q");
     return NextResponse.json({ error: "API key sozlanmagan" }, { status: 500 });
   }
 
-  // Dynamic brain context every request
-  const brainCtx = buildBrainContext();
-  const baseSystem = (system || SYSTEM_BASE) + "\n\n" + brainCtx;
+  const lastUser = [...messages].reverse().find((m: { role: string }) => m.role === "user");
+  const lastText = typeof lastUser?.content === "string" ? lastUser.content : "";
 
-  const toolProvider = list.find((p) => p.supportsTools && p.key !== "dummy");
-  if (toolProvider) {
+  const brainCtx = buildBrainContext();
+  let auto = "";
+  try {
+    auto = await autoContext(lastText);
+  } catch (e) {
+    auto = `[autoContext xato] ${String(e)}`;
+  }
+
+  const baseSystem =
+    (system || SYSTEM_BASE) +
+    "\n\n" +
+    brainCtx +
+    (auto ? `\n\n## SERVER TOMONIDAN YIG'ILGAN MA'LUMOT (ishlat):\n${auto}` : "");
+
+  // 1) Native tool-calling providers
+  const toolProviders = list.filter((p) => p.supportsTools && p.key !== "dummy");
+  for (const toolProvider of toolProviders) {
     try {
       const convo: ChatMessage[] = [{ role: "system", content: baseSystem }, ...messages];
       const finalText = await runToolLoop(toolProvider, convo);
-      log(
-        "info",
-        "chat-api",
-        `OK ${(Date.now() - start) / 1000}s — ${toolProvider.name}/${toolProvider.model} tools`
-      );
+      log("info", "chat-api", `tools ${toolProvider.name} ${(Date.now() - start) / 1000}s`);
       return textStream(finalText);
     } catch (e) {
-      log("warn", "chat-api", `${toolProvider.name} tool-loop xato: ${String(e)}`);
+      log("warn", "chat-api", `tool-loop fail ${toolProvider.name}: ${String(e)}`);
     }
   }
 
-  // Fallback: non-tool providers + lightweight RAG/search inject
-  const lastMsg = messages[messages.length - 1]?.content || "";
-  const [ragCtx, searchCtx] = await Promise.all([
-    ragSearch(lastMsg.slice(0, 100)),
-    /hozir|bugun|yangi|oxirgi|qidiruv|search|latest|news|2025|2026/i.test(lastMsg)
-      ? webSearch(lastMsg.slice(0, 100))
-      : Promise.resolve(""),
-  ]);
-  const extra = ragCtx + searchCtx;
-  const sysMsg = extra ? baseSystem + `\n\nQo'shimcha:${extra}` : baseSystem;
-
+  // 2) Stream without native tools (context already injected via autoContext)
   for (const p of list) {
     try {
       const res = await fetch(p.url, {
@@ -167,14 +196,14 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           model: p.model,
-          messages: [{ role: "system", content: sysMsg }, ...messages],
+          messages: [{ role: "system", content: baseSystem }, ...messages],
           stream: true,
         }),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(30000),
       });
       if (!res.ok) continue;
 
-      log("info", "chat-api", `OK stream — ${p.name}/${p.model}`);
+      log("info", "chat-api", `stream ${p.name}`);
       const enc = new TextEncoder();
       return new Response(
         new ReadableStream({
@@ -207,6 +236,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  log("error", "chat-api", "barcha provayderlar ishlamadi");
+  // 3) Last resort: return auto context alone
+  if (auto) {
+    return textStream("Internet/tool natijasi:\n" + auto);
+  }
+
   return NextResponse.json({ error: "Barcha provayderlar ishlamadi" }, { status: 500 });
 }

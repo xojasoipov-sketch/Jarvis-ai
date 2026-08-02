@@ -1,60 +1,207 @@
-// MCP-uslubidagi kengaytirilgan tool reyestri — OpenJarvis MCP g'oyasidan moslashtirilgan.
-// Tashqi HTTP tool'larni env orqali ulash mumkin; mavjud BUILTIN_TOOLS bilan birga ishlaydi.
+/**
+ * MCP-style tools + HTTP MCP servers.
+ *
+ * Env:
+ * MCP_TOOLS_JSON='[{"name":"x","description":"...","url":"https://.../run"}]'
+ * MCP_SERVERS_JSON='[{"name":"my-server","url":"https://mcp.example.com","headers":{}}]'
+ *   Server must support:
+ *   GET  {url}/tools  or POST {url} with {"method":"tools/list"}
+ *   POST {url}/call or POST {url} with {"method":"tools/call","params":{name,arguments}}
+ */
 import { BUILTIN_TOOLS, type ToolDef, runTool as runBuiltin } from "./tools";
 
 export type McpHttpTool = {
   name: string;
   description: string;
-  url: string; // POST endpoint — body: { args: object }
+  url: string;
   headers?: Record<string, string>;
 };
 
-/** Env: MCP_TOOLS_JSON='[{"name":"weather","description":"...","url":"https://..."}]' */
-function loadHttpToolsFromEnv(): McpHttpTool[] {
-  const raw = process.env.MCP_TOOLS_JSON;
+export type McpServer = {
+  name: string;
+  url: string;
+  headers?: Record<string, string>;
+};
+
+function parseJsonEnv<T>(raw: string | undefined): T[] {
   if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw) as McpHttpTool[];
-    return Array.isArray(parsed)
-      ? parsed.filter((t) => t?.name && t?.url)
-      : [];
+    const parsed = JSON.parse(raw) as T[];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
+export function loadHttpToolsFromEnv(): McpHttpTool[] {
+  return parseJsonEnv<McpHttpTool>(process.env.MCP_TOOLS_JSON).filter((t) => t?.name && t?.url);
+}
+
+export function loadMcpServersFromEnv(): McpServer[] {
+  return parseJsonEnv<McpServer>(process.env.MCP_SERVERS_JSON).filter((s) => s?.name && s?.url);
+}
+
 function httpToolToDef(t: McpHttpTool): ToolDef {
   return {
     name: `mcp_${t.name}`,
-    description: `[MCP] ${t.description}`,
+    description: `[MCP tool] ${t.description}`,
     parameters: {
       type: "object",
       properties: {
-        args: { type: "object", description: "Tool argumentlari (JSON object)" },
+        args: { type: "object", description: "Argumentlar" },
       },
     },
     run: async (args) => {
       const res = await fetch(t.url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(t.headers || {}),
-        },
+        headers: { "Content-Type": "application/json", ...(t.headers || {}) },
         body: JSON.stringify({ args: args.args ?? args }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(20000),
       });
-      if (!res.ok) throw new Error(`MCP tool ${t.name} xato: ${res.status}`);
+      if (!res.ok) throw new Error(`MCP tool ${t.name}: HTTP ${res.status}`);
       const ct = res.headers.get("content-type") || "";
-      if (ct.includes("application/json")) return res.json();
+      if (ct.includes("json")) return res.json();
       return { text: (await res.text()).slice(0, 5000) };
     },
   };
 }
 
-/** Barcha tool'lar: built-in + MCP HTTP */
+/** Discover tools from one MCP HTTP server */
+export async function listServerTools(server: McpServer): Promise<
+  { name: string; description: string }[]
+> {
+  const base = server.url.replace(/\/$/, "");
+  const headers = { "Content-Type": "application/json", ...(server.headers || {}) };
+
+  // Try GET /tools
+  try {
+    const r = await fetch(`${base}/tools`, {
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      const arr = data.tools || data || [];
+      if (Array.isArray(arr)) {
+        return arr.map((t: { name?: string; description?: string }) => ({
+          name: t.name || "unknown",
+          description: t.description || "",
+        }));
+      }
+    }
+  } catch {}
+
+  // Try JSON-RPC tools/list
+  try {
+    const r = await fetch(base, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      const arr = data.result?.tools || data.tools || [];
+      if (Array.isArray(arr)) {
+        return arr.map((t: { name?: string; description?: string }) => ({
+          name: t.name || "unknown",
+          description: t.description || "",
+        }));
+      }
+    }
+  } catch {}
+
+  return [];
+}
+
+export async function callServerTool(
+  server: McpServer,
+  toolName: string,
+  args: Record<string, unknown>
+): Promise<unknown> {
+  const base = server.url.replace(/\/$/, "");
+  const headers = { "Content-Type": "application/json", ...(server.headers || {}) };
+
+  // POST /call
+  try {
+    const r = await fetch(`${base}/call`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: toolName, arguments: args, args }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (r.ok) {
+      const ct = r.headers.get("content-type") || "";
+      if (ct.includes("json")) return r.json();
+      return { text: (await r.text()).slice(0, 8000) };
+    }
+  } catch {}
+
+  // JSON-RPC tools/call
+  const r = await fetch(base, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: toolName, arguments: args },
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!r.ok) throw new Error(`MCP server ${server.name}: HTTP ${r.status}`);
+  const data = await r.json();
+  if (data.error) throw new Error(JSON.stringify(data.error));
+  return data.result ?? data;
+}
+
+function serverToolDefs(): ToolDef[] {
+  const servers = loadMcpServersFromEnv();
+  if (!servers.length) return [];
+
+  const defs: ToolDef[] = [
+    {
+      name: "mcp_list_servers",
+      description: "Ulangan MCP serverlar va ularning tool larini ko'rsatadi",
+      parameters: { type: "object", properties: {} },
+      run: async () => {
+        const out = [];
+        for (const s of servers) {
+          const tools = await listServerTools(s);
+          out.push({ server: s.name, url: s.url, tools });
+        }
+        return { servers: out };
+      },
+    },
+    {
+      name: "mcp_call",
+      description:
+        "MCP server tool chaqirish. server = MCP_SERVERS_JSON dagi name, tool = tool nomi, args = argumentlar",
+      parameters: {
+        type: "object",
+        properties: {
+          server: { type: "string", description: "MCP server name" },
+          tool: { type: "string", description: "Tool name" },
+          args: { type: "object", description: "Arguments" },
+        },
+        required: ["server", "tool"],
+      },
+      run: async (args) => {
+        const serverName = String(args.server || "");
+        const toolName = String(args.tool || "");
+        const server = servers.find((s) => s.name === serverName);
+        if (!server) throw new Error(`MCP server topilmadi: ${serverName}. mcp_list_servers chaqiring.`);
+        return callServerTool(server, toolName, (args.args as Record<string, unknown>) || {});
+      },
+    },
+  ];
+  return defs;
+}
+
 export function getAllTools(): ToolDef[] {
   const mcp = loadHttpToolsFromEnv().map(httpToolToDef);
-  return [...BUILTIN_TOOLS, ...mcp];
+  const serverTools = serverToolDefs();
+  return [...BUILTIN_TOOLS, ...mcp, ...serverTools];
 }
 
 export function toolsAsOpenAIFunctionsAll() {
@@ -68,7 +215,6 @@ export async function runAnyTool(name: string, args: Record<string, unknown>): P
   const all = getAllTools();
   const tool = all.find((t) => t.name === name);
   if (tool) return tool.run(args);
-  // Fallback: faqat built-in
   return runBuiltin(name, args);
 }
 
@@ -78,4 +224,8 @@ export function listMcpTools() {
     description: t.description,
     url: t.url,
   }));
+}
+
+export function listMcpServers() {
+  return loadMcpServersFromEnv().map((s) => ({ name: s.name, url: s.url }));
 }
