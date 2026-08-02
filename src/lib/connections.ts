@@ -1,12 +1,9 @@
-/**
- * Runtime connection map — truth for AI Brain system prompt.
- */
 import { getProviders } from "@/lib/providers";
 import { dbConfigured } from "@/lib/supabase";
-import { BUILTIN_TOOLS } from "@/lib/tools";
 import { listMcpTools, listMcpServers, getAllTools } from "@/lib/mcp-tools";
 import { vaultConfigured } from "@/lib/githubVault";
 import { repoConfigured } from "@/lib/githubRepo";
+import { ENV, envAny } from "@/lib/env";
 
 export type ConnectionItem = {
   id: string;
@@ -14,24 +11,19 @@ export type ConnectionItem = {
   ok: boolean;
   detail: string;
   category: string;
-  env_vars?: string[];
+  env_hint?: string[];
 };
-
-function hasEnv(...names: string[]) {
-  return names.some((n) => Boolean(process.env[n]?.trim()));
-}
 
 export function getConnectionsSnapshot(): ConnectionItem[] {
   const items: ConnectionItem[] = [];
 
-  // ── LLM ───────────────────────────────────────────────────
   for (const p of getProviders()) {
     if (p.name === "pollinations") {
       items.push({
         id: "pollinations",
-        name: "Pollinations (LLM)",
+        name: "Pollinations LLM",
         ok: true,
-        detail: "Bepul text, key shart emas",
+        detail: "Bepul text (key shart emas)",
         category: "llm",
       });
       continue;
@@ -39,119 +31,118 @@ export function getConnectionsSnapshot(): ConnectionItem[] {
     if (!p.key || p.key === "dummy") continue;
     items.push({
       id: p.name,
-      name: p.local ? `Local LLM (${p.model})` : `LLM: ${p.name}`,
+      name: `LLM: ${p.name}`,
       ok: true,
-      detail: `${p.model}${p.supportsTools ? " | tool-calling YES" : " | no native tools"}`,
+      detail: `${p.model}${p.supportsTools ? " | tools YES" : ""}`,
       category: "llm",
     });
   }
 
-  // ── Data ──────────────────────────────────────────────────
   items.push({
     id: "supabase",
-    name: "Supabase (DB)",
+    name: "Supabase",
     ok: dbConfigured,
     detail: dbConfigured
-      ? "URL+key bor → tasks, knowledge, projects, CRM"
-      : "SUPABASE_URL va SUPABASE_SERVICE_ROLE_KEY yo'q yoki noto'g'ri",
+      ? "Ulangan — tasks, knowledge, projects"
+      : "URL yoki KEY topilmadi",
     category: "data",
-    env_vars: ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
+    env_hint: ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
   });
 
-  // ── Messaging ─────────────────────────────────────────────
+  const tg = Boolean(ENV.telegram());
   items.push({
     id: "telegram",
     name: "Telegram Bot",
-    ok: hasEnv("TELEGRAM_BOT_TOKEN"),
-    detail: hasEnv("TELEGRAM_BOT_TOKEN")
-      ? `Token bor${hasEnv("TELEGRAM_ALLOWED_USERS") ? " + ALLOWED_USERS" : ""}`
-      : "TELEGRAM_BOT_TOKEN yo'q",
+    ok: tg,
+    detail: tg ? "TELEGRAM_BOT_TOKEN bor" : "Token topilmadi",
     category: "messaging",
-    env_vars: ["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"],
+    env_hint: ["TELEGRAM_BOT_TOKEN"],
   });
 
-  // ── GitHub / Obsidian ─────────────────────────────────────
+  const gh = Boolean(ENV.github());
   items.push({
     id: "github",
-    name: "GitHub (code + PR)",
-    ok: repoConfigured || hasEnv("GITHUB_TOKEN", "GITHUB_PERSONAL_ACCESS_TOKEN", "GH_TOKEN"),
-    detail: hasEnv("GITHUB_TOKEN", "GITHUB_PERSONAL_ACCESS_TOKEN", "GH_TOKEN")
-      ? "Token bor → propose_code_change, merge_pull_request"
-      : "GITHUB_TOKEN / GITHUB_PERSONAL_ACCESS_TOKEN yo'q",
+    name: "GitHub",
+    ok: gh || repoConfigured,
+    detail: gh ? "Token bor — PR + vault" : "GITHUB_TOKEN topilmadi",
     category: "code",
-    env_vars: ["GITHUB_TOKEN", "GITHUB_PERSONAL_ACCESS_TOKEN"],
+    env_hint: ["GITHUB_TOKEN", "GITHUB_PERSONAL_ACCESS_TOKEN"],
   });
 
   items.push({
     id: "obsidian_vault",
-    name: "Obsidian Vault (GitHub)",
+    name: "Obsidian Vault",
     ok: vaultConfigured,
     detail: vaultConfigured
-      ? `Repo vault yo'li sozlangan → vault_read/write/search/list, create_file, read_file`
-      : "GitHub token kerak (GITHUB_TOKEN) — vault GitHub orqali",
+      ? "GitHub vault orqali create_file/read_file/vault_*"
+      : "GitHub token kerak",
     category: "knowledge",
-    env_vars: ["GITHUB_TOKEN", "GITHUB_VAULT_REPO", "GITHUB_VAULT_PATH"],
   });
 
-  // ── Hermes ────────────────────────────────────────────────
   items.push({
     id: "hermes",
-    name: "Hermes (agent orchestrator)",
+    name: "Hermes orchestrator",
     ok: true,
-    detail: "Built-in /api/hermes — multi-agent routing (har doim mavjud)",
+    detail: "/api/hermes — multi-agent (built-in)",
     category: "agents",
   });
 
-  // ── Voice ─────────────────────────────────────────────────
   items.push({
-    id: "elevenlabs",
-    name: "ElevenLabs",
-    ok: hasEnv("ELEVENLABS_API_KEY"),
-    detail: hasEnv("ELEVENLABS_API_KEY") ? "TTS/STT" : "ELEVENLABS_API_KEY yo'q",
-    category: "voice",
+    id: "railway",
+    name: "Railway deploy",
+    ok: envAny("RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "RAILWAY_PUBLIC_DOMAIN", "RAILWAY_PROJECT_ID"),
+    detail: envAny("RAILWAY_PUBLIC_DOMAIN")
+      ? `Domain: ${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : envAny("RAILWAY_ENVIRONMENT_NAME", "RAILWAY_ENVIRONMENT")
+        ? "Railway muhitida ishlayapti"
+        : "Local yoki Railway env ko'rinmayapti",
+    category: "infra",
   });
+
   items.push({
-    id: "gemini",
-    name: "Gemini API",
-    ok: hasEnv("GEMINI_API_KEY"),
-    detail: hasEnv("GEMINI_API_KEY") ? "Audio/STT/multimodal" : "GEMINI_API_KEY yo'q",
-    category: "voice",
+    id: "internet",
+    name: "Internet",
+    ok: true,
+    detail: "web_search, web_fetch, extract_* (server-side)",
+    category: "internet",
   });
+
   items.push({
     id: "groq",
-    name: "Groq (tools+STT)",
-    ok: hasEnv("GROQ_API_KEY"),
-    detail: hasEnv("GROQ_API_KEY")
-      ? "Tool-calling + Whisper"
-      : "GROQ_API_KEY yo'q — tool loop zaiflashadi",
+    name: "Groq (tool-calling)",
+    ok: Boolean(ENV.groq()),
+    detail: ENV.groq() ? "Tool loop ishlaydi" : "GROQ_API_KEY yo'q — tool chaqirish zaif",
+    category: "llm",
+    env_hint: ["GROQ_API_KEY"],
+  });
+
+  items.push({
+    id: "gemini",
+    name: "Gemini",
+    ok: Boolean(ENV.gemini()),
+    detail: ENV.gemini() ? "Key bor" : "GEMINI_API_KEY yo'q",
     category: "llm",
   });
 
-  // ── MCP ───────────────────────────────────────────────────
+  items.push({
+    id: "elevenlabs",
+    name: "ElevenLabs",
+    ok: Boolean(ENV.elevenlabs()),
+    detail: ENV.elevenlabs() ? "TTS/STT" : "yo'q",
+    category: "voice",
+  });
+
   const mcp = listMcpTools();
   const servers = listMcpServers();
   items.push({
-    id: "mcp_tools",
-    name: "MCP HTTP tools",
-    ok: mcp.length > 0,
-    detail: mcp.length ? mcp.map((t) => t.name).join(", ") : "MCP_TOOLS_JSON bo'sh",
+    id: "mcp",
+    name: "MCP",
+    ok: mcp.length > 0 || servers.length > 0,
+    detail:
+      mcp.length || servers.length
+        ? `tools=${mcp.map((t) => t.name).join(",") || "-"} servers=${servers.map((s) => s.name).join(",") || "-"}`
+        : "MCP_TOOLS_JSON / MCP_SERVERS_JSON bo'sh",
     category: "mcp",
-  });
-  items.push({
-    id: "mcp_servers",
-    name: "MCP Servers",
-    ok: servers.length > 0,
-    detail: servers.length ? servers.map((s) => s.name).join(", ") : "MCP_SERVERS_JSON bo'sh",
-    category: "mcp",
-  });
-
-  // ── Internet always ───────────────────────────────────────
-  items.push({
-    id: "internet",
-    name: "Internet (web_search / web_fetch / extract_*)",
-    ok: true,
-    detail: "DuckDuckGo + Wikipedia + fetch — har doim (server-side)",
-    category: "internet",
   });
 
   return items;
@@ -159,36 +150,24 @@ export function getConnectionsSnapshot(): ConnectionItem[] {
 
 export function buildBrainContext(): string {
   const snap = getConnectionsSnapshot();
+  const tools = getAllTools().map((t) => t.name);
   const ok = snap.filter((c) => c.ok);
-  const missing = snap.filter((c) => !c.ok);
-  const allToolNames = getAllTools().map((t) => t.name);
+  const bad = snap.filter((c) => !c.ok);
 
-  const lines: string[] = [
-    "# TIZIM HOLATI (FAKT — o'zing o'ylab chiqarma)",
+  return [
+    "# HAQIQIY TIZIM HOLATI (o'ylab chiqarma — faqat shu)",
     "",
     "## ✅ ULANGBAN",
-  ];
-  for (const c of ok) {
-    lines.push(`- ${c.name}: ${c.detail}`);
-  }
-  lines.push("", "## ❌ ULANMAGAN");
-  for (const c of missing) {
-    lines.push(`- ${c.name}: ${c.detail}`);
-  }
-  lines.push("", "## BARCHA TOOL LAR (faqat shular mavjud — boshqa nom o'ylab topma)");
-  lines.push(allToolNames.join(", "));
-  lines.push("");
-  lines.push("Muhim mapping:");
-  lines.push("- create_file / read_file → Obsidian vault (GitHub)");
-  lines.push("- knowledge_* / create_task / get_business_overview → Supabase");
-  lines.push("- propose_code_change → GitHub");
-  lines.push("- web_search / web_fetch / extract_* → Internet");
-  lines.push("- mcp_list_servers / mcp_call → MCP");
-  lines.push("- list_connections → shu inventory JSON");
-  lines.push("");
-  lines.push("Foydalanuvchi 'nima ulangan?' desa — list_connections chaqir yoki yuqoridagi ro'yxatni ayt.");
-
-  return lines.join("\n");
+    ...ok.map((c) => `- ${c.name}: ${c.detail}`),
+    "",
+    "## ❌ ULANMAGAN",
+    ...(bad.length ? bad.map((c) => `- ${c.name}: ${c.detail}`) : ["- (yo'q)"]),
+    "",
+    "## TOOL LAR (faqat shular — list_service_orders kabi o'ylab topma)",
+    tools.join(", "),
+    "",
+    "Agar foydalanuvchi tool/ulanish so'rasa — yuqoridagi ro'yxatni ayt yoki list_connections.",
+  ].join("\n");
 }
 
 export function connectionsSummaryJson() {
@@ -204,11 +183,53 @@ export function connectionsSummaryJson() {
       id: c.id,
       name: c.name,
       detail: c.detail,
-      env_vars: c.env_vars,
+      env_hint: c.env_hint,
     })),
-    tools: getAllTools().map((t) => t.name),
-    mcp_tools: listMcpTools().map((t) => t.name),
+    tools: getAllTools().map((t) => ({ name: t.name, description: t.description.slice(0, 120) })),
+    mcp_tools: listMcpTools(),
     mcp_servers: listMcpServers(),
-    note: "Bu server process.env dan o'qilgan haqiqiy holat",
   };
+}
+
+/** Human-readable answer — no LLM needed */
+export function formatConnectionsReport(): string {
+  const s = connectionsSummaryJson();
+  const lines: string[] = [
+    "## Hozir haqiqatan ulangan (server process.env)",
+    "",
+  ];
+  if (s.connected.length) {
+    for (const c of s.connected) {
+      lines.push(`✅ **${c.name}** — ${c.detail}`);
+    }
+  } else {
+    lines.push("(hech narsa ulanmagan deb ko'rinadi)");
+  }
+  lines.push("", "## Ulanmagan");
+  for (const c of s.disconnected) {
+    lines.push(
+      `❌ **${c.name}** — ${c.detail}` +
+        (c.env_hint?.length ? ` (Railway: ${c.env_hint.join(" yoki ")})` : "")
+    );
+  }
+  lines.push("", "## Mavjud tool lar");
+  lines.push(s.tools.map((t) => `
+- 
+${t.name}
+`).join("") || s.tools.map((t) => `- 
+${t.name}: ${t.description}`).join("\n"));
+  // fix the broken map above
+  return [
+    "## Hozir haqiqatan ulangan (server process.env)\n",
+    ...s.connected.map((c) => `✅ **${c.name}** — ${c.detail}`),
+    "\n## Ulanmagan",
+    ...s.disconnected.map(
+      (c) =>
+        `❌ **${c.name}** — ${c.detail}` +
+        (c.env_hint?.length ? ` → Railway Variables: \`${c.env_hint.join("` / `")}\`` : "")
+    ),
+    "\n## Mavjud tool lar (o'ylab chiqarilmagan)",
+    ...s.tools.map((t) => `- \`${t.name}\` — ${t.description}`),
+    "\n_Manba: /api/brain/status_",
+  ].join("\n");
 }
