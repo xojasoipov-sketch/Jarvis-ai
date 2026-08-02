@@ -2,9 +2,8 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["pdf-parse", "mammoth"],
-  },
+  // Next 15+: experimental.serverComponentsExternalPackages → serverExternalPackages
+  serverExternalPackages: ["pdf-parse", "mammoth"],
 };
 
 export default withSentryConfig(nextConfig, {
@@ -14,5 +13,6 @@ export default withSentryConfig(nextConfig, {
   widenClientFileUpload: true,
   tunnelRoute: "/monitoring",
   disableLogger: true,
-  automaticVercelMonitors: true,
+  // Railway, not Vercel
+  automaticVercelMonitors: false,
 });
