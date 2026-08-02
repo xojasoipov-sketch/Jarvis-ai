@@ -2,11 +2,7 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["pdf-parse", "mammoth"],
-  },
-  // Railway / container: listen on PORT from environment
-  // Next.js automatically uses process.env.PORT when running `next start`
+  serverExternalPackages: ["pdf-parse", "mammoth"],
 };
 
 export default withSentryConfig(nextConfig, {
@@ -16,6 +12,5 @@ export default withSentryConfig(nextConfig, {
   widenClientFileUpload: true,
   tunnelRoute: "/monitoring",
   disableLogger: true,
-  // Vercel-specific monitoring disabled — app is Railway-first
   automaticVercelMonitors: false,
 });

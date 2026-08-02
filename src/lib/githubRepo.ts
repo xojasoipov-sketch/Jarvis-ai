@@ -1,8 +1,8 @@
-// Lets Pari AI propose changes to its own source code — always via a Pull Request,
-// never a direct push to main. A human reviews and merges.
+import { ENV } from "@/lib/env";
 
-const TOKEN = process.env.GITHUB_TOKEN || "";
-const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
+const TOKEN = ENV.github();
+const REPO =
+  process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BASE_BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN || "";
@@ -41,7 +41,10 @@ export async function testGitHubAccess(): Promise<{ repo: string; canPush: boole
 }
 
 async function getBaseSha(): Promise<string> {
-  const res = await fetch(api(`git/ref/heads/${BASE_BRANCH}`), { headers: headers(), signal: AbortSignal.timeout(8000) });
+  const res = await fetch(api(`git/ref/heads/${BASE_BRANCH}`), {
+    headers: headers(),
+    signal: AbortSignal.timeout(8000),
+  });
   if (!res.ok) throw new Error(`Base branch topilmadi: ${res.status}`);
   const data = await res.json();
   return data.object.sha;
@@ -58,7 +61,10 @@ async function createBranch(name: string, fromSha: string): Promise<void> {
 }
 
 async function getFileSha(path: string, branch: string): Promise<string | undefined> {
-  const res = await fetch(api(`contents/${encodeURI(path)}?ref=${branch}`), { headers: headers(), signal: AbortSignal.timeout(8000) });
+  const res = await fetch(api(`contents/${encodeURI(path)}?ref=${branch}`), {
+    headers: headers(),
+    signal: AbortSignal.timeout(8000),
+  });
   if (!res.ok) return undefined;
   const data = await res.json();
   return data.sha;
@@ -98,21 +104,17 @@ export async function proposeCodeChange(
 ): Promise<{ prUrl: string; branch: string }> {
   if (!repoConfigured) throw new Error("GITHUB_TOKEN yoki repo sozlanmagan");
   if (!files.length) throw new Error("Kamida bitta fayl kerak");
-
   const baseSha = await getBaseSha();
   const branch = `pari-ai/auto-${Date.now()}`;
   await createBranch(branch, baseSha);
-
   for (const f of files) {
     await putFile(f.path, f.content, branch, `pari-ai: ${description.slice(0, 60)}`);
   }
-
   const prUrl = await openPR(
     branch,
     `Pari AI: ${description.slice(0, 70)}`,
-    `${description}\n\n---\nBu o'zgarish Pari AI tomonidan avtomatik taklif qilindi. Tekshirib, merge qilishdan oldin diff'ni ko'rib chiqing.`
+    `${description}\n\n---\nPari AI avtomatik taklif.`
   );
-
   return { prUrl, branch };
 }
 
@@ -135,8 +137,7 @@ export async function listPullRequests(): Promise<PullRequestInfo[]> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    const reason = body?.message || "Noma'lum sabab";
-    throw new Error(`PR ro'yxati olinmadi: ${res.status} — ${reason}`);
+    throw new Error(`PR ro'yxati olinmadi: ${res.status} — ${body?.message || ""}`);
   }
   const data = await res.json();
   return (data as Record<string, unknown>[]).map((pr) => ({
@@ -152,7 +153,7 @@ export async function listPullRequests(): Promise<PullRequestInfo[]> {
 }
 
 export async function getPullRequestDiff(prNumber: number): Promise<string> {
-  if (!repoConfigured) throw new Error("GITHUB_TOKEN yoki repo sozlanmagan");
+  if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan");
   const res = await fetch(api(`pulls/${prNumber}`), {
     headers: headers({ Accept: "application/vnd.github.v3.diff" }),
     signal: AbortSignal.timeout(10000),
@@ -169,13 +170,14 @@ export async function mergePullRequest(prNumber: number): Promise<{ merged: bool
     body: JSON.stringify({ merge_method: "squash" }),
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) throw new Error(`PR merge qilishda xato: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(`PR merge xato: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return { merged: data.merged, sha: data.sha };
 }
 
+/** Vercel qoldiq — Railway asosiy. Token bo'lmasa xato. */
 export async function vercelRedeploy(): Promise<{ url: string; id: string }> {
-  if (!VERCEL_TOKEN) throw new Error("VERCEL_TOKEN sozlanmagan");
+  if (!VERCEL_TOKEN) throw new Error("VERCEL_TOKEN yo'q (Railway ishlatiladi)");
   const [org, repoName] = REPO.split("/");
   const url = VERCEL_TEAM_ID
     ? `https://api.vercel.com/v13/deployments?teamId=${VERCEL_TEAM_ID}`
@@ -190,12 +192,11 @@ export async function vercelRedeploy(): Promise<{ url: string; id: string }> {
       name: "pari-ai",
       project: VERCEL_PROJECT_ID,
       target: "production",
-      // Vercel's gitSource wants org/repo as separate fields, not "owner/repo"
       gitSource: { type: "github", org, repo: repoName, ref: BASE_BRANCH },
     }),
     signal: AbortSignal.timeout(15000),
   });
-  if (!res.ok) throw new Error(`Vercel redeploy xato: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(`Vercel redeploy: ${res.status}`);
   const data = await res.json();
   return { url: `https://${data.url}`, id: data.id };
 }

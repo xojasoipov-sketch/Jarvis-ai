@@ -1,12 +1,8 @@
-// GitHub-backed Obsidian vault — real cloud storage, no local server required.
-// Notes live at GITHUB_VAULT_REPO (default: same repo) under GITHUB_VAULT_PATH (default: "vault").
+import { ENV } from "@/lib/env";
 
-const TOKEN =
-  process.env.GITHUB_TOKEN ||
-  process.env.GITHUB_PERSONAL_ACCESS_TOKEN ||
-  process.env.GH_TOKEN ||
-  "";
-const REPO = process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
+const TOKEN = ENV.github();
+const REPO =
+  process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
 const ROOT = (process.env.GITHUB_VAULT_PATH || "vault").replace(/^\/|\/$/g, "");
 
@@ -25,7 +21,9 @@ function headers(extra: Record<string, string> = {}) {
   };
 }
 
-export async function listVault(subPath = ""): Promise<{ name: string; path: string; type: "file" | "dir" }[]> {
+export async function listVault(
+  subPath = ""
+): Promise<{ name: string; path: string; type: "file" | "dir" }[]> {
   const dir = subPath ? `${ROOT}/${subPath}` : ROOT;
   const res = await fetch(api(`contents/${dir}?ref=${BRANCH}`), {
     headers: headers(),
@@ -66,14 +64,12 @@ export async function writeVaultFile(
     const existing = await check.json();
     sha = existing.sha;
   }
-
   const body: Record<string, string> = {
     message,
     content: Buffer.from(content, "utf-8").toString("base64"),
     branch: BRANCH,
   };
   if (sha) body.sha = sha;
-
   const res = await fetch(api(`contents/${filePath}`), {
     method: "PUT",
     headers: headers({ "Content-Type": "application/json" }),
@@ -83,21 +79,21 @@ export async function writeVaultFile(
   return res.ok;
 }
 
-export async function deleteVaultFile(
-  filePath: string,
-  message = "chore: delete vault file"
-): Promise<boolean> {
+export async function deleteVaultFile(filePath: string): Promise<boolean> {
   const check = await fetch(api(`contents/${filePath}?ref=${BRANCH}`), {
     headers: headers(),
     signal: AbortSignal.timeout(8000),
   });
   if (!check.ok) return false;
   const existing = await check.json();
-
   const res = await fetch(api(`contents/${filePath}`), {
     method: "DELETE",
     headers: headers({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ message, sha: existing.sha, branch: BRANCH }),
+    body: JSON.stringify({
+      message: `chore: delete ${filePath}`,
+      sha: existing.sha,
+      branch: BRANCH,
+    }),
     signal: AbortSignal.timeout(8000),
   });
   return res.ok;
