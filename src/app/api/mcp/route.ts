@@ -21,15 +21,17 @@ function parseJsonEnv(name: string): unknown[] {
   }
 }
 
-// GET /api/mcp — tool inventory + MCP config status
-export async function GET() {
-  const tools = BUILTIN_TOOLS.map((t) => ({
-    name: t.name,
-    description: t.description,
-    source: "builtin" as const,
-  }));
+type ToolSource = "builtin" | "hermes" | "mcp_json";
 
-  // Optional external Hermes gateway
+export async function GET() {
+  const tools: { name: string; description: string; source: ToolSource }[] = BUILTIN_TOOLS.map(
+    (t) => ({
+      name: t.name,
+      description: t.description,
+      source: "builtin",
+    })
+  );
+
   if (HERMES_URL) {
     try {
       const res = await fetch(`${HERMES_URL}/tools`, {
@@ -50,14 +52,13 @@ export async function GET() {
     }
   }
 
-  // MCP_TOOLS_JSON — extra tool definitions (names for inventory)
   const mcpTools = parseJsonEnv("MCP_TOOLS_JSON");
   for (const t of mcpTools as { name?: string; description?: string }[]) {
     if (t?.name) {
       tools.push({
         name: t.name,
         description: t.description || "MCP_TOOLS_JSON",
-        source: "mcp_json" as const,
+        source: "mcp_json",
       });
     }
   }
@@ -78,11 +79,10 @@ export async function GET() {
       })),
     },
     telegram_tool: tools.some((t) => t.name === "telegram_send"),
-    note: "Telegram = telegram_send / telegram_get_me tool. MCP = builtin + HERMES_URL + MCP_*_JSON",
+    note: "Telegram = telegram_send / telegram_get_me. MCP = builtin + HERMES_URL + MCP_*_JSON",
   });
 }
 
-// POST /api/mcp — run tool { tool, args }
 export async function POST(req: NextRequest) {
   const { tool, args } = await req.json();
 
