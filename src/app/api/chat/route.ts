@@ -1,167 +1,240 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProviders } from "@/lib/providers";
-import { runToolLoop, type ChatMessage } from "@/lib/toolloop";
+import { getProviders, type Provider } from "@/lib/providers";
 import { log } from "@/lib/logger";
-import { supabase, dbConfigured } from "@/lib/supabase";
-import { classifyFast, normalizeUzbek, intentToContext } from "@/lib/fatosat";
+import { buildBrainContext, connectionsSummaryJson } from "@/lib/connections";
+import { toolsAsOpenAIFunctionsAll, runAnyTool } from "@/lib/mcp-tools";
+import { internetSearch, fetchUrl } from "@/lib/web";
 
-const SYSTEM = `Sen Pari AI — Sadining shaxsiy AI ish stoli va ijrochi yordamchisissan.
+const SYSTEM_BASE = `Sen Pari AI Brain.
+Faqat system dagi ✅/❌ ulanishlar va TOOL LAR ro'yxatidan foydalan.
+list_service_orders, get_order_details kabi nomlarni O'YLAMA — ular yo'q.
+O'zbek savol → o'zbek javob. Internet → web_search.`;
 
-## Kim sansen
-Sadi — AI va texnologiya xizmatlar ko'rsatuvchi mutaxassis. Sen uning:
-- **Ish stolisi**: hamma narsani shu yerdan boshqaradi
-- **Ijrochi yordamchisi**: xizmatlarni haqiqatda bajaradi (kod yozadi, kontent yaratadi, tahlil qiladi)
-- **Biznes AI'si**: buyurtmalar, mijozlar, daromad, strategiya — hammani kuzatadi
+type ChatMessage = {
+  role: string;
+  content: string | null;
+  tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string } }[];
+  tool_call_id?: string;
+};
 
-## Nima qila olasan (xizmatlar ro'yxati)
-**AI & Avtomatlashtirish**: Telegram bot, AI agent, Voice AI, AI chatbot, call-center, sales robot, HR automation, CRM integratsiya, n8n/Make.com workflow
-**Dasturlash**: Next.js/React sayt, Telegram Mini App, CRM tizimi, ERP, mobil ilova, landing page
-**SMM & Marketing**: kontent strategiya, post/caption yozish, hashtag research, reklama kampaniya, Google Ads, SEO, email marketing
-**Kontent**: blog maqola, copywriting, video skript, YouTube strategiya, online kurs yaratish
-**Dizayn & Media**: UI/UX (Figma konsept), brending/logo brief, dashboard UI, reklama rolik skript, motion brief, AI avatar video
-**Konsultatsiya**: biznes strategiya, digital transformatsiya, sotuv tizimi, KPI/OKR, franchise hujjat, CRM audit
-
-## Qoidalar
-1. **O'zbek tilida so'rasa — o'zbek tilida javob ber**
-2. **Ish konteksti bo'lsa — darhol ishni boshlash**, savol ber, keyin ijro et
-3. **Haqiqiy ma'lumot kerak bo'lsa — tool chaqir**, taxmin qilma:
-   - Hozirgi faktlar/yangiliklar: web_search
-   - Shaxsiy bilim bazasi: knowledge_search
-   - Biznes holati (buyurtmalar, daromad, xizmatlar): get_business_overview, list_service_orders
-4. **Kod yozganda** — to'liq ishlaydigann, copy-paste qilsa bo'ladigan kod ber
-5. **Vizual narsa so'rasa** (sahifa, grafik, animatsiya, UI mockup) — mustaqil HTML \`\`\`html blokida ber
-6. **Muhim ma'lumot aytilsa** — knowledge_save taklif qil
-7. **Propose_code_change** — Pari AI ilovasining o'z kodiga o'zgartirish kerak bo'lsagina
-
-## Tone
-Professional lekin samimiy. Sadi bilan ishchi muhitda gaplash — ortiqcha ta'rif yo'q, natijaga yo'nalgan.`;
-
-
-async function ragSearch(query: string): Promise<string> {
-  if (!dbConfigured) return "";
-  try {
-    const { data } = await supabase!
-      .from("pari_knowledge")
-      .select("title, content")
-      .or(`title.ilike.%${query.slice(0, 50)}%,content.ilike.%${query.slice(0, 50)}%`)
-      .limit(3);
-    if (!data?.length) return "";
-    const snippets = data.map(r => `[${r.title}]: ${r.content.slice(0, 300)}`).join("\n");
-    return `\n\n📚 **Bilim bazasidan (RAG):**\n${snippets}`;
-  } catch { return ""; }
+function isInventoryQuestion(text: string): boolean {
+  return /nima ulan|qanday tool|qaysi tool|ulangan|connected|list_connections|nima bor|asosiy tool|vositalar|integratsiya|github|telegram|supabase|railway|obsidian|hermes|konnekt|toolar|funksiya|key|kalit|connect|monitoring|buyurtma|overview|mavjud/i.test(
+    text
+  );
 }
 
-async function webSearch(query: string): Promise<string> {
+function formatReport(): string {
   try {
-    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
-    const data = await res.json();
-    const parts: string[] = [];
-    if (data.AbstractText) parts.push(`**${data.Heading}**: ${data.AbstractText}`);
-    for (const t of (data.RelatedTopics || []).slice(0, 4)) {
-      if (t.Text) parts.push(`- ${t.Text}`);
+    const s = connectionsSummaryJson();
+    return [
+      "## Haqiqiy ulanishlar (Railway process.env)\n",
+      ...s.connected.map((c) => `✅ **${c.name}** — ${c.detail}`),
+      "\n## Ulanmagan",
+      ...(s.disconnected.length
+        ? s.disconnected.map((c) => `❌ **${c.name}** — ${c.detail}`)
+        : ["(yo'q)"]),
+      "\n## Tool lar",
+      ...s.tools.map((n: string | { name: string }) =>
+        typeof n === "string" ? `- \`${n}\`` : `- \`${n.name}\``
+      ),
+    ].join("\n");
+  } catch (e) {
+    return String(e);
+  }
+}
+
+async function autoExtra(userText: string): Promise<string> {
+  const parts: string[] = [];
+  const t = userText.toLowerCase();
+  const urlM = userText.match(/https?:\/\/[^\s]+/i);
+
+  if (urlM) {
+    try {
+      if (/email/i.test(t)) {
+        parts.push(
+          "[extract_emails]\n" +
+            JSON.stringify(await runAnyTool("extract_emails", { url: urlM[0] })).slice(0, 3000)
+        );
+      } else if (/social|instagram|telegram/i.test(t)) {
+        parts.push(
+          "[extract_social_links]\n" +
+            JSON.stringify(await runAnyTool("extract_social_links", { url: urlM[0] })).slice(0, 3000)
+        );
+      } else {
+        const page = await fetchUrl(urlM[0]);
+        parts.push(`[web_fetch] ${page.title}\n${page.text.slice(0, 3500)}`);
+      }
+    } catch (e) {
+      parts.push(`[fetch xato] ${String(e)}`);
     }
-    return parts.length ? `\n\n🔍 **Web qidiruv natijalari (${query}):**\n${parts.join("\n")}` : "";
-  } catch { return ""; }
+  } else if (/internet|qidir|search|yangilik|hozir|bugun|raqobatch|crm tizim/i.test(userText)) {
+    try {
+      const s = await internetSearch(userText.slice(0, 200));
+      parts.push(
+        "[web_search]\n" +
+          s.hits.map((h, i) => `${i + 1}. ${h.title}\n${h.url}\n${h.snippet}`).join("\n")
+      );
+    } catch (e) {
+      parts.push(`[web_search xato] ${String(e)}`);
+    }
+  }
+  return parts.join("\n\n");
+}
+
+async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise<string> {
+  const tools = toolsAsOpenAIFunctionsAll();
+  const convo = [...messages];
+  for (let round = 0; round < 8; round++) {
+    const res = await fetch(provider.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${provider.key}`,
+        ...(provider.headers || {}),
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        messages: convo,
+        tools,
+        tool_choice: "auto",
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!res.ok) throw new Error(`Provider ${res.status}`);
+    const data = await res.json();
+    const msg = data.choices?.[0]?.message;
+    if (!msg) throw new Error("Bo'sh javob");
+    if (!msg.tool_calls?.length) return msg.content || "";
+    convo.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
+    for (const call of msg.tool_calls) {
+      let result: unknown;
+      try {
+        result = await runAnyTool(call.function.name, JSON.parse(call.function.arguments || "{}"));
+      } catch (err) {
+        result = { error: (err as Error).message };
+      }
+      convo.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result).slice(0, 12000),
+      });
+    }
+  }
+  return "Tool limit.";
 }
 
 function textStream(text: string): Response {
   const enc = new TextEncoder();
-  return new Response(new ReadableStream({
-    start(ctrl) {
-      ctrl.enqueue(enc.encode(text));
-      ctrl.close();
-    },
-  }), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  return new Response(
+    new ReadableStream({
+      start(c) {
+        c.enqueue(enc.encode(text));
+        c.close();
+      },
+    }),
+    { headers: { "Content-Type": "text/plain; charset=utf-8" } }
+  );
 }
 
 export async function POST(req: NextRequest) {
   const start = Date.now();
   const { messages, system } = await req.json();
-
-  // Fatosat: normalize + classify last message
-  const rawLast = messages[messages.length - 1]?.content || "";
-  const normalizedLast = normalizeUzbek(rawLast);
-  const fastIntent = classifyFast(normalizedLast);
-
-  // Auto-create task if intent detected
-  if (fastIntent?.type === "task" && dbConfigured) {
-    void supabase!.from("pari_tasks").insert({ title: fastIntent.title, status: "todo" });
-  }
-  // Auto-save to knowledge if intent detected
-  if (fastIntent?.type === "knowledge_save" && dbConfigured) {
-    void supabase!.from("pari_knowledge").insert({ title: "Chat'dan saqlangan", content: rawLast.slice(0, 1000) });
-  }
-
   const list = getProviders();
   if (!list.length) {
-    log("error", "chat-api", "POST /api/chat — 500 — hech qanday provider key sozlanmagan");
     return NextResponse.json({ error: "API key sozlanmagan" }, { status: 500 });
   }
 
-  // Fatosat: enrich system with intent hint so AI knows what user wants
-  const intentHint = fastIntent ? intentToContext(fastIntent) : "";
-  const baseSystem = (system || SYSTEM) + (intentHint ? `\n\n${intentHint}` : "");
+  const lastUser = [...messages].reverse().find((m: { role: string }) => m.role === "user");
+  const lastText = typeof lastUser?.content === "string" ? lastUser.content : "";
 
-  // Prefer the tool-capable provider so the agent can actually call vault/code/web tools.
-  // Only if a real key is set — skip tool loop for keyless providers like Pollinations.
-  const toolProvider = list.find((p) => p.supportsTools && p.key !== "dummy");
-  if (toolProvider) {
+  // Inventory questions → no LLM fantasy
+  if (isInventoryQuestion(lastText)) {
+    log("info", "chat-api", "inventory short-circuit");
+    return textStream(formatReport());
+  }
+
+  const live = JSON.stringify(connectionsSummaryJson(), null, 2).slice(0, 8000);
+  let extra = "";
+  try {
+    extra = await autoExtra(lastText);
+  } catch (e) {
+    extra = String(e);
+  }
+
+  const baseSystem =
+    (system || SYSTEM_BASE) +
+    "\n\n" +
+    buildBrainContext() +
+    "\n\n## LIVE JSON\n" +
+    live +
+    (extra ? "\n\n## EXTRA\n" + extra : "");
+
+  // Prefer Groq / OpenAI tool-calling
+  const toolProviders = list.filter((p) => p.supportsTools && p.key !== "dummy");
+  for (const toolProvider of toolProviders) {
     try {
-      const convo: ChatMessage[] = [{ role: "system", content: baseSystem }, ...messages];
-      const finalText = await runToolLoop(toolProvider, convo);
-      log("info", "chat-api", `POST /api/chat — 200 OK (${((Date.now() - start) / 1000).toFixed(1)}s) — ${toolProvider.name}/${toolProvider.model}`);
+      const finalText = await runToolLoop(toolProvider, [
+        { role: "system", content: baseSystem },
+        ...messages,
+      ]);
+      log("info", "chat-api", `tools ${toolProvider.name} ${(Date.now() - start) / 1000}s`);
       return textStream(finalText);
-    } catch {
-      log("warn", "chat-api", `${toolProvider.name} tool-loop xato berdi, boshqa providerga o'tildi`);
+    } catch (e) {
+      log("warn", "chat-api", `tool-loop fail ${toolProvider.name}: ${String(e)}`);
     }
   }
 
-  // Context enrichment for non-tool-capable providers
-  const lastMsg = messages[messages.length - 1]?.content || "";
-  const [ragCtx, searchCtx] = await Promise.all([
-    ragSearch(lastMsg.slice(0, 100)),
-    /hozir|bugun|yangi|oxirgi|so'ngi|qidiruv|search|latest|news|2024|2025|2026/i.test(lastMsg)
-      ? webSearch(lastMsg.slice(0, 100))
-      : Promise.resolve(""),
-  ]);
-  const extra = ragCtx + searchCtx;
-  const sysMsg = extra ? baseSystem + `\n\nQo'shimcha kontekst:${extra}` : baseSystem;
-
-  const body = { model: "", messages: [{ role: "system", content: sysMsg }, ...messages], stream: true };
-
-  for (const p of list.filter((p) => !p.supportsTools)) {
+  // Stream fallback
+  for (const p of list) {
     try {
       const res = await fetch(p.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}`, ...(p.headers || {}) },
-        body: JSON.stringify({ ...body, model: p.model }),
-        signal: AbortSignal.timeout(9000),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${p.key}`,
+          ...(p.headers || {}),
+        },
+        body: JSON.stringify({
+          model: p.model,
+          messages: [{ role: "system", content: baseSystem }, ...messages],
+          stream: true,
+        }),
+        signal: AbortSignal.timeout(45000),
       });
       if (!res.ok) continue;
 
-      log("info", "chat-api", `POST /api/chat — 200 OK (${((Date.now() - start) / 1000).toFixed(1)}s) — ${p.name}/${p.model}`);
       const enc = new TextEncoder();
-      return new Response(new ReadableStream({
-        async start(ctrl) {
-          const reader = res.body!.getReader();
-          const dec = new TextDecoder();
-          let buf = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += dec.decode(value, { stream: true });
-            const lines = buf.split("\n"); buf = lines.pop() || "";
-            for (const line of lines) {
-              const d = line.replace(/^data: /, "").trim();
-              if (!d || d === "[DONE]") continue;
-              try { const t = JSON.parse(d).choices?.[0]?.delta?.content || ""; if (t) ctrl.enqueue(enc.encode(t)); } catch {}
+      return new Response(
+        new ReadableStream({
+          async start(ctrl) {
+            const reader = res.body!.getReader();
+            const dec = new TextDecoder();
+            let buf = "";
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buf += dec.decode(value, { stream: true });
+              const lines = buf.split("\n");
+              buf = lines.pop() || "";
+              for (const line of lines) {
+                const d = line.replace(/^data: /, "").trim();
+                if (!d || d === "[DONE]") continue;
+                try {
+                  const t = JSON.parse(d).choices?.[0]?.delta?.content || "";
+                  if (t) ctrl.enqueue(enc.encode(t));
+                } catch {}
+              }
             }
-          }
-          ctrl.close();
-        },
-      }), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
-    } catch { continue; }
+            ctrl.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      );
+    } catch {
+      continue;
+    }
   }
-  log("error", "chat-api", "POST /api/chat — 500 — barcha provayderlar ishlamadi");
-  return NextResponse.json({ error: "Barcha provayderlar ishlamadi" }, { status: 500 });
+
+  return textStream("Provayder ishlamadi.\n\n" + formatReport());
 }
