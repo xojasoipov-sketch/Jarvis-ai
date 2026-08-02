@@ -3,13 +3,14 @@ import "./globals.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "Pari AI — Your Personal AI OS",
-  description: "Full-stack AI assistant that handles everything for you",
+  title: "Pari AI — Business Factory OS",
+  description:
+    "AI-powered Business Operating System: CRM, orders, automation, knowledge, finance, and AI employees in one workspace.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="uz">
       <body>
         <AppShell>{children}</AppShell>
       </body>

@@ -2,139 +2,81 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Brain, Briefcase, ShoppingCart, Users, Bot,
-  Tv2, Clapperboard, Zap, BookOpen, BarChart3, Wallet,
-  Store, Settings, LogOut, X, type LucideIcon,
-  MessageSquare, CheckSquare, FolderKanban, Calendar, FolderOpen,
-  Radio, Code2, Database, Wrench, ShieldCheck, CreditCard,
-  ScrollText, Sparkles, History, ChevronDown, ChevronRight, Plug,
+  LogOut, X, ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
+import { MODULES, MODULE_GROUPS, type ModuleDef } from "@/lib/modules";
 
-type NavEntry = { label: string; href: string; icon: LucideIcon };
-type NavGroup = {
-  label: string; icon: LucideIcon; href: string;
-  items?: NavEntry[]; badge?: string;
-};
-
-const mainNav: NavGroup[] = [
-  { label: "Dashboard",      icon: LayoutDashboard, href: "/" },
-  {
-    label: "AI Brain",       icon: Brain,           href: "/chat",
-    items: [
-      { label: "Chat",       href: "/chat",         icon: MessageSquare },
-      { label: "Tarix",      href: "/history",      icon: History },
-      { label: "Pari",       href: "/pari",         icon: Sparkles },
-      { label: "Skill Tree", href: "/skilltree",    icon: Brain },
-    ],
-  },
-  {
-    label: "Business",       icon: Briefcase,       href: "/services",
-    items: [
-      { label: "Xizmatlar",  href: "/services",     icon: Briefcase },
-      { label: "Buyurtmalar",href: "/orders",       icon: ShoppingCart },
-      { label: "Mijozlar",   href: "/clients",      icon: Users },
-    ],
-  },
-  {
-    label: "AI Employees",   icon: Bot,             href: "/agents",
-    items: [
-      { label: "Agentlar",   href: "/agents",       icon: Bot },
-      { label: "Vazifalar",  href: "/tasks",        icon: CheckSquare },
-      { label: "Loyihalar",  href: "/projects",     icon: FolderKanban },
-    ],
-  },
-  {
-    label: "Content Factory",icon: Tv2,             href: "/smm",
-    items: [
-      { label: "SMM",        href: "/smm",          icon: Radio },
-      { label: "Biznes",     href: "/business",     icon: Briefcase },
-    ],
-  },
-  { label: "Media Studio",   icon: Clapperboard,   href: "/media" },
-  {
-    label: "Automation",     icon: Zap,             href: "/automation",
-    items: [
-      { label: "Workflows",  href: "/automation",   icon: Zap },
-      { label: "Calendar",   href: "/calendar",     icon: Calendar },
-      { label: "Fayllar",    href: "/files",        icon: FolderOpen },
-    ],
-  },
-  { label: "Knowledge Hub",  icon: BookOpen,        href: "/knowledge" },
-  { label: "Analytics",      icon: BarChart3,       href: "/analytics" },
-  { label: "Finance",        icon: Wallet,          href: "/billing" },
-  { label: "Marketplace",    icon: Store,           href: "/marketplace" },
-  {
-    label: "Settings",       icon: Settings,        href: "/settings",
-    items: [
-      { label: "Sozlamalar", href: "/settings",     icon: Settings },
-      { label: "Xavfsizlik", href: "/security",     icon: ShieldCheck },
-      { label: "Billing",    href: "/billing",      icon: CreditCard },
-      { label: "Loglar",     href: "/logs",         icon: ScrollText },
-      { label: "Dev Tools",  href: "/devtools",     icon: Wrench },
-      { label: "Code",       href: "/code",         icon: Code2 },
-      { label: "Databases",  href: "/databases",    icon: Database },
-      { label: "Connectors", href: "/apis",         icon: Plug },
-    ],
-  },
-];
-
-function NavGroupItem({ group, onClose }: { group: NavGroup; onClose?: () => void }) {
+function NavLink({
+  href, label, icon: Icon, onClose, nested,
+}: {
+  href: string; label: string; icon: LucideIcon; onClose?: () => void; nested?: boolean;
+}) {
   const path = usePathname();
-  const isTop = group.href === "/" ? path === "/" : path.startsWith(group.href);
-  const hasActive = group.items?.some(i => path === i.href);
-  const [open, setOpen] = useState(isTop || Boolean(hasActive));
-  const Icon = group.icon;
+  const active = href === "/" ? path === "/" : path === href || (href !== "/" && path.startsWith(href + "/"));
+  return (
+    <Link
+      href={href}
+      onClick={onClose}
+      className={`flex items-center gap-2.5 rounded-lg text-sm transition-all ${
+        nested ? "px-2 py-1.5 text-xs" : "px-3 py-2"
+      } ${
+        active
+          ? "bg-gray-900 text-white font-medium"
+          : nested
+            ? "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+      }`}
+    >
+      <Icon size={nested ? 13 : 15} strokeWidth={1.75} className="flex-shrink-0" />
+      <span className="flex-1 truncate">{label}</span>
+    </Link>
+  );
+}
 
-  if (!group.items) {
-    return (
-      <Link href={group.href} onClick={onClose}
-        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${
-          isTop ? "bg-gray-900 text-white font-medium" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-        }`}
-      >
-        <Icon size={15} strokeWidth={1.75} className="flex-shrink-0" />
-        <span className="flex-1">{group.label}</span>
-        {group.badge && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded-full font-medium">
-            {group.badge}
-          </span>
-        )}
-      </Link>
-    );
+function ModuleNav({ mod, onClose }: { mod: ModuleDef; onClose?: () => void }) {
+  const path = usePathname();
+  const hasRoutes = Boolean(mod.routes?.length);
+  const childActive = mod.routes?.some((r) => path === r.href);
+  const topActive = mod.href === "/" ? path === "/" : path.startsWith(mod.href);
+  const [open, setOpen] = useState(topActive || Boolean(childActive));
+  const Icon = mod.icon;
+
+  if (!hasRoutes) {
+    return <NavLink href={mod.href} label={mod.name} icon={Icon} onClose={onClose} />;
   }
 
   return (
     <div>
-      <button onClick={() => setOpen(!open)}
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${
-          isTop || hasActive ? "text-gray-900 font-semibold" : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+          topActive || childActive ? "text-gray-900 font-semibold" : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
         }`}
       >
         <Icon size={15} strokeWidth={1.75} className="flex-shrink-0" />
-        <span className="flex-1 text-left">{group.label}</span>
-        {open
-          ? <ChevronDown size={12} strokeWidth={2} className="text-gray-400 flex-shrink-0" />
-          : <ChevronRight size={12} strokeWidth={2} className="text-gray-400 flex-shrink-0" />}
+        <span className="flex-1 text-left">{mod.name}</span>
+        {open ? (
+          <ChevronDown size={12} className="text-gray-400" />
+        ) : (
+          <ChevronRight size={12} className="text-gray-400" />
+        )}
       </button>
       {open && (
         <div className="ml-3.5 mt-0.5 mb-1 pl-3 border-l border-gray-100 space-y-0.5">
-          {group.items.map((item) => {
-            const active = path === item.href;
-            const IIcon = item.icon;
-            return (
-              <Link key={item.href} href={item.href} onClick={onClose}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-all ${
-                  active ? "bg-gray-900 text-white font-medium" : "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                }`}
-              >
-                <IIcon size={13} strokeWidth={1.75} className="flex-shrink-0" />
-                {item.label}
-              </Link>
-            );
-          })}
+          {mod.routes!.map((r) => (
+            <NavLink
+              key={r.href}
+              href={r.href}
+              label={r.label}
+              icon={r.icon || Icon}
+              onClose={onClose}
+              nested
+            />
+          ))}
         </div>
       )}
     </div>
@@ -159,33 +101,70 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-7 h-7 rounded-lg bg-gray-900 flex items-center justify-center flex-shrink-0">
-            <Brain size={14} strokeWidth={2} className="text-white" />
+            <span className="text-white text-[10px] font-bold">BF</span>
           </div>
-          <div>
-            <p className="text-sm font-bold text-gray-900 leading-none">Pari AI</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">Business OS</p>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-900 leading-none truncate">Pari AI</p>
+            <p className="text-[10px] text-gray-400 mt-0.5 truncate">Business Factory OS</p>
           </div>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5 flex-shrink-0">
           <NotificationBell />
           <ThemeToggle />
           <LogoutButton />
           {onClose && (
-            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 md:hidden">
+            <button type="button" onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 md:hidden">
               <X size={15} strokeWidth={1.75} />
             </button>
           )}
         </div>
       </div>
-      <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        {mainNav.map((g) => <NavGroupItem key={g.label} group={g} onClose={onClose} />)}
+
+      <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-3">
+        {MODULE_GROUPS.map((g) => {
+          const mods = MODULES.filter((m) => m.group === g.id);
+          // Deduplicate by href primary for cleaner nav (client_portal shares clients)
+          const seen = new Set<string>();
+          const unique = mods.filter((m) => {
+            if (m.id === "client_portal" || m.id === "workflow_builder" || m.id === "api_center") return false;
+            if (seen.has(m.href) && m.id !== "dashboard") return false;
+            seen.add(m.href);
+            return true;
+          });
+          if (!unique.length) return null;
+          return (
+            <div key={g.id}>
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                {g.label}
+              </p>
+              <div className="space-y-0.5">
+                {unique.map((m) => (
+                  <ModuleNav key={m.id} mod={m} onClose={onClose} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </nav>
-      <div className="px-4 py-2.5 border-t border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">S</div>
-          <p className="text-xs text-gray-500 flex-1">Sadi · AI Business OS</p>
+
+      <div className="px-3 py-2.5 border-t border-gray-100">
+        <button
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+          }}
+          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-gray-500 bg-gray-50 hover:bg-gray-100 transition-colors"
+        >
+          <span className="flex-1 text-left">Search…</span>
+          <kbd className="text-[10px] border border-gray-200 rounded px-1 py-0.5 bg-white">⌘K</kbd>
+        </button>
+        <div className="flex items-center gap-2 mt-2 px-1">
+          <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+            S
+          </div>
+          <p className="text-xs text-gray-500 flex-1 truncate">Workspace · Owner</p>
         </div>
       </div>
     </div>
