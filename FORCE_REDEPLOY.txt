@@ -1,0 +1,1 @@
+redeploy-trigger 2026-08-02T21:45Z — brain inventory fix + missing deps
