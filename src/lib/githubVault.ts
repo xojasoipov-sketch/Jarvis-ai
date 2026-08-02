@@ -1,4 +1,3 @@
-// GitHub-backed Obsidian vault — Railway env aliases (Github_token, GH_TOKEN, ...)
 import { ENV } from "@/lib/env";
 
 const TOKEN = ENV.github();
@@ -62,38 +61,16 @@ export async function writeVaultFile(
     const existing = await check.json();
     sha = existing.sha;
   }
-
   const body: Record<string, string> = {
     message,
     content: Buffer.from(content, "utf-8").toString("base64"),
     branch: BRANCH,
   };
   if (sha) body.sha = sha;
-
   const res = await fetch(api(`contents/${filePath}`), {
     method: "PUT",
     headers: headers({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(8000),
-  });
-  return res.ok;
-}
-
-export async function deleteVaultFile(
-  filePath: string,
-  message = "chore: delete vault file"
-): Promise<boolean> {
-  const check = await fetch(api(`contents/${filePath}?ref=${BRANCH}`), {
-    headers: headers(),
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!check.ok) return false;
-  const existing = await check.json();
-
-  const res = await fetch(api(`contents/${filePath}`), {
-    method: "DELETE",
-    headers: headers({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ message, sha: existing.sha, branch: BRANCH }),
     signal: AbortSignal.timeout(8000),
   });
   return res.ok;

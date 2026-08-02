@@ -1,1 +1,1 @@
-redeploy-trigger 2026-08-02T21:45Z — brain inventory fix + missing deps
+full-sync 2026-08-02T21:50Z deploy branch claude/jarvis-ai-loyham-analiz-tjuvhq

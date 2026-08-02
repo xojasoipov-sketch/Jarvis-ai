@@ -5,7 +5,6 @@ export function envFirst(...names: string[]): string {
     const v = process.env[n];
     if (v && String(v).trim()) return String(v).trim();
   }
-  // case-insensitive fallback (Github_token vs GITHUB_TOKEN)
   const lowerMap = new Map<string, string>();
   for (const [k, v] of Object.entries(process.env)) {
     if (v && String(v).trim()) lowerMap.set(k.toLowerCase(), String(v).trim());
@@ -23,11 +22,7 @@ export function envAny(...names: string[]): boolean {
 
 export const ENV = {
   supabaseUrl: () =>
-    envFirst(
-      "SUPABASE_URL",
-      "NEXT_PUBLIC_SUPABASE_URL",
-      "SUPABASE_PROJECT_URL"
-    ),
+    envFirst("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_PROJECT_URL"),
   supabaseKey: () =>
     envFirst(
       "SUPABASE_SERVICE_ROLE_KEY",
