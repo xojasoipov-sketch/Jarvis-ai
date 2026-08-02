@@ -148,7 +148,6 @@ export async function POST(req: NextRequest) {
   const lastUser = [...messages].reverse().find((m: { role: string }) => m.role === "user");
   const lastText = typeof lastUser?.content === "string" ? lastUser.content : "";
 
-  // Inventory questions → no LLM fantasy
   if (isInventoryQuestion(lastText)) {
     log("info", "chat-api", "inventory short-circuit");
     return textStream(formatReport());
@@ -170,7 +169,6 @@ export async function POST(req: NextRequest) {
     live +
     (extra ? "\n\n## EXTRA\n" + extra : "");
 
-  // Prefer Groq / OpenAI tool-calling
   const toolProviders = list.filter((p) => p.supportsTools && p.key !== "dummy");
   for (const toolProvider of toolProviders) {
     try {
@@ -185,7 +183,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Stream fallback
   for (const p of list) {
     try {
       const res = await fetch(p.url, {

@@ -90,7 +90,12 @@ export function getConnectionsSnapshot(): ConnectionItem[] {
   items.push({
     id: "railway",
     name: "Railway deploy",
-    ok: envAny("RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "RAILWAY_PUBLIC_DOMAIN", "RAILWAY_PROJECT_ID"),
+    ok: envAny(
+      "RAILWAY_ENVIRONMENT",
+      "RAILWAY_ENVIRONMENT_NAME",
+      "RAILWAY_PUBLIC_DOMAIN",
+      "RAILWAY_PROJECT_ID"
+    ),
     detail: envAny("RAILWAY_PUBLIC_DOMAIN")
       ? `Domain: ${process.env.RAILWAY_PUBLIC_DOMAIN}`
       : envAny("RAILWAY_ENVIRONMENT_NAME", "RAILWAY_ENVIRONMENT")
@@ -111,7 +116,7 @@ export function getConnectionsSnapshot(): ConnectionItem[] {
     id: "groq",
     name: "Groq (tool-calling)",
     ok: Boolean(ENV.groq()),
-    detail: ENV.groq() ? "Tool loop ishlaydi" : "GROQ_API_KEY yo'q — tool chaqirish zaif",
+    detail: ENV.groq() ? "Tool loop ishlaydi" : "GROQ_API_KEY yo'q",
     category: "llm",
     env_hint: ["GROQ_API_KEY"],
   });
@@ -153,7 +158,6 @@ export function buildBrainContext(): string {
   const tools = getAllTools().map((t) => t.name);
   const ok = snap.filter((c) => c.ok);
   const bad = snap.filter((c) => !c.ok);
-
   return [
     "# HAQIQIY TIZIM HOLATI (o'ylab chiqarma — faqat shu)",
     "",
@@ -163,10 +167,10 @@ export function buildBrainContext(): string {
     "## ❌ ULANMAGAN",
     ...(bad.length ? bad.map((c) => `- ${c.name}: ${c.detail}`) : ["- (yo'q)"]),
     "",
-    "## TOOL LAR (faqat shular — list_service_orders kabi o'ylab topma)",
+    "## TOOL LAR (faqat shular)",
     tools.join(", "),
     "",
-    "Agar foydalanuvchi tool/ulanish so'rasa — yuqoridagi ro'yxatni ayt yoki list_connections.",
+    "Agar foydalanuvchi tool/ulanish so'rasa — yuqoridagi ro'yxat yoki list_connections.",
   ].join("\n");
 }
 
@@ -185,13 +189,15 @@ export function connectionsSummaryJson() {
       detail: c.detail,
       env_hint: c.env_hint,
     })),
-    tools: getAllTools().map((t) => ({ name: t.name, description: t.description.slice(0, 120) })),
+    tools: getAllTools().map((t) => ({
+      name: t.name,
+      description: t.description.slice(0, 120),
+    })),
     mcp_tools: listMcpTools(),
     mcp_servers: listMcpServers(),
   };
 }
 
-/** Human-readable answer — no LLM needed */
 export function formatConnectionsReport(): string {
   const s = connectionsSummaryJson();
   return [
@@ -201,7 +207,7 @@ export function formatConnectionsReport(): string {
     ...s.disconnected.map(
       (c) =>
         `❌ **${c.name}** — ${c.detail}` +
-        (c.env_hint?.length ? ` → Railway Variables: \`${c.env_hint.join("` / `")}\`` : "")
+        (c.env_hint?.length ? ` → Railway: \`${c.env_hint.join("` / `")}\`` : "")
     ),
     "\n## Mavjud tool lar (o'ylab chiqarilmagan)",
     ...s.tools.map((t) => `- \`${t.name}\` — ${t.description}`),
