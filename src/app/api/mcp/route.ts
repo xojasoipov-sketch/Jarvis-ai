@@ -21,12 +21,16 @@ function parseJsonEnv(name: string): unknown[] {
   }
 }
 
+type ToolSource = "builtin" | "hermes" | "mcp_json";
+
 export async function GET() {
-  const tools = BUILTIN_TOOLS.map((t) => ({
-    name: t.name,
-    description: t.description,
-    source: "builtin" as const,
-  }));
+  const tools: { name: string; description: string; source: ToolSource }[] = BUILTIN_TOOLS.map(
+    (t) => ({
+      name: t.name,
+      description: t.description,
+      source: "builtin",
+    })
+  );
 
   if (HERMES_URL) {
     try {
@@ -43,7 +47,9 @@ export async function GET() {
         }));
         tools.push(...external);
       }
-    } catch {}
+    } catch {
+      // ignore
+    }
   }
 
   const mcpTools = parseJsonEnv("MCP_TOOLS_JSON");
@@ -52,7 +58,7 @@ export async function GET() {
       tools.push({
         name: t.name,
         description: t.description || "MCP_TOOLS_JSON",
-        source: "mcp_json" as const,
+        source: "mcp_json",
       });
     }
   }
