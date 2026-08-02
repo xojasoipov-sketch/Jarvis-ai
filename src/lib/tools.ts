@@ -1,6 +1,7 @@
 import { vaultConfigured, listVault, readVaultFile, writeVaultFile, searchVault } from "@/lib/githubVault";
 import { repoConfigured, proposeCodeChange, mergePullRequest } from "@/lib/githubRepo";
 import { supabase, dbConfigured } from "@/lib/supabase";
+import { connectionsSummaryJson } from "@/lib/connections";
 
 export type ToolDef = {
   name: string;
@@ -9,7 +10,6 @@ export type ToolDef = {
   run: (args: Record<string, unknown>) => Promise<unknown>;
 };
 
-/** HTML dan toza matn */
 function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -41,6 +41,13 @@ async function fetchHtml(url: string, timeoutMs = 12000): Promise<string> {
 }
 
 export const BUILTIN_TOOLS: ToolDef[] = [
+  {
+    name: "list_connections",
+    description:
+      "Hozir qaysi xizmatlar (Supabase, Telegram, GitHub, LLM, tools) ulanganini ko'rsatadi. Foydalanuvchi 'nima ulangan?', 'qanday tool bor?' desa SHU toolni chaqir.",
+    parameters: { type: "object", properties: {} },
+    run: async () => connectionsSummaryJson(),
+  },
   {
     name: "calculator",
     description: "Matematik ifodani hisoblaydi",
@@ -92,18 +99,12 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       return { query, results };
     },
   },
-
-  // ── Ultimate Web Scraper ilhomidagi extractorlar ──────────────────────────
   {
     name: "extract_emails",
-    description:
-      "Sahifadan email manzillarini topadi (Ultimate Web Scraper / Email Extractor uslubida). Lead generation uchun.",
+    description: "Sahifadan email manzillarini topadi",
     parameters: {
       type: "object",
-      properties: {
-        url: { type: "string", description: "Sahifa URL" },
-        max: { type: "number", description: "Maksimal email soni (default 50)" },
-      },
+      properties: { url: { type: "string" }, max: { type: "number" } },
       required: ["url"],
     },
     run: async (args) => {
@@ -112,31 +113,20 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       const html = await fetchHtml(url);
       const re = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
       const found = [...new Set((html.match(re) || []).map((e) => e.toLowerCase()))]
-        .filter((e) => !e.endsWith(".png") && !e.endsWith(".jpg") && !e.endsWith(".gif") && !e.includes("example.com"))
+        .filter((e) => !e.endsWith(".png") && !e.endsWith(".jpg") && !e.includes("example.com"))
         .slice(0, max);
       return { url, count: found.length, emails: found };
     },
   },
   {
     name: "extract_social_links",
-    description:
-      "Sahifadan ijtimoiy tarmoq linklarini topadi (Telegram, Instagram, Twitter/X, LinkedIn, YouTube, Facebook, TikTok).",
-    parameters: {
-      type: "object",
-      properties: { url: { type: "string" } },
-      required: ["url"],
-    },
+    description: "Sahifadan ijtimoiy tarmoq linklarini topadi",
+    parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
     run: async (args) => {
       const url = String(args.url || "");
       const html = await fetchHtml(url);
       const platforms: Record<string, string[]> = {
-        telegram: [],
-        instagram: [],
-        twitter: [],
-        linkedin: [],
-        youtube: [],
-        facebook: [],
-        tiktok: [],
+        telegram: [], instagram: [], twitter: [], linkedin: [], youtube: [], facebook: [], tiktok: [],
       };
       const patterns: [keyof typeof platforms, RegExp][] = [
         ["telegram", /href=["'](https?:\/\/(?:t\.me|telegram\.me)\/[^"'\s]+)["']/gi],
@@ -158,13 +148,10 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "extract_images",
-    description: "Sahifadan rasm URL larini oladi (Image Downloader uslubida).",
+    description: "Sahifadan rasm URL larini oladi",
     parameters: {
       type: "object",
-      properties: {
-        url: { type: "string" },
-        max: { type: "number", description: "Default 30" },
-      },
+      properties: { url: { type: "string" }, max: { type: "number" } },
       required: ["url"],
     },
     run: async (args) => {
@@ -174,29 +161,17 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       const base = new URL(pageUrl);
       const set = new Set<string>();
       for (const m of html.matchAll(/(?:src|data-src)=["']([^"']+\.(?:jpg|jpeg|png|webp|gif|svg)[^"']*)["']/gi)) {
-        try {
-          set.add(new URL(m[1], base).href);
-        } catch {}
+        try { set.add(new URL(m[1], base).href); } catch {}
       }
-      for (const m of html.matchAll(/url\(["']?([^"')]+\.(?:jpg|jpeg|png|webp|gif))["']?\)/gi)) {
-        try {
-          set.add(new URL(m[1], base).href);
-        } catch {}
-      }
-      const images = [...set].slice(0, max);
-      return { url: pageUrl, count: images.length, images };
+      return { url: pageUrl, count: [...set].length, images: [...set].slice(0, max) };
     },
   },
   {
     name: "extract_page_text",
-    description:
-      "Sahifadan toza matn + title + meta description oladi (Page Text Extractor). Knowledge Hub ga saqlash uchun qulay.",
+    description: "Sahifadan toza matn + title + meta",
     parameters: {
       type: "object",
-      properties: {
-        url: { type: "string" },
-        max_chars: { type: "number", description: "Default 8000" },
-      },
+      properties: { url: { type: "string" }, max_chars: { type: "number" } },
       required: ["url"],
     },
     run: async (args) => {
@@ -208,25 +183,15 @@ export const BUILTIN_TOOLS: ToolDef[] = [
         html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i) ||
         html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
       const text = stripHtml(html).slice(0, maxChars);
-      return {
-        url,
-        title: titleM?.[1]?.trim() || "",
-        description: descM?.[1]?.trim() || "",
-        text,
-        chars: text.length,
-      };
+      return { url, title: titleM?.[1]?.trim() || "", description: descM?.[1]?.trim() || "", text, chars: text.length };
     },
   },
   {
     name: "extract_list",
-    description:
-      "Sahifadan ro'yxat elementlarini oladi (List Extractor): <li>, jadval qatorlari yoki takrorlanuvchi bloklar.",
+    description: "Sahifadan ro'yxat elementlarini oladi",
     parameters: {
       type: "object",
-      properties: {
-        url: { type: "string" },
-        max: { type: "number", description: "Default 50" },
-      },
+      properties: { url: { type: "string" }, max: { type: "number" } },
       required: ["url"],
     },
     run: async (args) => {
@@ -239,26 +204,15 @@ export const BUILTIN_TOOLS: ToolDef[] = [
         if (t.length > 2) items.push(t);
         if (items.length >= max) break;
       }
-      if (items.length < 5) {
-        for (const m of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
-          const t = stripHtml(m[1]).slice(0, 300);
-          if (t.length > 2) items.push(t);
-          if (items.length >= max) break;
-        }
-      }
       return { url, count: items.length, items: items.slice(0, max) };
     },
   },
-
   {
     name: "web_crawl",
-    description: "Berilgan URL'ning ichki linklari orqali kontent yig'adi (max 5 sahifa)",
+    description: "URL ichki linklari orqali kontent yig'adi (max 5 sahifa)",
     parameters: {
       type: "object",
-      properties: {
-        url: { type: "string" },
-        max_pages: { type: "number", description: "Default 3, max 5" },
-      },
+      properties: { url: { type: "string" }, max_pages: { type: "number" } },
       required: ["url"],
     },
     run: async (args) => {
@@ -274,32 +228,22 @@ export const BUILTIN_TOOLS: ToolDef[] = [
         try {
           const html = await fetchHtml(url, 6000);
           const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-          const title = titleM?.[1]?.trim() || url;
-          const text = stripHtml(html).slice(0, 500);
-          results.push({ url, title, excerpt: text });
+          results.push({ url, title: titleM?.[1]?.trim() || url, excerpt: stripHtml(html).slice(0, 500) });
           const base = new URL(url);
           const links = [...html.matchAll(/href=["']([^"']+)["']/gi)]
-            .map((m) => {
-              try {
-                return new URL(m[1], url).href;
-              } catch {
-                return "";
-              }
-            })
+            .map((m) => { try { return new URL(m[1], url).href; } catch { return ""; } })
             .filter((h) => h.startsWith(base.origin) && !visited.has(h))
             .slice(0, 5);
           for (const link of links) await crawl(link);
         } catch {}
       }
-
       await crawl(startUrl);
       return { pages_visited: results.length, results };
     },
   },
-
   {
     name: "vault_read",
-    description: "Obsidian vault'dan faylni o'qiydi",
+    description: "Obsidian vault'dan faylni o'qiydi (faqat GitHub vault sozlangan bo'lsa)",
     parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
     run: async (args) => {
       if (!vaultConfigured) throw new Error("Vault sozlanmagan (GITHUB_TOKEN kerak)");
@@ -340,13 +284,8 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "knowledge_search",
-    description:
-      "Knowledge Hub'dan qidiradi (Supabase). Katta corpus uchun kelajakda turbovec (TurboQuant) vector index ulanishi mumkin — hozir ilike + tags.",
-    parameters: {
-      type: "object",
-      properties: { query: { type: "string" } },
-      required: ["query"],
-    },
+    description: "Knowledge Hub (Supabase) dan qidiradi — faqat Supabase ulangan bo'lsa",
+    parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
     run: async (args) => {
       if (!dbConfigured) throw new Error("Supabase sozlanmagan");
       const q = String(args.query || "");
@@ -395,7 +334,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "create_task",
-    description: "Yangi vazifa yaratadi",
+    description: "Yangi vazifa yaratadi (Supabase pari_tasks)",
     parameters: {
       type: "object",
       properties: {
@@ -422,7 +361,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "propose_code_change",
-    description: "O'z kodiga PR orqali o'zgartirish taklif qiladi",
+    description: "O'z kodiga PR orqali o'zgartirish taklif qiladi (GitHub token kerak)",
     parameters: {
       type: "object",
       properties: {
@@ -461,14 +400,13 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "railway_info",
-    description:
-      "Deploy platformasi haqida ma'lumot. App Railway da ishlaydi; redeploy GitHub push yoki Railway dashboard orqali.",
+    description: "Deploy platformasi holati (Railway)",
     parameters: { type: "object", properties: {} },
     run: async () => ({
       platform: "Railway",
       public_domain: process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL || null,
       environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "unknown",
-      note: "Redeploy: git push main yoki Railway → Deployments → Redeploy. Vercel ishlatilmaydi.",
+      note: "Redeploy: git push main yoki Railway dashboard",
     }),
   },
 ];
