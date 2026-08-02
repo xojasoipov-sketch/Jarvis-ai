@@ -11,12 +11,80 @@ export type ToolDef = {
   run: (args: Record<string, unknown>) => Promise<unknown>;
 };
 
+const ROOT = (process.env.GITHUB_VAULT_PATH || "vault").replace(/^\/|\/$/g, "");
+
 export const BUILTIN_TOOLS: ToolDef[] = [
   {
     name: "list_connections",
-    description: "Ulangan xizmatlar va tool lar holati",
+    description:
+      "BARCHA ulanishlar: Supabase, Telegram, GitHub, Obsidian vault, Hermes, LLM, MCP, internet. 'Nima ulangan?' uchun SHU tool.",
     parameters: { type: "object", properties: {} },
     run: async () => connectionsSummaryJson(),
+  },
+  {
+    name: "get_business_overview",
+    description:
+      "Biznes holati: vazifalar, loyihalar, bilim bazasi, agent runlar (Supabase). CRM/orders agar jadvallar bo'lsa.",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      if (!dbConfigured || !supabase) throw new Error("Supabase sozlanmagan");
+      const [tasks, projects, knowledge, runs] = await Promise.all([
+        supabase.from("pari_tasks").select("id, title, status, priority").limit(20),
+        supabase.from("pari_projects").select("id, name, status").limit(20),
+        supabase.from("pari_knowledge").select("id, title").limit(10),
+        supabase.from("pari_agent_runs").select("id, agent_name, task, status").order("created_at", { ascending: false }).limit(10),
+      ]);
+      return {
+        tasks: { count: tasks.data?.length ?? 0, items: tasks.data || [], error: tasks.error?.message },
+        projects: { count: projects.data?.length ?? 0, items: projects.data || [], error: projects.error?.message },
+        knowledge: { count: knowledge.data?.length ?? 0, titles: (knowledge.data || []).map((k) => k.title), error: knowledge.error?.message },
+        recent_agent_runs: runs.data || [],
+        note: tasks.error?.message?.includes("does not exist")
+          ? "Jadvallar yo'q — SQL migratsiyani ishga tushiring"
+          : "OK",
+      };
+    },
+  },
+  {
+    name: "create_file",
+    description: "Fayl yaratish (Obsidian vault / GitHub). path masalan: notes/plan.md yoki bot.py",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Fayl yo'li" },
+        content: { type: "string", description: "Mazmun" },
+      },
+      required: ["path", "content"],
+    },
+    run: async (args) => {
+      if (!vaultConfigured) throw new Error("Vault/GitHub sozlanmagan — GITHUB_TOKEN kerak");
+      let path = String(args.path || "").replace(/^\/+/, "");
+      if (!path.startsWith(ROOT + "/") && !path.startsWith(ROOT)) {
+        path = `${ROOT}/${path}`;
+      }
+      const ok = await writeVaultFile(path, String(args.content || ""), `pari-ai: create ${path}`);
+      if (!ok) throw new Error("Fayl yozilmadi");
+      return { ok: true, path };
+    },
+  },
+  {
+    name: "read_file",
+    description: "Fayl o'qish (Obsidian vault / GitHub)",
+    parameters: {
+      type: "object",
+      properties: { path: { type: "string" } },
+      required: ["path"],
+    },
+    run: async (args) => {
+      if (!vaultConfigured) throw new Error("Vault/GitHub sozlanmagan — GITHUB_TOKEN kerak");
+      let path = String(args.path || "").replace(/^\/+/, "");
+      if (!path.startsWith(ROOT + "/") && !path.startsWith(ROOT)) {
+        path = `${ROOT}/${path}`;
+      }
+      const content = await readVaultFile(path);
+      if (content === null) throw new Error(`Fayl topilmadi: ${path}`);
+      return { path, content: content.slice(0, 15000) };
+    },
   },
   {
     name: "calculator",
@@ -41,48 +109,47 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "web_search",
-    description:
-      "INTERNET qidiruv — hozirgi voqealar, faktlar, saytlar. Har doim internet kerak bo'lsa shu tool.",
+    description: "Internet qidiruv (DuckDuckGo, Wikipedia, Brave). Hozirgi faktlar/yangiliklar.",
     parameters: {
       type: "object",
-      properties: { query: { type: "string", description: "Qidiruv so'rovi" } },
+      properties: { query: { type: "string" } },
       required: ["query"],
     },
     run: async (args) => internetSearch(String(args.query || "")),
   },
   {
     name: "web_fetch",
-    description: "URL ochib matn olish (internet)",
+    description: "URL dan matn olish",
     parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
     run: async (args) => fetchUrl(String(args.url || "")),
   },
   {
     name: "extract_emails",
-    description: "Sahifadan email lar (Email Extractor)",
+    description: "Sahifadan email",
     parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
     run: async (args) => extractFromPage(String(args.url || ""), "emails"),
   },
   {
     name: "extract_social_links",
-    description: "Sahifadan social linklar (Social Link Extractor)",
+    description: "Sahifadan social linklar",
     parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
     run: async (args) => extractFromPage(String(args.url || ""), "social"),
   },
   {
     name: "extract_images",
-    description: "Sahifadan rasmlar (Image Downloader)",
+    description: "Sahifadan rasmlar",
     parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
     run: async (args) => extractFromPage(String(args.url || ""), "images"),
   },
   {
     name: "extract_page_text",
-    description: "Sahifa toza matni (Page Text Extractor)",
+    description: "Sahifa toza matni",
     parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
     run: async (args) => extractFromPage(String(args.url || ""), "text"),
   },
   {
     name: "extract_list",
-    description: "Sahifadan ro'yxatlar (List Extractor)",
+    description: "Sahifadan ro'yxat",
     parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
     run: async (args) => extractFromPage(String(args.url || ""), "list"),
   },
@@ -97,8 +164,8 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     run: async (args) => {
       const start = String(args.url || "");
       const max = Math.min(Number(args.max_pages) || 3, 5);
-      const visited = new Set<string>();
       const results: { url: string; title: string; excerpt: string }[] = [];
+      const visited = new Set<string>();
       async function crawl(u: string) {
         if (visited.has(u) || visited.size >= max) return;
         visited.add(u);
@@ -113,30 +180,30 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "vault_read",
-    description: "Vault fayl o'qish",
+    description: "Obsidian vault fayl o'qish",
     parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
     run: async (args) => {
-      if (!vaultConfigured) throw new Error("Vault sozlanmagan");
+      if (!vaultConfigured) throw new Error("Vault sozlanmagan (GITHUB_TOKEN)");
       return { path: args.path, content: await readVaultFile(String(args.path || "")) };
     },
   },
   {
     name: "vault_write",
-    description: "Vault yozish",
+    description: "Obsidian vault yozish",
     parameters: {
       type: "object",
       properties: { path: { type: "string" }, content: { type: "string" } },
       required: ["path", "content"],
     },
     run: async (args) => {
-      if (!vaultConfigured) throw new Error("Vault sozlanmagan");
+      if (!vaultConfigured) throw new Error("Vault sozlanmagan (GITHUB_TOKEN)");
       await writeVaultFile(String(args.path || ""), String(args.content || ""));
       return { ok: true, path: args.path };
     },
   },
   {
     name: "vault_search",
-    description: "Vault qidiruv",
+    description: "Vault ichida qidiruv",
     parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
     run: async (args) => {
       if (!vaultConfigured) throw new Error("Vault sozlanmagan");
@@ -145,7 +212,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "vault_list",
-    description: "Vault ro'yxat",
+    description: "Vault fayllar ro'yxati",
     parameters: { type: "object", properties: { path: { type: "string" } } },
     run: async (args) => {
       if (!vaultConfigured) throw new Error("Vault sozlanmagan");
@@ -154,7 +221,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "knowledge_search",
-    description: "Knowledge Hub qidiruv",
+    description: "Supabase Knowledge Hub qidiruv",
     parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
     run: async (args) => {
       if (!dbConfigured) throw new Error("Supabase sozlanmagan");
@@ -170,7 +237,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "knowledge_save",
-    description: "Knowledge Hub saqlash",
+    description: "Knowledge Hub ga saqlash",
     parameters: {
       type: "object",
       properties: {
@@ -197,7 +264,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "create_task",
-    description: "Vazifa yaratish",
+    description: "Vazifa yaratish (Supabase)",
     parameters: {
       type: "object",
       properties: {
@@ -224,7 +291,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "propose_code_change",
-    description: "Kod o'zgarishi PR",
+    description: "Kodga PR (GitHub)",
     parameters: {
       type: "object",
       properties: {
@@ -242,7 +309,10 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     },
     run: async (args) => {
       if (!repoConfigured) throw new Error("GITHUB_TOKEN sozlanmagan");
-      return proposeCodeChange(String(args.description || ""), (args.files || []) as { path: string; content: string }[]);
+      return proposeCodeChange(
+        String(args.description || ""),
+        (args.files || []) as { path: string; content: string }[]
+      );
     },
   },
   {
@@ -260,7 +330,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "railway_info",
-    description: "Railway holati",
+    description: "Railway deploy holati",
     parameters: { type: "object", properties: {} },
     run: async () => ({
       platform: "Railway",
