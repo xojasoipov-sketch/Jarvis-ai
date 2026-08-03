@@ -42,9 +42,11 @@ export async function middleware(req: NextRequest) {
   maybeCleanup();
   const path = req.nextUrl.pathname;
 
-  // Login / static / auth hech qachon qayta yo'naltirilmasin (reload loop oldini olish)
+  // Public: login, portfolio (SADIPRIME mehmonlar), static, auth, telegram webhook
   if (
     path === "/login" ||
+    path === "/portfolio" ||
+    path.startsWith("/portfolio/") ||
     path.startsWith("/_next") ||
     path.startsWith("/api/auth") ||
     path === "/favicon.ico" ||
@@ -67,7 +69,7 @@ export async function middleware(req: NextRequest) {
     if (limited) return limited;
   }
   if (path.startsWith("/api/tts") || path.startsWith("/api/stt") || path.startsWith("/api/voice")) {
-    const limited = rateLimit(req, 30, 60_000); // ElevenLabs uchun biroz kengaytirildi
+    const limited = rateLimit(req, 30, 60_000);
     if (limited) return limited;
   }
 
@@ -78,10 +80,8 @@ export async function middleware(req: NextRequest) {
       if (path.startsWith("/api/")) {
         return NextResponse.json({ error: "Autentifikatsiya talab qilinadi" }, { status: 401 });
       }
-      // Allaqachon login'da bo'lsa qayta redirect qilma
       if (path === "/login") return NextResponse.next();
       const loginUrl = new URL("/login", req.url);
-      // next ichida /login bo'lmasin — loop oldini oladi
       const nextPath = path.startsWith("/login") ? "/" : path;
       loginUrl.searchParams.set("next", nextPath);
       return NextResponse.redirect(loginUrl);
@@ -93,6 +93,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon|login|api/auth/login|api/telegram|monitoring|logo.png).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon|login|portfolio|api/auth/login|api/telegram|monitoring|logo.png).*)",
   ],
 };
