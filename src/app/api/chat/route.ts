@@ -4,11 +4,15 @@ import { log } from "@/lib/logger";
 import { buildBrainContext, connectionsSummaryJson } from "@/lib/connections";
 import { toolsAsOpenAIFunctionsAll, runAnyTool } from "@/lib/mcp-tools";
 import { internetSearch, fetchUrl } from "@/lib/web";
+import { ownerChatSystem } from "@/lib/owner";
 
-const SYSTEM_BASE = `Sen Pari AI Brain.
+const SYSTEM_BASE = `${ownerChatSystem()}
+
+Sen Pari AI Brain (shaxsiy OS).
 Faqat system dagi ✅/❌ ulanishlar va TOOL LAR ro'yxatidan foydalan.
 list_service_orders, get_order_details kabi nomlarni O'YLAMA — ular yo'q.
-O'zbek savol → o'zbek javob. Internet → web_search.`;
+O'zbek savol → o'zbek javob. Internet → web_search.
+Agent/buyruqda mavzudan chiqib chalkashtirma — aniq bajar.`;
 
 type ChatMessage = {
   role: string;
@@ -148,7 +152,6 @@ export async function POST(req: NextRequest) {
   const lastUser = [...messages].reverse().find((m: { role: string }) => m.role === "user");
   const lastText = typeof lastUser?.content === "string" ? lastUser.content : "";
 
-  // Inventory questions → no LLM fantasy
   if (isInventoryQuestion(lastText)) {
     log("info", "chat-api", "inventory short-circuit");
     return textStream(formatReport());
@@ -170,7 +173,6 @@ export async function POST(req: NextRequest) {
     live +
     (extra ? "\n\n## EXTRA\n" + extra : "");
 
-  // Prefer Groq / OpenAI tool-calling
   const toolProviders = list.filter((p) => p.supportsTools && p.key !== "dummy");
   for (const toolProvider of toolProviders) {
     try {
@@ -185,7 +187,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Stream fallback
   for (const p of list) {
     try {
       const res = await fetch(p.url, {
