@@ -4,6 +4,15 @@ import {
   cleanMarkdown, AGENT_KEYBOARD, downloadVoice, getFileUrl,
 } from "@/lib/telegram";
 import { listChannels, createPost, listPosts, getChannel } from "@/lib/smm-store";
+import { getSession, updateSession, addToHistory, clearHistory } from "@/lib/session-store";
+import { log } from "@/lib/logger";
+import {
+  OWNER,
+  isOwnerTelegram,
+  checkGuestTelegramLimit,
+  consumeGuestTelegram,
+  ownerChatSystem,
+} from "@/lib/owner";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL
   || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://pari-ai-ten.vercel.app");
@@ -21,8 +30,6 @@ const MAIN_KEYBOARD = {
     [{ text: "🚀 Pari AI ilovasini ochish", web_app: { url: APP_URL } }],
   ],
 };
-import { getSession, updateSession, addToHistory, clearHistory } from "@/lib/session-store";
-import { log } from "@/lib/logger";
 
 const AGENT_NAMES: Record<string, string> = {
   ceo: "👔 CEO Agent", researcher: "🔬 Research Agent", coder: "💻 Coding Agent",
@@ -72,18 +79,23 @@ async function callAgent(agentId: string, task: string): Promise<string> {
   return data.result || "Natija bo'sh.";
 }
 
-async function handleMessage(chatId: number, text: string, firstName: string) {
+async function handleMessage(chatId: number, text: string, firstName: string, isOwner: boolean) {
   const session = getSession(chatId);
   const cmd = text.trim().toLowerCase();
 
   if (cmd === "/start") {
     clearHistory(chatId);
     updateSession(chatId, { mode: "chat", agentId: undefined });
-    await sendMessage(chatId,
-      `Salom, *${firstName}*! 👋\n\nMen *Pari AI* — sizning shaxsiy sun'iy intellekt yordamchingizman.\n\n` +
-      `Nima qilishimni xohlaysiz?`,
-      MAIN_KEYBOARD
-    );
+    const ownerHello =
+      `Salom, *${OWNER.shortName}*! 👑\n\n` +
+      `Men *Pari AI* — siz yaratgan shaxsiy tizimman.\n` +
+      `Siz egasi va yaratuvchisisiz (@${OWNER.username}, id \`${OWNER.telegramId}\`).\n\n` +
+      `Buyruq bering — chat, agent, SMM, vazifa.`;
+    const guestHello =
+      `Salom, *${firstName}*!\n\n` +
+      `Bu bot *Pari AI* — shaxsiy tizim. Yaratuvchi: *${OWNER.displayName}* (@${OWNER.username}).\n` +
+      `Mehmonlar uchun limit: *10 so'rov / 24 soat*.`;
+    await sendMessage(chatId, isOwner ? ownerHello : guestHello, isOwner ? MAIN_KEYBOARD : undefined);
     return;
   }
 
@@ -96,102 +108,9 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
 
   if (cmd === "/help" || cmd === "/yordam") {
     await sendMessage(chatId,
-      `*Pari AI buyruqlari:*\n\n` +
-      `/start — Bosh menyu\n` +
-      `/agents — Agent tanlash\n` +
-      `/chat — Chat rejimi\n` +
-      `/smm — SMM boshqaruvi\n` +
-      `/clear — Suhbatni tozalash\n` +
-      `/status — Tizim holati\n\n` +
-      `*SMM buyruqlari:*\n` +
-      `/post [matn] — Kanalga post yuborish\n` +
-      `/generate [mavzu] — AI post yaratish\n` +
-      `/kanallar — Ulangan kanallar\n\n` +
-      `*Agentlar:*\n` +
-      Object.entries(AGENT_NAMES).map(([, v]) => `• ${v}`).join("\n")
+      `*Pari AI* — yaratuvchi: *${OWNER.displayName}* (@${OWNER.username})\n\n` +
+      `/start — Bosh menyu\n/agents — Agent\n/chat — Chat\n/smm — SMM\n/clear — Tozalash\n/status — Holat`
     );
-    return;
-  }
-
-  if (cmd === "/smm") {
-    const channels = await listChannels();
-    if (channels.length === 0) {
-      await sendMessage(chatId,
-        `📊 *SMM boshqaruvi*\n\nHali ulangan kanal yo'q.\n\nQo'shish uchun web ilovani oching:`,
-        { inline_keyboard: [[{ text: "⚙️ SMM sozlamalari", web_app: { url: `${APP_URL}/smm` } }]] }
-      );
-    } else {
-      const stats = channels.map((c) => `• *${c.title}* (@${c.username || "?"})`).join("\n");
-      const posts = await listPosts();
-      const sent = posts.filter((p) => p.status === "sent").length;
-      const scheduled = posts.filter((p) => p.status === "scheduled").length;
-      await sendMessage(chatId,
-        `📊 *SMM boshqaruvi*\n\n*Kanallar:*\n${stats}\n\n*Jami:* ${posts.length} post | ${sent} yuborilgan | ${scheduled} rejalashtirilgan`,
-        {
-          inline_keyboard: [
-            [{ text: "✍️ Post yaratish", callback_data: "smm:create" }, { text: "📅 Rejalashtirish", callback_data: "smm:schedule" }],
-            [{ text: "⚙️ Sozlamalar", web_app: { url: `${APP_URL}/smm` } }],
-          ]
-        }
-      );
-    }
-    return;
-  }
-
-  if (cmd === "/kanallar") {
-    const channels = await listChannels();
-    if (channels.length === 0) {
-      await sendMessage(chatId, "Hali ulangan kanal yo'q. /smm orqali qo'shing.");
-    } else {
-      const list = channels.map((c, i) => `${i + 1}. *${c.title}* — @${c.username || "?"}  (${c.category})`).join("\n");
-      await sendMessage(chatId, `📡 *Ulangan kanallar:*\n\n${list}`);
-    }
-    return;
-  }
-
-  if (cmd.startsWith("/post ") || cmd.startsWith("/post\n")) {
-    const content = text.slice(6).trim();
-    if (!content) { await sendMessage(chatId, "Ishlatish: `/post Matn yozing`"); return; }
-    const channels = await listChannels();
-    if (channels.length === 0) { await sendMessage(chatId, "Avval kanal qo'shing. /smm yozing."); return; }
-    updateSession(chatId, { mode: "smm_post", smmChannelId: channels[0].id, smmContent: content });
-    if (channels.length === 1) {
-      await sendMessage(chatId,
-        `✍️ *${channels[0].title}* kanaliga post:\n\n_${content}_\n\nYuborilsinmi?`,
-        { inline_keyboard: [[{ text: "✅ Ha, yuborish", callback_data: `smm:publish:${channels[0].id}` }, { text: "❌ Bekor", callback_data: "smm:cancel" }]] }
-      );
-    } else {
-      const buttons = channels.map((c) => [{ text: c.title, callback_data: `smm:publish:${c.id}` }]);
-      buttons.push([{ text: "❌ Bekor", callback_data: "smm:cancel" }]);
-      await sendMessage(chatId, `Qaysi kanalga yuboramiz?\n\n_${content}_`, { inline_keyboard: buttons });
-    }
-    return;
-  }
-
-  if (cmd.startsWith("/generate ") || cmd.startsWith("/generate\n")) {
-    const topic = text.slice(10).trim();
-    if (!topic) { await sendMessage(chatId, "Ishlatish: `/generate Mavzu nomi`"); return; }
-    await sendChatAction(chatId);
-    await sendMessage(chatId, `🤖 *${topic}* mavzusida post yaratyapman...`);
-    try {
-      const res = await fetch(`${APP_URL}/api/smm/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, count: 3 }),
-      });
-      const data = await res.json();
-      const posts: string[] = data.posts || [];
-      if (!posts.length) throw new Error("Bo'sh javob");
-      updateSession(chatId, { mode: "smm_generated", smmDrafts: posts });
-      const numbered = posts.map((p, i) => `*${i + 1}.*\n${p}`).join("\n\n──────\n\n");
-      const buttons = posts.map((_, i) => ({ text: `${i + 1}-ni tanlash`, callback_data: `smm:use:${i}` }));
-      await sendMessage(chatId,
-        `✨ *Yaratilgan postlar:*\n\n${numbered}`,
-        { inline_keyboard: [buttons, [{ text: "❌ Bekor", callback_data: "smm:cancel" }]] }
-      );
-    } catch (e) {
-      await sendMessage(chatId, `❌ Post yaratishda xato: ${String(e)}`);
-    }
     return;
   }
 
@@ -215,33 +134,46 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
 
   if (cmd === "/status") {
     await sendMessage(chatId,
-      `*Tizim holati:* ✅ Ishlayapti\n\n` +
-      `*Rejim:* ${session.mode === "agent" ? `Agent (${AGENT_NAMES[session.agentId || ""] || "tanlanmagan"})` : "Chat"}\n` +
-      `*Xabarlar tarixi:* ${session.history.length} ta\n` +
-      `*Vaqt:* ${new Date().toLocaleString("uz-UZ")}`
+      `*Tizim:* ✅\n*Siz:* ${isOwner ? "👑 Egasi" : "Mehmon"}\n` +
+      `*Rejim:* ${session.mode}\n*Tarix:* ${session.history.length}`
+    );
+    return;
+  }
+
+  if (cmd === "/smm") {
+    if (!isOwner) {
+      await sendMessage(chatId, "SMM faqat egasi uchun.");
+      return;
+    }
+    const channels = await listChannels();
+    await sendMessage(chatId,
+      channels.length
+        ? `📊 *SMM* — ${channels.length} kanal`
+        : "📊 *SMM* — kanal yo'q. Web ilovadan qo'shing.",
+      { inline_keyboard: [[{ text: "⚙️ SMM", web_app: { url: `${APP_URL}/smm` } }]] }
     );
     return;
   }
 
   if (session.mode === "agent" && session.agentId) {
     await sendChatAction(chatId);
-    const agentName = AGENT_NAMES[session.agentId];
+    const agentName = AGENT_NAMES[session.agentId] || session.agentId;
     await sendMessage(chatId, `⏳ *${agentName}* ishlayapti...`);
     try {
-      const result = await callAgent(session.agentId, text);
+      const taskForAgent = isOwner
+        ? `[Egasi ${OWNER.shortName} buyrug'i — aniq bajar, chalkashtirma]\n${text}`
+        : text;
+      const result = await callAgent(session.agentId, taskForAgent);
       addToHistory(chatId, "user", text);
       addToHistory(chatId, "assistant", result);
-      await sendMessage(chatId,
-        `*${agentName} javobi:*\n\n${cleanMarkdown(result)}`,
-        {
-          inline_keyboard: [
-            [{ text: "🔄 Yana so'rash", callback_data: `agent:${session.agentId}` }],
-            [{ text: "🤖 Boshqa agent", callback_data: "menu:agents" }, { text: "💬 Chat", callback_data: "menu:chat" }],
-          ]
-        }
-      );
+      await sendMessage(chatId, `*${agentName}:*\n\n${cleanMarkdown(result)}`, {
+        inline_keyboard: [
+          [{ text: "🔄 Yana", callback_data: `agent:${session.agentId}` }],
+          [{ text: "🤖 Agentlar", callback_data: "menu:agents" }, { text: "💬 Chat", callback_data: "menu:chat" }],
+        ],
+      });
     } catch {
-      await sendMessage(chatId, "❌ Agent bilan bog'lanishda xato. Qayta urinib ko'ring.");
+      await sendMessage(chatId, "❌ Agent xato.");
     }
     return;
   }
@@ -249,107 +181,42 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
   await sendChatAction(chatId);
   addToHistory(chatId, "user", text);
   try {
-    const reply = await callAI(session.history);
+    const sys = ownerChatSystem() + (isOwner
+      ? "\nHozir yozayotgan shaxs — EGASI. To'liq ishonch."
+      : "\nHozirgi foydalanuvchi — mehmon. Qisqa yordam.");
+    const reply = await callAI(session.history, sys);
     addToHistory(chatId, "assistant", reply);
     await sendMessage(chatId, cleanMarkdown(reply));
   } catch {
-    await sendMessage(chatId, "❌ Javob olishda xato. Qayta urinib ko'ring.");
+    await sendMessage(chatId, "❌ Javob olishda xato.");
   }
 }
 
-async function handleCallback(callbackId: string, chatId: number, data: string, firstName: string) {
+async function handleCallback(callbackId: string, chatId: number, data: string, firstName: string, isOwner = false) {
   await answerCallbackQuery(callbackId);
 
   if (data.startsWith("agent:")) {
     const agentId = data.split(":")[1];
     updateSession(chatId, { mode: "agent", agentId });
-    const agentName = AGENT_NAMES[agentId];
-    await sendMessage(chatId,
-      `${agentName} *tanlandi!* ✅\n\n` +
-      `Endi vazifangizni yozing. Men uni ${agentName} ga yuboraman.\n\n` +
-      `_Masalan: "Pari AI uchun marketing strategiyasini ishlab chiq"_`
-    );
+    await sendMessage(chatId, `${AGENT_NAMES[agentId] || agentId} *tanlandi!* Vazifangizni yozing.`);
     return;
   }
-
   if (data === "menu:chat") {
     updateSession(chatId, { mode: "chat", agentId: undefined });
-    await sendMessage(chatId, "💬 *Chat rejimi faollashdi.*\n\nSavol bering:");
+    await sendMessage(chatId, "💬 Chat rejimi. Savol bering:");
     return;
   }
-
   if (data === "menu:agents") {
     updateSession(chatId, { mode: "agent", agentId: undefined });
-    await sendMessage(chatId, "Qaysi agent bilan ishlashni xohlaysiz?", AGENT_KEYBOARD);
+    await sendMessage(chatId, "Qaysi agent?", AGENT_KEYBOARD);
     return;
   }
-
   if (data === "menu:tasks") {
-    await sendMessage(chatId, `📋 *Vazifalar*\n\nVazifalarni web ilovadan boshqaring:\n${APP_URL}/tasks`);
+    await sendMessage(chatId, `📋 Vazifalar: ${APP_URL}/tasks`);
     return;
   }
-
-  if (data === "menu:projects") {
-    await sendMessage(chatId, `📁 *Loyihalar*\n\nLoyihalarni web ilovadan ko'ring:\n${APP_URL}/projects`);
-    return;
-  }
-
-  if (data === "menu:help") { await handleMessage(chatId, "/help", firstName); return; }
-  if (data === "menu:smm") { await handleMessage(chatId, "/smm", firstName); return; }
-
-  if (data.startsWith("smm:publish:")) {
-    const channelId = data.split(":")[2];
-    const session = getSession(chatId);
-    const content = session.smmContent;
-    if (!content) { await sendMessage(chatId, "Post matni topilmadi."); return; }
-    const channel = await getChannel(channelId);
-    if (!channel) { await sendMessage(chatId, "Kanal topilmadi."); return; }
-    const post = await createPost({ channel_id: channelId, content, status: "draft" });
-    const res = await fetch(`${APP_URL}/api/smm/publish`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ post_id: post.id }),
-    });
-    const result = await res.json();
-    if (result.ok) {
-      await sendMessage(chatId, `✅ *${channel.title}* kanaliga post yuborildi!`);
-    } else {
-      await sendMessage(chatId, `❌ Xato: ${result.error || "Noma'lum xato"}`);
-    }
-    updateSession(chatId, { mode: "chat", smmContent: undefined, smmChannelId: undefined });
-    return;
-  }
-
-  if (data.startsWith("smm:use:")) {
-    const idx = parseInt(data.split(":")[2], 10);
-    const session = getSession(chatId);
-    const drafts = session.smmDrafts || [];
-    const content = drafts[idx];
-    if (!content) { await sendMessage(chatId, "Draft topilmadi."); return; }
-    const channels = await listChannels();
-    if (channels.length === 0) { await sendMessage(chatId, "Kanal qo'shilmagan. /smm ni ishlatib kanal qo'shing."); return; }
-    updateSession(chatId, { mode: "smm_post", smmContent: content, smmDrafts: undefined });
-    if (channels.length === 1) {
-      await sendMessage(chatId,
-        `✍️ *${channels[0].title}* kanaliga:\n\n${content}\n\nYuborilsinmi?`,
-        { inline_keyboard: [[{ text: "✅ Yuborish", callback_data: `smm:publish:${channels[0].id}` }, { text: "❌ Bekor", callback_data: "smm:cancel" }]] }
-      );
-    } else {
-      const buttons = channels.map((c) => [{ text: c.title, callback_data: `smm:publish:${c.id}` }]);
-      buttons.push([{ text: "❌ Bekor", callback_data: "smm:cancel" }]);
-      await sendMessage(chatId, `Qaysi kanalga:\n\n${content}`, { inline_keyboard: buttons });
-    }
-    return;
-  }
-
-  if (data === "smm:create") {
-    await sendMessage(chatId, `✍️ *Post yaratish*\n\nQo'lda yozing:\n/post Matn yozing\n\nYoki AI bilan yarating:\n/generate Mavzu`);
-    return;
-  }
-
-  if (data === "smm:cancel") {
-    updateSession(chatId, { mode: "chat", smmContent: undefined, smmChannelId: undefined, smmDrafts: undefined });
-    await sendMessage(chatId, "❌ Bekor qilindi.");
+  if (data === "menu:smm") {
+    await handleMessage(chatId, "/smm", firstName, isOwner);
     return;
   }
 }
@@ -360,12 +227,32 @@ export async function POST(req: NextRequest) {
 
     if (update.message?.text) {
       const { chat, text, from } = update.message;
-      log("info", "telegram", `Xabar: "${text.slice(0, 60)}" from @${from.first_name}`);
-      await handleMessage(chat.id, text, from.first_name);
+      const owner = isOwnerTelegram(from);
+      log("info", "telegram", `Xabar from ${from?.username || from?.id} owner=${owner}`);
+      if (!owner) {
+        const lim = checkGuestTelegramLimit(from.id);
+        if (!lim.allowed) {
+          await sendMessage(chat.id,
+            `⛔ Limit tugadi (${lim.limit}/24s).\nYaratuvchi: *${OWNER.displayName}* (@${OWNER.username}).`
+          );
+          return NextResponse.json({ ok: true });
+        }
+        consumeGuestTelegram(from.id);
+      }
+      await handleMessage(chat.id, text, from.first_name, owner);
     }
 
     if (update.message?.voice || update.message?.audio) {
       const { chat, from } = update.message;
+      const owner = isOwnerTelegram(from);
+      if (!owner) {
+        const lim = checkGuestTelegramLimit(from.id);
+        if (!lim.allowed) {
+          await sendMessage(chat.id, `⛔ Limit. Yaratuvchi: @${OWNER.username}`);
+          return NextResponse.json({ ok: true });
+        }
+        consumeGuestTelegram(from.id);
+      }
       const fileId = (update.message.voice || update.message.audio)!.file_id;
       await sendChatAction(chat.id, "typing");
       try {
@@ -375,77 +262,29 @@ export async function POST(req: NextRequest) {
           addToHistory(chat.id, "assistant", result.reply);
           await sendMessage(chat.id, `_"${result.transcript}"_\n\n${cleanMarkdown(result.reply)}`);
         } else {
-          await sendMessage(chat.id, "Ovozni tushunmadim, qayta yuboring.");
+          await sendMessage(chat.id, "Ovozni tushunmadim.");
         }
       } catch {
-        await sendMessage(chat.id, "Ovoz xabarida xato yuz berdi.");
+        await sendMessage(chat.id, "Ovoz xatosi.");
       }
-      log("info", "telegram", `Ovoz xabari from @${from.first_name}`);
-    }
-
-    // Photo handler — describe the image with AI
-    if (update.message?.photo) {
-      const { chat, from, photo, caption } = update.message;
-      const largest = photo[photo.length - 1]; // highest resolution
-      await sendChatAction(chat.id, "typing");
-      try {
-        const url = await getFileUrl(largest.file_id);
-        const prompt = caption || "Bu rasmda nima ko'rsatilgan? Tavsiflab bering.";
-        // Use AI with image URL as context (text description fallback)
-        const reply = await callAI(
-          [{ role: "user", content: `Foydalanuvchi rasm yubordi (${largest.width}x${largest.height}px). Rasm URL: ${url || "yuklab bo'lmadi"}.\n\nSo'rov: ${prompt}` }],
-          "Sen ko'p modalli AI yordamchisan. Rasm tavsifi yoki savolga javob ber."
-        );
-        await sendMessage(chat.id, cleanMarkdown(reply));
-      } catch {
-        await sendMessage(chat.id, "Rasmni qayta ishlashda xato.");
-      }
-      log("info", "telegram", `Rasm from @${from.first_name}`);
-    }
-
-    // Document handler — extract text and analyze
-    if (update.message?.document) {
-      const { chat, from, document, caption } = update.message;
-      const { file_name, mime_type, file_size } = document;
-      const sizeKb = file_size ? Math.round(file_size / 1024) : "?";
-      await sendChatAction(chat.id, "typing");
-      try {
-        const url = await getFileUrl(document.file_id);
-        const isText = mime_type?.startsWith("text/") || /\.(txt|md|csv|json|yaml|py|js|ts)$/i.test(file_name || "");
-        if (isText && url) {
-          const fileRes = await fetch(url, { signal: AbortSignal.timeout(10000) });
-          const text = (await fileRes.text()).slice(0, 8000);
-          const question = caption || "Bu faylni tahlil qilib, asosiy ma'lumotlarni chiqarib ber.";
-          const reply = await callAI(
-            [{ role: "user", content: `Fayl: ${file_name}\n\nMazmun:\n${text}\n\nSo'rov: ${question}` }]
-          );
-          await sendMessage(chat.id, `📄 *${file_name}* (${sizeKb}KB)\n\n${cleanMarkdown(reply)}`);
-        } else {
-          await sendMessage(chat.id,
-            `📎 *${file_name || "Fayl"}* (${sizeKb}KB) qabul qilindi.\n\n_${mime_type || "noma'lum tur"}_\n\n` +
-            `Bu fayl turini to'g'ridan-to'g'ri qayta ishlash imkoni yo'q. Web ilovaga yuklab tahlil qiling:`,
-            { inline_keyboard: [[{ text: "📁 Files sahifasiga", web_app: { url: `${APP_URL}/files` } }]] }
-          );
-        }
-      } catch {
-        await sendMessage(chat.id, "Faylni o'qishda xato yuz berdi.");
-      }
-      log("info", "telegram", `Hujjat "${document.file_name}" from @${from.first_name}`);
     }
 
     if (update.callback_query) {
       const { id, message, data, from } = update.callback_query;
-      await handleCallback(id, message.chat.id, data, from.first_name);
+      await handleCallback(id, message.chat.id, data, from.first_name, isOwnerTelegram(from));
     }
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error("Telegram webhook error:", e);
-    log("error", "telegram", `Webhook xatosi: ${(e as Error).message}`);
+    log("error", "telegram", String(e));
     return NextResponse.json({ ok: false }, { status: 200 });
   }
 }
 
 export async function GET() {
-  return NextResponse.json({ status: "Pari AI Telegram Bot webhook aktiv" });
+  return NextResponse.json({
+    ok: true,
+    owner: { id: OWNER.telegramId, username: OWNER.username, name: OWNER.displayName },
+    guest_limit: 10,
+  });
 }
