@@ -5,6 +5,9 @@ import {
   defaultWelcomeText,
 } from "@/lib/elevenlabs";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 async function streamElementsTTS(text: string, lang: string): Promise<ArrayBuffer | null> {
   try {
     const voice = lang === "ru" ? "Maxim" : "Brian";
@@ -81,13 +84,12 @@ export async function GET(req: NextRequest) {
   const textParam = (sp.get("text") || "").trim();
   const lang = (sp.get("lang") || "uz").toLowerCase();
 
-  // Health / config
   if (!textParam && mode !== "welcome") {
     return NextResponse.json({
       ...elevenLabsMeta(),
       default_lang: "uz",
       welcome: defaultWelcomeText(),
-      note: "O'zbek ovoz: ELEVENLABS_API_KEY majburiy. mode=welcome yoki text=",
+      note: "mode=welcome yoki ?text=... — Railway Variables: ELEVENLABS_API_KEY",
     });
   }
 
@@ -97,7 +99,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         error: "tts_failed",
-        hint: "Railway Variables: ELEVENLABS_API_KEY va ELEVENLABS_VOICE_ID",
+        hint: "1) ELEVENLABS_API_KEY to'g'ri servicega 2) Redeploy 3) key sk_ bilan boshlanadi",
         ...elevenLabsMeta(),
       },
       { status: 502 }
@@ -120,7 +122,9 @@ export async function POST(req: NextRequest) {
     if (!text) return NextResponse.json({ error: "text kerak" }, { status: 400 });
 
     const result = await resolveTTS(text, lang);
-    if (!result) return NextResponse.json({ error: "tts_failed", ...elevenLabsMeta() }, { status: 502 });
+    if (!result) {
+      return NextResponse.json({ error: "tts_failed", ...elevenLabsMeta() }, { status: 502 });
+    }
 
     return audioResponse(result.buf, result.provider, result.cached, "no-store");
   } catch (e) {

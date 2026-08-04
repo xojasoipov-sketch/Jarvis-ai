@@ -1,15 +1,22 @@
 /**
  * ElevenLabs TTS — shared client + in-memory cache
- * (inspired by hectorg2211/jarvis welcome cache pattern)
  */
+import { envFirst } from "@/lib/env";
 
-const KEY = () => process.env.ELEVENLABS_API_KEY || "";
-const VOICE = () => process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
-const MODEL = () => process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
+const KEY = () =>
+  envFirst(
+    "ELEVENLABS_API_KEY",
+    "ELEVEN_LABS_API_KEY",
+    "ELEVENLABS_KEY",
+    "XI_API_KEY"
+  );
+const VOICE = () =>
+  envFirst("ELEVENLABS_VOICE_ID", "ELEVEN_LABS_VOICE_ID") || "21m00Tcm4TlvDq8ikWAM";
+const MODEL = () =>
+  envFirst("ELEVENLABS_MODEL_ID", "ELEVEN_LABS_MODEL_ID") || "eleven_multilingual_v2";
 
-// process-local cache (Railway instance lifetime)
 const CACHE = new Map<string, { buf: ArrayBuffer; ts: number }>();
-const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6h
+const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
 const CACHE_MAX = 40;
 
 function cacheKey(text: string, lang: string) {
@@ -21,10 +28,14 @@ export function elevenLabsConfigured() {
 }
 
 export function elevenLabsMeta() {
+  const key = KEY();
   return {
-    configured: elevenLabsConfigured(),
+    configured: Boolean(key),
+    elevenlabs: key ? "✅ ELEVENLABS_API_KEY set" : "❌ ELEVENLABS_API_KEY not set",
     voice_id: VOICE(),
     model_id: MODEL(),
+    key_prefix: key ? `${key.slice(0, 6)}…` : null,
+    fallbacks: ["streamelements", "google-tts"],
   };
 }
 
@@ -34,7 +45,10 @@ export async function synthesizeElevenLabs(
   opts: { skipCache?: boolean } = {}
 ): Promise<{ buffer: ArrayBuffer; cached: boolean; provider: "elevenlabs" } | null> {
   const key = KEY();
-  if (!key) return null;
+  if (!key) {
+    console.warn("TTS: ELEVENLABS_API_KEY yo'q (env)");
+    return null;
+  }
 
   const clean = text.trim().slice(0, 2500);
   if (!clean) return null;
@@ -62,7 +76,7 @@ export async function synthesizeElevenLabs(
   }
 
   async function call(payload: Record<string, unknown>) {
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE()}`, {
+    return fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE()}`, {
       method: "POST",
       headers: {
         "xi-api-key": key,
@@ -72,7 +86,6 @@ export async function synthesizeElevenLabs(
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(20000),
     });
-    return res;
   }
 
   let res = await call(body);
@@ -89,7 +102,6 @@ export async function synthesizeElevenLabs(
   const buffer = await res.arrayBuffer();
   if (buffer.byteLength < 200) return null;
 
-  // cache
   if (CACHE.size >= CACHE_MAX) {
     const first = CACHE.keys().next().value;
     if (first) CACHE.delete(first);
@@ -99,7 +111,6 @@ export async function synthesizeElevenLabs(
   return { buffer, cached: false, provider: "elevenlabs" };
 }
 
-/** Default owner welcome line (double-clap / HUD boot) */
 export function defaultWelcomeText(name = process.env.OWNER_SHORT_NAME || "Sadi") {
   return (
     process.env.JARVIS_WELCOME_TEXT ||
