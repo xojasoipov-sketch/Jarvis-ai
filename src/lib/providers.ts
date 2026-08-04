@@ -1,4 +1,5 @@
 // Provider chain: local-first → free cloud → paid.
+import { envAll, envFirst, ENV } from "@/lib/env";
 
 export const PROVIDER_COSTS: Record<string, number> = {
   local: 0,
@@ -25,14 +26,9 @@ export type Provider = {
   local?: boolean;
 };
 
+/** BASE + BASE2… + case-insensitive */
 function envKeys(base: string): string[] {
-  const keys: string[] = [];
-  if (process.env[base]?.trim()) keys.push(process.env[base]!.trim());
-  for (let i = 2; i <= 10; i++) {
-    const v = process.env[`${base}${i}`]?.trim();
-    if (v) keys.push(v);
-  }
-  return keys;
+  return envAll(base, 12);
 }
 
 function providerEntries(
@@ -98,13 +94,9 @@ function getLocalProviders(): Provider[] {
 }
 
 function resolveSiteUrl(): string {
-  if (process.env.SITE_URL) return process.env.SITE_URL.replace(/\/$/, "");
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-  if (process.env.RAILWAY_PUBLIC_DOMAIN) {
-    const d = process.env.RAILWAY_PUBLIC_DOMAIN;
-    return d.startsWith("http") ? d : `https://${d}`;
-  }
-  return "https://pari-ai.up.railway.app";
+  const s = ENV.siteUrl();
+  if (!s) return "https://pari-ai.up.railway.app";
+  return s.startsWith("http") ? s.replace(/\/$/, "") : `https://${s}`;
 }
 
 export function getProviders(): Provider[] {
@@ -122,25 +114,22 @@ export function getProviders(): Provider[] {
     costPer1M: 0,
   });
 
-  // Groq — asosiy bepul/tezkor
   list.push(
     ...providerEntries(
       "groq",
       "GROQ_API_KEY",
       "https://api.groq.com/openai/v1/chat/completions",
-      process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+      envFirst("GROQ_MODEL") || "llama-3.3-70b-versatile",
       { supportsTools: true }
     )
   );
 
-  // Gemini (Google AI Studio) — OpenAI-compatible emas, alohida test; chat uchun OpenRouter orqali
-  // OpenRouter — barqaror bepul model
   list.push(
     ...providerEntries(
       "openrouter",
       "OPENROUTER_API_KEY",
       "https://openrouter.ai/api/v1/chat/completions",
-      process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
+      envFirst("OPENROUTER_MODEL") || "openai/gpt-4o-mini",
       {
         supportsTools: true,
         headers: {
@@ -151,13 +140,12 @@ export function getProviders(): Provider[] {
     )
   );
 
-  // Cerebras
   list.push(
     ...providerEntries(
       "cerebras",
       "CEREBRAS_API_KEY",
       "https://api.cerebras.ai/v1/chat/completions",
-      process.env.CEREBRAS_MODEL || "llama3.1-8b"
+      envFirst("CEREBRAS_MODEL") || "llama3.1-8b"
     )
   );
 
@@ -175,7 +163,7 @@ export function getProviders(): Provider[] {
       "kimi",
       "MOONSHOT_API_KEY",
       "https://api.moonshot.ai/v1/chat/completions",
-      process.env.MOONSHOT_MODEL || "moonshot-v1-8k"
+      envFirst("MOONSHOT_MODEL") || "moonshot-v1-8k"
     )
   );
 
@@ -212,4 +200,12 @@ export function getProviders(): Provider[] {
 
 export function getLocalOnly(): Provider[] {
   return getLocalProviders();
+}
+
+/** Nechta provider key yuklangan (debug) */
+export function providerKeyStats() {
+  return {
+    total_providers: getProviders().filter((p) => p.key && p.key !== "dummy").length,
+    by_family: ENV.inventory(),
+  };
 }

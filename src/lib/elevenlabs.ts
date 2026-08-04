@@ -1,19 +1,11 @@
 /**
  * ElevenLabs TTS — shared client + in-memory cache
  */
-import { envFirst } from "@/lib/env";
+import { ENV } from "@/lib/env";
 
-const KEY = () =>
-  envFirst(
-    "ELEVENLABS_API_KEY",
-    "ELEVEN_LABS_API_KEY",
-    "ELEVENLABS_KEY",
-    "XI_API_KEY"
-  );
-const VOICE = () =>
-  envFirst("ELEVENLABS_VOICE_ID", "ELEVEN_LABS_VOICE_ID") || "21m00Tcm4TlvDq8ikWAM";
-const MODEL = () =>
-  envFirst("ELEVENLABS_MODEL_ID", "ELEVEN_LABS_MODEL_ID") || "eleven_multilingual_v2";
+const KEY = () => ENV.elevenlabs();
+const VOICE = () => ENV.elevenlabsVoice();
+const MODEL = () => ENV.elevenlabsModel();
 
 const CACHE = new Map<string, { buf: ArrayBuffer; ts: number }>();
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
@@ -36,6 +28,7 @@ export function elevenLabsMeta() {
     model_id: MODEL(),
     key_prefix: key ? `${key.slice(0, 6)}…` : null,
     fallbacks: ["streamelements", "google-tts"],
+    inventory: ENV.inventory(),
   };
 }
 
