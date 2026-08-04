@@ -48,7 +48,71 @@ function playMicTone(on: boolean) {
     osc.start(t);
     osc.stop(t + 0.13);
     osc.onended = () => ctx.close().catch(() => {});
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
+}
+
+function splitClientSentences(text: string, maxLen = 280): string[] {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  const parts = clean.split(/(?<=[.!?…])\s+/).filter(Boolean);
+  const out: string[] = [];
+  let buf = "";
+  for (const p of parts) {
+    if ((buf + " " + p).trim().length > maxLen && buf) {
+      out.push(buf.trim());
+      buf = p;
+    } else {
+      buf = buf ? `${buf} ${p}` : p;
+    }
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out.length ? out : [clean.slice(0, maxLen)];
+}
+
+async function playMpegBlob(blob: Blob, audioElRef: { current: HTMLAudioElement | null }) {
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.src = url;
+  audioElRef.current = audio;
+  await new Promise<void>((resolve, reject) => {
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("audio element error"));
+    };
+    audio.play().catch(reject);
+  });
+}
+
+/** Fetch TTS — stream preferred, buffer fallback */
+async function fetchTtsBlob(text: string, lang: string, preferStream: boolean): Promise<Blob> {
+  const res = await fetch("/api/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, lang, stream: preferStream }),
+  });
+
+  const ct = res.headers.get("content-type") || "";
+  if (!res.ok) {
+    let msg = `tts ${res.status}`;
+    if (ct.includes("json")) {
+      const j = await res.json().catch(() => ({}));
+      msg = j.error || j.hint || msg;
+    }
+    throw new Error(msg);
+  }
+
+  if (ct.includes("json")) {
+    throw new Error("tts returned json, not audio");
+  }
+
+  return res.blob();
 }
 
 export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") {
@@ -80,115 +144,89 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   }, []);
 
   const startGroq = useCallback(async () => {
-    playMicTone(true);
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    chunksRef.current = [];
     const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
       ? "audio/webm;codecs=opus"
       : "audio/webm";
+    chunksRef.current = [];
     const rec = new MediaRecorder(stream, { mimeType });
     mediaRef.current = rec;
-
     rec.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
+      if (e.data.size) chunksRef.current.push(e.data);
     };
     rec.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      if (blob.size < 500) return;
-      const form = new FormData();
-      form.append("audio", blob, "audio.webm");
-      form.append("lang", lang.split("-")[0] || "uz");
+      const fd = new FormData();
+      fd.append("file", blob, "audio.webm");
       try {
-        const res = await fetch("/api/stt", { method: "POST", body: form });
-        if (!res.ok) return;
+        const res = await fetch("/api/stt", { method: "POST", body: fd });
         const data = await res.json();
         if (data.text) onResult(data.text);
-      } catch {}
-    };
-    rec.start(200);
-    setListening(true);
-  }, [lang, onResult]);
-
-  const toggle = useCallback(() => {
-    const hasMedia =
-      typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
-    if (useGroq && hasMedia) {
-      if (listening) {
-        stopGroq();
-        return;
+      } catch {
+        /* ignore */
       }
-      startGroq().catch(() => {
-        setListening(false);
-        playMicTone(false);
-      });
-      return;
-    }
-
-    const w = window as SpeechWindow;
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) return;
-
-    if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
-      playMicTone(false);
-      return;
-    }
-
-    playMicTone(true);
-    const rec = new Ctor();
-    rec.lang = lang;
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onresult = (e) => {
-      const transcript = Array.from(
-        { length: e.results.length },
-        (_, i) => e.results[i][0].transcript
-      ).join(" ");
-      onResult(transcript);
     };
-    rec.onerror = () => {
-      setListening(false);
-      playMicTone(false);
-    };
-    rec.onend = () => setListening(false);
-    recognitionRef.current = rec;
     rec.start();
     setListening(true);
-  }, [listening, lang, onResult, useGroq, startGroq, stopGroq]);
+    playMicTone(true);
+  }, [onResult]);
+
+  const toggle = useCallback(() => {
+    if (listening) {
+      if (mediaRef.current) stopGroq();
+      else recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+    if (useGroq) {
+      startGroq().catch(() => setListening(false));
+      return;
+    }
+    const w = window as SpeechWindow;
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    recognitionRef.current = rec;
+    rec.lang = lang;
+    rec.interimResults = false;
+    rec.onresult = (e: SpeechRecognitionEvent) => {
+      const t = e.results[e.resultIndex]?.[0]?.transcript;
+      if (t) onResult(t);
+    };
+    rec.onend = () => setListening(false);
+    rec.start();
+    setListening(true);
+    playMicTone(true);
+  }, [listening, lang, onResult, startGroq, stopGroq, useGroq]);
 
   return { listening, supported: supported || useGroq === true, toggle };
 }
 
-/** ElevenLabs TTS (server) — brauzer speechSynthesis ishlatilmaydi (o'zbek uchun yomon) */
+/** ElevenLabs TTS — sentence queue + stream/buffer, HTMLAudio (decodeAudioData MPEG xatolaridan qochish) */
 export function useVoiceOutput() {
   const [enabled, setEnabled] = useState(false);
   const [supported] = useState(true);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const [speaking, setSpeaking] = useState(false);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const queueRef = useRef<string[]>([]);
+  const cancelledRef = useRef(false);
 
   const toggleEnabled = useCallback(() => {
-    const next = !enabled;
-    if (next && typeof window !== "undefined") {
-      const w = window as SpeechWindow;
-      const AudioCtx = window.AudioContext || w.webkitAudioContext;
-      if (AudioCtx && !audioCtxRef.current) {
-        const ctx = new AudioCtx();
-        audioCtxRef.current = ctx;
-        ctx.resume().catch(() => {});
-        const buf = ctx.createBuffer(1, 1, 22050);
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        src.connect(ctx.destination);
-        src.start(0);
-      } else if (audioCtxRef.current?.state === "suspended") {
-        audioCtxRef.current.resume().catch(() => {});
-      }
+    setEnabled((v) => !v);
+  }, []);
+
+  const stop = useCallback(() => {
+    cancelledRef.current = true;
+    queueRef.current = [];
+    if (audioElRef.current) {
+      audioElRef.current.pause();
+      audioElRef.current.src = "";
+      audioElRef.current = null;
     }
-    setEnabled(next);
-  }, [enabled]);
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    setSpeaking(false);
+  }, []);
 
   const speak = useCallback(
     async (text: string) => {
@@ -198,82 +236,52 @@ export function useVoiceOutput() {
         .replace(/[*_#`~]/g, "")
         .replace(/\n+/g, ". ")
         .trim()
-        .slice(0, 2000);
+        .slice(0, 4000);
       if (!clean) return;
 
-      try {
-        sourceRef.current?.stop();
-      } catch {}
-      sourceRef.current = null;
-      if (audioElRef.current) {
-        audioElRef.current.pause();
-        audioElRef.current = null;
-      }
+      stop();
+      cancelledRef.current = false;
+      setSpeaking(true);
 
       const lang = detectLang(clean);
+      const chunks = splitClientSentences(clean);
+      queueRef.current = chunks;
 
-      // POST — uzun matn, ElevenLabs
       try {
-        const res = await fetch("/api/tts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: clean, lang }),
-        });
-        if (res.ok) {
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-
-          const ctx = audioCtxRef.current;
-          if (ctx && ctx.state !== "closed") {
+        for (const chunk of chunks) {
+          if (cancelledRef.current) break;
+          try {
+            // Avval stream, xato bo'lsa buffer
+            let blob: Blob;
             try {
-              if (ctx.state === "suspended") await ctx.resume();
-              const ab = await blob.arrayBuffer();
-              const decoded = await ctx.decodeAudioData(ab.slice(0));
-              const src = ctx.createBufferSource();
-              src.buffer = decoded;
-              src.connect(ctx.destination);
-              sourceRef.current = src;
-              src.start(0);
-              src.onended = () => URL.revokeObjectURL(url);
-              return;
+              blob = await fetchTtsBlob(chunk, lang, true);
             } catch {
-              /* HTMLAudio fallback */
+              blob = await fetchTtsBlob(chunk, lang, false);
+            }
+            if (cancelledRef.current) break;
+            if (blob.size < 100) throw new Error("empty audio");
+            await playMpegBlob(blob, audioElRef);
+          } catch (e) {
+            console.warn("TTS chunk error:", e);
+            // oxirgi chora — speechSynthesis shu chunk uchun
+            if ("speechSynthesis" in window && !cancelledRef.current) {
+              await new Promise<void>((resolve) => {
+                const utter = new SpeechSynthesisUtterance(chunk);
+                utter.lang = lang === "ru" ? "ru-RU" : "tr-TR";
+                utter.rate = 0.95;
+                utter.onend = () => resolve();
+                utter.onerror = () => resolve();
+                window.speechSynthesis.speak(utter);
+              });
             }
           }
-
-          const audio = new Audio(url);
-          audioElRef.current = audio;
-          await audio.play();
-          audio.onended = () => URL.revokeObjectURL(url);
-          return;
         }
-      } catch (e) {
-        console.warn("ElevenLabs TTS client error:", e);
-      }
-
-      // Oxirgi chora — speechSynthesis (sifat past, lekin ovoz chiqadi)
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(clean);
-        utter.lang = lang === "ru" ? "ru-RU" : "tr-TR";
-        utter.rate = 0.95;
-        window.speechSynthesis.speak(utter);
+      } finally {
+        setSpeaking(false);
       }
     },
-    [enabled]
+    [enabled, stop]
   );
 
-  const stop = useCallback(() => {
-    try {
-      sourceRef.current?.stop();
-    } catch {}
-    sourceRef.current = null;
-    if (audioElRef.current) {
-      audioElRef.current.pause();
-      audioElRef.current = null;
-    }
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  }, []);
-
-  return { enabled, setEnabled: toggleEnabled, supported, speak, stop };
+  return { enabled, setEnabled: toggleEnabled, supported, speak, stop, speaking };
 }

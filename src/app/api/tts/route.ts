@@ -3,6 +3,7 @@ import {
   synthesizeElevenLabs,
   elevenLabsMeta,
   defaultWelcomeText,
+  splitSentences,
 } from "@/lib/elevenlabs";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,6 @@ async function streamElementsTTS(text: string, lang: string): Promise<ArrayBuffe
 async function googleTTS(text: string, lang: string): Promise<ArrayBuffer | null> {
   const tryLangs =
     lang === "uz" ? ["uz", "tr"] : lang === "ru" ? ["ru"] : [lang, "en"];
-
   for (const tl of tryLangs) {
     try {
       const url = new URL("https://translate.google.com/translate_tts");
@@ -49,16 +49,15 @@ async function googleTTS(text: string, lang: string): Promise<ArrayBuffer | null
   return null;
 }
 
-async function resolveTTS(text: string, lang: string) {
-  const el = await synthesizeElevenLabs(text, lang);
-  if (el) return { buf: el.buffer, provider: el.provider, cached: el.cached };
-
+async function resolveBuffer(text: string, lang: string) {
+  const el = await synthesizeElevenLabs(text, lang, { stream: false });
+  if (el && "buffer" in el) {
+    return { buf: el.buffer, provider: el.provider, cached: el.cached };
+  }
   let buf = await streamElementsTTS(text, lang);
   if (buf) return { buf, provider: "streamelements", cached: false };
-
   buf = await googleTTS(text, lang);
   if (buf) return { buf, provider: "google", cached: false };
-
   return null;
 }
 
@@ -83,29 +82,48 @@ export async function GET(req: NextRequest) {
   const mode = (sp.get("mode") || "").toLowerCase();
   const textParam = (sp.get("text") || "").trim();
   const lang = (sp.get("lang") || "uz").toLowerCase();
+  const wantStream = sp.get("stream") === "1" || sp.get("stream") === "true";
 
   if (!textParam && mode !== "welcome") {
     return NextResponse.json({
       ...elevenLabsMeta(),
       default_lang: "uz",
       welcome: defaultWelcomeText(),
-      note: "mode=welcome yoki ?text=... — Railway Variables: ELEVENLABS_API_KEY",
+      endpoints: {
+        buffer: "POST /api/tts { text, lang }",
+        stream: "POST /api/tts { text, lang, stream: true } or GET ?stream=1&text=",
+      },
     });
   }
 
   const text = mode === "welcome" ? defaultWelcomeText() : textParam;
-  const result = await resolveTTS(text, lang);
+
+  if (wantStream) {
+    const el = await synthesizeElevenLabs(text, lang, { stream: true });
+    if (el && "stream" in el) {
+      return new Response(el.stream, {
+        headers: {
+          "Content-Type": "audio/mpeg",
+          "Cache-Control": "no-store",
+          "X-TTS-Provider": "elevenlabs-stream",
+          "Transfer-Encoding": "chunked",
+        },
+      });
+    }
+    // stream fail → buffer fallback
+  }
+
+  const result = await resolveBuffer(text, lang);
   if (!result) {
     return NextResponse.json(
       {
         error: "tts_failed",
-        hint: "1) ELEVENLABS_API_KEY to'g'ri servicega 2) Redeploy 3) key sk_ bilan boshlanadi",
+        hint: "ELEVENLABS_API_KEY + Redeploy. Stream: model_id va voice_id ni tekshiring.",
         ...elevenLabsMeta(),
       },
       { status: 502 }
     );
   }
-
   return audioResponse(result.buf, result.provider, result.cached);
 }
 
@@ -114,6 +132,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const lang = String(body.lang || "uz").toLowerCase();
     const mode = String(body.mode || "").toLowerCase();
+    const wantStream = Boolean(body.stream);
+    const chunk = Boolean(body.chunk); // sentence queue helper metadata only
     const text =
       mode === "welcome"
         ? defaultWelcomeText(body.name)
@@ -121,11 +141,31 @@ export async function POST(req: NextRequest) {
 
     if (!text) return NextResponse.json({ error: "text kerak" }, { status: 400 });
 
-    const result = await resolveTTS(text, lang);
-    if (!result) {
-      return NextResponse.json({ error: "tts_failed", ...elevenLabsMeta() }, { status: 502 });
+    if (chunk) {
+      return NextResponse.json({ chunks: splitSentences(text) });
     }
 
+    if (wantStream) {
+      const el = await synthesizeElevenLabs(text, lang, { stream: true });
+      if (el && "stream" in el) {
+        return new Response(el.stream, {
+          headers: {
+            "Content-Type": "audio/mpeg",
+            "Cache-Control": "no-store",
+            "X-TTS-Provider": "elevenlabs-stream",
+          },
+        });
+      }
+      // fall through to buffer
+    }
+
+    const result = await resolveBuffer(text, lang);
+    if (!result) {
+      return NextResponse.json(
+        { error: "tts_failed", ...elevenLabsMeta() },
+        { status: 502 }
+      );
+    }
     return audioResponse(result.buf, result.provider, result.cached, "no-store");
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
