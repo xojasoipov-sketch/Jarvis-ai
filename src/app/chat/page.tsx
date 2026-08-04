@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Mic, Send, History, Volume2, VolumeX, ChevronDown, Code2, Eye } from "lucide-react";
+import { Mic, Send, History, Volume2, VolumeX } from "lucide-react";
 import { useVoiceInput, useVoiceOutput } from "@/hooks/useVoice";
 import ChatSkillsBar from "@/components/ChatSkillsBar";
 
@@ -23,8 +23,7 @@ function DustCanvas() {
     }
     resize();
     window.addEventListener("resize", resize);
-    const N = 80;
-    for (let i = 0; i < N; i++) {
+    for (let i = 0; i < 80; i++) {
       pts.push({
         x: Math.random() * (canvas.width || 300),
         y: Math.random() * (canvas.height || 400),
@@ -39,7 +38,9 @@ function DustCanvas() {
       if (!ctx || !canvas) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (const p of pts) {
-        p.x += p.vx; p.y += p.vy; p.a += p.da;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.a += p.da;
         if (p.a > 1 || p.a < 0.05) p.da *= -1;
         if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
         if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
@@ -229,7 +230,7 @@ function ChatInner() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => voiceOut.toggle?.()}
+            onClick={() => voiceOut.setEnabled()}
             className={`p-1.5 rounded-lg transition-all ${
               voiceOut.enabled ? "text-purple-300" : "text-white/20 hover:text-white/50"
             }`}
