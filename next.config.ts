@@ -3,12 +3,17 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["pdf-parse", "mammoth"],
+  transpilePackages: ["three"],
+  // Railway / low-memory builds
+  experimental: {
+    // keep default
+  },
 };
 
 export default withSentryConfig(nextConfig, {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
-  silent: !process.env.CI,
+  silent: true,
   widenClientFileUpload: true,
   tunnelRoute: "/monitoring",
   disableLogger: true,
