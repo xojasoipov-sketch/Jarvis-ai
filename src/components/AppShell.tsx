@@ -18,7 +18,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname() || "/";
   const router = useRouter();
 
-  if (path === "/login" || path === "/portfolio" || path.startsWith("/portfolio/")) {
+  if (
+    path === "/login" ||
+    path === "/portfolio" ||
+    path.startsWith("/portfolio/") ||
+    path === "/orb" ||
+    path.startsWith("/orb/")
+  ) {
     return <>{children}</>;
   }
 
