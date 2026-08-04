@@ -3,12 +3,12 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
-import { MessageSquare, Terminal, LayoutGrid, Briefcase, Settings, Menu, X } from "lucide-react";
+import { MessageSquare, LayoutGrid, Briefcase, Settings, Menu, X, Bot } from "lucide-react";
 
 const BOTTOM = [
   { href: "/pari", label: "Pari", icon: LayoutGrid },
-  { href: "/hud", label: "HUD", icon: Terminal },
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/agents", label: "Agent", icon: Bot },
   { href: "/portfolio", label: "Studio", icon: Briefcase },
   { href: "/settings", label: "Sozlama", icon: Settings },
 ];
@@ -22,17 +22,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // HUD — o'z shell'i bor (full-bleed terminal)
-  if (path === "/hud" || path.startsWith("/hud/")) {
-    return <>{children}</>;
-  }
-
   const isPari = path === "/pari" || path === "/";
+  const isChat = path === "/chat" || path.startsWith("/chat");
+  const darkImmersive = isPari || isChat;
 
   return (
     <div
       className="flex h-[100dvh] overflow-hidden"
-      style={{ background: isPari ? "#050510" : "#f8f9fc" }}
+      style={{ background: darkImmersive ? "#050510" : "#f8f9fc" }}
     >
       {open && (
         <div
@@ -51,13 +48,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        {!isPari && <Header onMenu={() => setOpen((o) => !o)} />}
+        {!darkImmersive && <Header onMenu={() => setOpen((o) => !o)} />}
 
-        {isPari && (
+        {darkImmersive && (
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="fixed top-3 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-black/50 text-white backdrop-blur-md active:scale-95"
+            className="fixed top-3 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-black/50 text-white backdrop-blur-md active:scale-95 lg:hidden"
             aria-label="Menyu"
           >
             {open ? <X size={20} /> : <Menu size={20} />}
@@ -66,13 +63,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         <main
           className={`flex-1 overflow-y-auto ${
-            isPari ? "p-0" : "p-3 pb-20 sm:p-4 lg:p-6 lg:pb-6"
+            darkImmersive ? "p-0" : "p-3 pb-20 sm:p-4 lg:p-6 lg:pb-6"
           }`}
         >
           {children}
         </main>
 
-        <nav className="fixed bottom-0 inset-x-0 z-30 border-t border-gray-200/80 bg-white/95 backdrop-blur-md lg:hidden safe-bottom">
+        <nav className="fixed bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0a0a12]/95 backdrop-blur-md lg:hidden safe-bottom">
           <div className="mx-auto flex max-w-lg items-stretch justify-between px-1 pb-[env(safe-area-inset-bottom)]">
             {BOTTOM.map(({ href, label, icon: Icon }) => {
               const active =
@@ -88,7 +85,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     router.push(href);
                   }}
                   className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
-                    active ? "text-indigo-600" : "text-gray-500"
+                    active ? "text-violet-300" : "text-white/35"
                   }`}
                 >
                   <Icon size={20} strokeWidth={active ? 2.25 : 1.75} />
