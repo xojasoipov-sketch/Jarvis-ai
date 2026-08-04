@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   synthesizeElevenLabs,
   elevenLabsMeta,
+  elevenLabsConfigured,
   defaultWelcomeText,
   splitSentences,
 } from "@/lib/elevenlabs";
@@ -23,7 +24,7 @@ async function streamElementsTTS(text: string, lang: string): Promise<ArrayBuffe
 
 async function googleTTS(text: string, lang: string): Promise<ArrayBuffer | null> {
   const tryLangs =
-    lang === "uz" ? ["uz", "tr"] : lang === "ru" ? ["ru"] : [lang, "en"];
+    lang === "uz" ? ["tr", "en"] : lang === "ru" ? ["ru"] : [lang, "en"];
   for (const tl of tryLangs) {
     try {
       const url = new URL("https://translate.google.com/translate_tts");
@@ -49,23 +50,39 @@ async function googleTTS(text: string, lang: string): Promise<ArrayBuffer | null
   return null;
 }
 
+const allowFallback = () => process.env.ALLOW_TTS_FALLBACK === "true";
+
 async function resolveBuffer(text: string, lang: string) {
   const el = await synthesizeElevenLabs(text, lang, { stream: false });
-  if (el && "buffer" in el) {
-    return { buf: el.buffer, provider: el.provider, cached: el.cached };
+
+  if (el.ok && "buffer" in el) {
+    return {
+      buf: el.buffer,
+      provider: "elevenlabs" as const,
+      cached: el.cached,
+      error: null as string | null,
+    };
   }
+
+  const elError = !el.ok ? el.error : "elevenlabs failed";
+
+  // Kalit BOR bo'lsa — Google/SE ga yashirincha tushilMAYDI (oddiy chalkashlik)
+  if (elevenLabsConfigured() && !allowFallback()) {
+    return { buf: null, provider: "none" as const, cached: false, error: elError };
+  }
+
   let buf = await streamElementsTTS(text, lang);
-  if (buf) return { buf, provider: "streamelements", cached: false };
+  if (buf) return { buf, provider: "streamelements" as const, cached: false, error: elError };
   buf = await googleTTS(text, lang);
-  if (buf) return { buf, provider: "google", cached: false };
-  return null;
+  if (buf) return { buf, provider: "google" as const, cached: false, error: elError };
+  return { buf: null, provider: "none" as const, cached: false, error: elError };
 }
 
 function audioResponse(
   buf: ArrayBuffer,
   provider: string,
   cached: boolean,
-  cacheControl = "public, max-age=3600"
+  cacheControl = "no-store"
 ) {
   return new Response(buf, {
     headers: {
@@ -89,36 +106,31 @@ export async function GET(req: NextRequest) {
       ...elevenLabsMeta(),
       default_lang: "uz",
       welcome: defaultWelcomeText(),
-      endpoints: {
-        buffer: "POST /api/tts { text, lang }",
-        stream: "POST /api/tts { text, lang, stream: true } or GET ?stream=1&text=",
-      },
+      note: "Kalit bor va EL xato bo'lsa Google ishlatilMAYDI (ALLOW_TTS_FALLBACK=true qilmasangiz)",
     });
   }
 
   const text = mode === "welcome" ? defaultWelcomeText() : textParam;
 
-  if (wantStream) {
+  if (wantStream && elevenLabsConfigured()) {
     const el = await synthesizeElevenLabs(text, lang, { stream: true });
-    if (el && "stream" in el) {
+    if (el.ok && "stream" in el) {
       return new Response(el.stream, {
         headers: {
           "Content-Type": "audio/mpeg",
           "Cache-Control": "no-store",
           "X-TTS-Provider": "elevenlabs-stream",
-          "Transfer-Encoding": "chunked",
         },
       });
     }
-    // stream fail → buffer fallback
   }
 
   const result = await resolveBuffer(text, lang);
-  if (!result) {
+  if (!result.buf) {
     return NextResponse.json(
       {
         error: "tts_failed",
-        hint: "ELEVENLABS_API_KEY + Redeploy. Stream: model_id va voice_id ni tekshiring.",
+        detail: result.error,
         ...elevenLabsMeta(),
       },
       { status: 502 }
@@ -133,7 +145,7 @@ export async function POST(req: NextRequest) {
     const lang = String(body.lang || "uz").toLowerCase();
     const mode = String(body.mode || "").toLowerCase();
     const wantStream = Boolean(body.stream);
-    const chunk = Boolean(body.chunk); // sentence queue helper metadata only
+    const chunk = Boolean(body.chunk);
     const text =
       mode === "welcome"
         ? defaultWelcomeText(body.name)
@@ -145,9 +157,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ chunks: splitSentences(text) });
     }
 
-    if (wantStream) {
+    if (wantStream && elevenLabsConfigured()) {
       const el = await synthesizeElevenLabs(text, lang, { stream: true });
-      if (el && "stream" in el) {
+      if (el.ok && "stream" in el) {
         return new Response(el.stream, {
           headers: {
             "Content-Type": "audio/mpeg",
@@ -156,17 +168,20 @@ export async function POST(req: NextRequest) {
           },
         });
       }
-      // fall through to buffer
     }
 
     const result = await resolveBuffer(text, lang);
-    if (!result) {
+    if (!result.buf) {
       return NextResponse.json(
-        { error: "tts_failed", ...elevenLabsMeta() },
+        {
+          error: "tts_failed",
+          detail: result.error,
+          ...elevenLabsMeta(),
+        },
         { status: 502 }
       );
     }
-    return audioResponse(result.buf, result.provider, result.cached, "no-store");
+    return audioResponse(result.buf, result.provider, result.cached);
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
