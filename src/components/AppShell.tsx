@@ -3,12 +3,12 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
-import { MessageSquare, Bot, LayoutGrid, Briefcase, Settings, Menu, X } from "lucide-react";
+import { MessageSquare, Terminal, LayoutGrid, Briefcase, Settings, Menu, X } from "lucide-react";
 
 const BOTTOM = [
   { href: "/pari", label: "Pari", icon: LayoutGrid },
+  { href: "/hud", label: "HUD", icon: Terminal },
   { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/agents", label: "Agent", icon: Bot },
   { href: "/portfolio", label: "Studio", icon: Briefcase },
   { href: "/settings", label: "Sozlama", icon: Settings },
 ];
@@ -18,8 +18,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname() || "/";
   const router = useRouter();
 
-  // Faqat login va portfolio — to'liq public, shell yo'q
   if (path === "/login" || path === "/portfolio" || path.startsWith("/portfolio/")) {
+    return <>{children}</>;
+  }
+
+  // HUD — o'z shell'i bor (full-bleed terminal)
+  if (path === "/hud" || path.startsWith("/hud/")) {
     return <>{children}</>;
   }
 
@@ -30,7 +34,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       className="flex h-[100dvh] overflow-hidden"
       style={{ background: isPari ? "#050510" : "#f8f9fc" }}
     >
-      {/* Overlay */}
       {open && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -39,7 +42,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Sidebar drawer */}
       <div
         className={`fixed lg:static inset-y-0 left-0 z-50 w-[min(288px,85vw)] transition-transform duration-200 ease-out lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
@@ -49,30 +51,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        {/* Header: oddiy sahifalar */}
         {!isPari && <Header onMenu={() => setOpen((o) => !o)} />}
 
-        {/* Pari: qorong'u floating menu */}
         {isPari && (
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="fixed top-3 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-black/50 text-white backdrop-blur-md active:scale-95 lg:hidden"
+            className="fixed top-3 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-black/50 text-white backdrop-blur-md active:scale-95"
             aria-label="Menyu"
           >
             {open ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        )}
-
-        {/* Desktop: pari ham menyu */}
-        {isPari && (
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            className="fixed top-3 left-3 z-30 hidden h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-white/80 backdrop-blur lg:flex"
-            aria-label="Menyu"
-          >
-            <Menu size={18} />
           </button>
         )}
 
@@ -84,7 +72,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
 
-        {/* Pastki mobil navigatsiya */}
         <nav className="fixed bottom-0 inset-x-0 z-30 border-t border-gray-200/80 bg-white/95 backdrop-blur-md lg:hidden safe-bottom">
           <div className="mx-auto flex max-w-lg items-stretch justify-between px-1 pb-[env(safe-area-inset-bottom)]">
             {BOTTOM.map(({ href, label, icon: Icon }) => {
