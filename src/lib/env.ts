@@ -35,7 +35,6 @@ export function envAny(...names: string[]): boolean {
 
 /**
  * BASE, BASE2…BASE10, BASE_2… va case-insensitive
- * Masalan: GROQ_API_KEY, GROQ_API_KEY2, groq_api_key_3
  */
 export function envAll(base: string, max = 12): string[] {
   const map = envMap();
@@ -48,14 +47,12 @@ export function envAll(base: string, max = 12): string[] {
     found.push(val);
   };
 
-  // exact + numbered
   push(trim(process.env[base]));
   for (let i = 2; i <= max; i++) {
     push(trim(process.env[`${base}${i}`]));
     push(trim(process.env[`${base}_${i}`]));
   }
 
-  // case-insensitive scan
   const baseLower = base.toLowerCase();
   const re = new RegExp(
     `^${baseLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:_?(\d+))?$`
@@ -72,6 +69,31 @@ export function envAll(base: string, max = 12): string[] {
   for (const { v } of indexed) push(v);
 
   return found;
+}
+
+/** ElevenLabs — nomlar chalkash bo'lsa ham sk_ kalitni topish */
+function findElevenLabsKey(): string {
+  const named = envFirst(
+    "ELEVENLABS_API_KEY",
+    "ELEVEN_LABS_API_KEY",
+    "ELEVENLABS_KEY",
+    "ELEVENLABS_APIKEY",
+    "ELEVEN_LABS_KEY",
+    "XI_API_KEY",
+    "ELEVENLABS_TOKEN"
+  );
+  if (named) return named;
+
+  // istalgan env: nomi eleven+api/key va qiymati sk_ yoki uzun
+  for (const [k, v] of Object.entries(process.env)) {
+    const kl = k.toLowerCase();
+    const val = trim(v);
+    if (!val) continue;
+    if (!kl.includes("eleven")) continue;
+    if (kl.includes("voice") || kl.includes("model") || kl.includes("url")) continue;
+    if (val.startsWith("sk_") || val.length > 20) return val;
+  }
+  return "";
 }
 
 export const ENV = {
@@ -115,13 +137,7 @@ export const ENV = {
   cerebras: () => envAll("CEREBRAS_API_KEY"),
   mistral: () => envAll("MISTRAL_API_KEY"),
   dashscope: () => envAll("DASHSCOPE_API_KEY"),
-  elevenlabs: () =>
-    envFirst(
-      "ELEVENLABS_API_KEY",
-      "ELEVEN_LABS_API_KEY",
-      "ELEVENLABS_KEY",
-      "XI_API_KEY"
-    ),
+  elevenlabs: () => findElevenLabsKey(),
   elevenlabsVoice: () =>
     envFirst("ELEVENLABS_VOICE_ID", "ELEVEN_LABS_VOICE_ID") || "21m00Tcm4TlvDq8ikWAM",
   elevenlabsModel: () =>
@@ -135,7 +151,6 @@ export const ENV = {
       "PUBLIC_URL"
     ),
 
-  /** Debug: nechta key topilgani (qiymatlarsiz) */
   inventory(): Record<string, number | boolean | string> {
     return {
       groq: ENV.groq().length,
