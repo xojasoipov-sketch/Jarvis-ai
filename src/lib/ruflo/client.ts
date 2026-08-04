@@ -1,17 +1,36 @@
+import { rufloAgents } from "./agents";
+
 export type RufloTask = {
   task: string;
   context?: Record<string, unknown>;
 };
 
 /**
- * Ruflo bridge layer.
- * Keeps orchestration isolated from existing Jarvis agents.
+ * Ruflo orchestration bridge.
+ * Keeps Jarvis core stable while enabling multi-agent routing.
  */
-export async function runRuflo(task: RufloTask) {
+export async function runRuflo(input: RufloTask) {
+  const hasNativeRuntime = Boolean(process.env.RUFLO_API_URL);
+
+  if (hasNativeRuntime) {
+    const response = await fetch(process.env.RUFLO_API_URL!, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.RUFLO_API_KEY
+          ? { Authorization: `Bearer ${process.env.RUFLO_API_KEY}` }
+          : {}),
+      },
+      body: JSON.stringify(input),
+    });
+
+    return response.json();
+  }
+
   return {
-    status: "ready",
-    task: task.task,
-    agents: ["planner", "memory", "tool"],
-    note: "Ruflo bridge initialized. Connect native Ruflo runtime here.",
+    status: "local-orchestrator",
+    task: input.task,
+    agents: rufloAgents,
+    next: "Connect RUFLO_API_URL for native Ruflo runtime",
   };
 }
