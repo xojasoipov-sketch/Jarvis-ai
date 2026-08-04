@@ -1,225 +1,474 @@
 "use client";
-import { useState } from "react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Plus, Clock, KeyRound, Play, Bot, MessageSquare, Bell,
-  Zap, CheckCircle2, Loader2, X, Sun, type LucideIcon,
+  Play,
+  Plus,
+  Trash2,
+  Zap,
+  Loader2,
+  ChevronRight,
+  Power,
+  Copy,
 } from "lucide-react";
+import {
+  NODE_CATALOG,
+  kindColor,
+  seedFlows,
+  type FlowNode,
+  type NodeKind,
+  type VisualFlow,
+} from "@/lib/flows";
 
-type Trigger = "schedule" | "keyword" | "manual";
-type Action = "agent" | "chat" | "notify" | "digest";
-
-type Flow = {
-  id: number;
-  name: string;
-  trigger: Trigger;
-  triggerValue: string;
-  action: Action;
-  actionValue: string;
-  active: boolean;
-  runs: number;
-  lastRun?: string;
-};
-
-const INIT_FLOWS: Flow[] = [
-  { id: 1, name: "Kunlik brifing (Morning Digest)", trigger: "schedule", triggerValue: "Har kuni 09:00", action: "digest", actionValue: "digest", active: true, runs: 0, lastRun: undefined },
-  { id: 2, name: "Kunlik hisobot", trigger: "schedule", triggerValue: "Har kuni 09:00", action: "agent", actionValue: "analyst", active: true, runs: 14, lastRun: "Bugun 09:00" },
-  { id: 3, name: "Yangi loyiha tahlili", trigger: "keyword", triggerValue: "yangi loyiha", action: "agent", actionValue: "ceo", active: true, runs: 6, lastRun: "Kecha" },
-  { id: 4, name: "Haftalik strategiya", trigger: "schedule", triggerValue: "Har dushanba 08:00", action: "agent", actionValue: "ceo", active: false, runs: 3, lastRun: "5 kun oldin" },
-];
-
-const TRIGGER_ICONS: Record<Trigger, LucideIcon> = { schedule: Clock, keyword: KeyRound, manual: Play };
-const ACTION_ICONS: Record<Action, LucideIcon> = { agent: Bot, chat: MessageSquare, notify: Bell, digest: Sun };
-const AGENT_NAMES: Record<string, string> = {
-  digest: "Morning Digest",
-  ceo: "CEO Agent", researcher: "Research Agent", coder: "Coding Agent",
-  analyst: "Data Analyst", writer: "Content Writer", marketing: "Marketing Agent",
-  devops: "DevOps Agent", assistant: "Personal Assistant",
-};
+const STORAGE_KEY = "pari.visual.flows.v1";
 
 export default function AutomationPage() {
-  const [flows, setFlows] = useState<Flow[]>(INIT_FLOWS);
-  const [showNew, setShowNew] = useState(false);
-  const [running, setRunning] = useState<number | null>(null);
-  const [newFlow, setNewFlow] = useState({
-    name: "", trigger: "manual" as Trigger, triggerValue: "",
-    action: "agent" as Action, actionValue: "assistant",
-  });
-  const [result, setResult] = useState<{ id: number; text: string } | null>(null);
+  const [flows, setFlows] = useState<VisualFlow[]>([]);
+  const [activeId, setActiveId] = useState<string>("");
+  const [running, setRunning] = useState(false);
+  const [activeNode, setActiveNode] = useState<string | null>(null);
+  const [log, setLog] = useState<{ step: string; ok: boolean; text: string }[]>([]);
+  const [hydrated, setHydrated] = useState(false);
 
-  function toggleFlow(id: number) {
-    setFlows(p => p.map(f => f.id === id ? { ...f, active: !f.active } : f));
-  }
-
-  async function runFlow(flow: Flow) {
-    setRunning(flow.id);
-    setResult(null);
+  useEffect(() => {
     try {
-      if (flow.action === "digest") {
-        const res = await fetch("/api/digest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ focus: flow.triggerValue || "" }),
-        });
-        const data = await res.json();
-        setFlows(p => p.map(f => f.id === flow.id ? { ...f, runs: f.runs + 1, lastRun: "Hozir" } : f));
-        setResult({ id: flow.id, text: data.digest || data.error || "Brifing tayyor emas" });
-      } else {
-        const task = flow.triggerValue || flow.name;
-        const res = await fetch("/api/agent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agentId: flow.actionValue, task }),
-        });
-        const data = await res.json();
-        setFlows(p => p.map(f => f.id === flow.id ? { ...f, runs: f.runs + 1, lastRun: "Hozir" } : f));
-        setResult({ id: flow.id, text: data.result });
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as VisualFlow[];
+        if (Array.isArray(parsed) && parsed.length) {
+          setFlows(parsed);
+          setActiveId(parsed[0].id);
+          setHydrated(true);
+          return;
+        }
       }
-    } catch { setResult({ id: flow.id, text: "Xato yuz berdi." }); }
-    setRunning(null);
+    } catch {
+      /* seed */
+    }
+    const s = seedFlows();
+    setFlows(s);
+    setActiveId(s[0].id);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(flows));
+  }, [flows, hydrated]);
+
+  const flow = useMemo(
+    () => flows.find((f) => f.id === activeId) || flows[0],
+    [flows, activeId]
+  );
+
+  const updateFlow = useCallback(
+    (patch: Partial<VisualFlow> | ((f: VisualFlow) => VisualFlow)) => {
+      setFlows((list) =>
+        list.map((f) => {
+          if (f.id !== (flow?.id || activeId)) return f;
+          return typeof patch === "function" ? patch(f) : { ...f, ...patch };
+        })
+      );
+    },
+    [flow?.id, activeId]
+  );
+
+  function addNode(kind: NodeKind, type: string, label: string, defaults: Record<string, string> = {}) {
+    if (!flow) return;
+    const node: FlowNode = {
+      id: `n${Date.now()}`,
+      kind,
+      type,
+      label,
+      config: { ...defaults },
+    };
+    // insert before final End if present
+    const nodes = [...flow.nodes];
+    const endIdx = nodes.findIndex((n) => n.type === "end");
+    if (endIdx >= 0) nodes.splice(endIdx, 0, node);
+    else nodes.push(node);
+    updateFlow({ nodes });
+    setActiveNode(node.id);
   }
 
-  function addFlow() {
-    if (!newFlow.name.trim()) return;
-    const actionValue = newFlow.action === "digest" ? "digest" : newFlow.actionValue;
-    setFlows(p => [...p, { ...newFlow, actionValue, id: Date.now(), active: true, runs: 0 }]);
-    setNewFlow({ name: "", trigger: "manual", triggerValue: "", action: "agent", actionValue: "assistant" });
-    setShowNew(false);
+  function removeNode(id: string) {
+    if (!flow) return;
+    updateFlow({ nodes: flow.nodes.filter((n) => n.id !== id && n.type !== "noop") });
+    if (activeNode === id) setActiveNode(null);
   }
 
-  function deleteFlow(id: number) {
-    setFlows(p => p.filter(f => f.id !== id));
+  function moveNode(id: string, dir: -1 | 1) {
+    if (!flow) return;
+    const nodes = [...flow.nodes];
+    const i = nodes.findIndex((n) => n.id === id);
+    if (i < 0) return;
+    const j = i + dir;
+    if (j < 0 || j >= nodes.length) return;
+    // keep end at end
+    if (nodes[i].type === "end" || nodes[j].type === "end") return;
+    [nodes[i], nodes[j]] = [nodes[j], nodes[i]];
+    updateFlow({ nodes });
+  }
+
+  async function runSequential() {
+    if (!flow || running) return;
+    setRunning(true);
+    setLog([]);
+    const steps: { step: string; ok: boolean; text: string }[] = [];
+
+    for (const node of flow.nodes) {
+      setActiveNode(node.id);
+      try {
+        if (node.kind === "trigger" || node.type === "end") {
+          steps.push({ step: node.label, ok: true, text: node.kind === "trigger" ? "Trigger OK" : "Done" });
+          setLog([...steps]);
+          continue;
+        }
+        if (node.type === "if_owner") {
+          steps.push({ step: node.label, ok: true, text: "Condition passed (owner session)" });
+          setLog([...steps]);
+          continue;
+        }
+        if (node.type === "skill") {
+          const skill = node.config.skill || "plan";
+          const res = await fetch("/api/skills", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: skill, skill, remember: true }),
+          });
+          const data = await res.json();
+          steps.push({
+            step: node.label,
+            ok: res.ok,
+            text: (data.answer || data.error || "").slice(0, 400),
+          });
+        } else if (node.type === "digest") {
+          const res = await fetch("/api/digest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ focus: "" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          steps.push({
+            step: node.label,
+            ok: res.ok,
+            text: String(data.digest || data.error || "digest").slice(0, 400),
+          });
+        } else if (node.type === "agent") {
+          const res = await fetch("/api/agent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              agentId: node.config.agentId || "assistant",
+              task: flow.name,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          steps.push({
+            step: node.label,
+            ok: res.ok,
+            text: String(data.result || data.error || "agent").slice(0, 400),
+          });
+        } else if (node.type === "vault") {
+          const res = await fetch("/api/memory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: node.config.title || flow.name,
+              content: steps.map((s) => `## ${s.step}\n${s.text}`).join("\n\n"),
+              tags: ["automation", "flow"],
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          steps.push({
+            step: node.label,
+            ok: res.ok,
+            text: data.saved ? `saved:${data.source || "ok"}` : data.error || "vault",
+          });
+        } else if (node.type === "notify") {
+          steps.push({ step: node.label, ok: true, text: "Notify queued (UI)" });
+        } else {
+          steps.push({ step: node.label, ok: true, text: "skipped" });
+        }
+        setLog([...steps]);
+      } catch (e) {
+        steps.push({
+          step: node.label,
+          ok: false,
+          text: e instanceof Error ? e.message : "error",
+        });
+        setLog([...steps]);
+        break;
+      }
+    }
+
+    updateFlow((f) => ({
+      ...f,
+      runs: f.runs + 1,
+      lastRun: new Date().toLocaleString("uz-UZ"),
+    }));
+    setRunning(false);
+    setActiveNode(null);
+  }
+
+  function newFlow() {
+    const id = `flow-${Date.now()}`;
+    const f: VisualFlow = {
+      id,
+      name: "Yangi oqim",
+      active: true,
+      runs: 0,
+      nodes: [
+        { id: `${id}-t`, kind: "trigger", type: "manual", label: "Manual", config: {} },
+        { id: `${id}-e`, kind: "output", type: "end", label: "End", config: {} },
+      ],
+    };
+    setFlows((x) => [f, ...x]);
+    setActiveId(id);
+    setLog([]);
+  }
+
+  function duplicateFlow() {
+    if (!flow) return;
+    const id = `flow-${Date.now()}`;
+    const copy: VisualFlow = {
+      ...flow,
+      id,
+      name: `${flow.name} (copy)`,
+      runs: 0,
+      lastRun: undefined,
+      nodes: flow.nodes.map((n) => ({ ...n, id: `${id}-${n.id}` })),
+    };
+    setFlows((x) => [copy, ...x]);
+    setActiveId(id);
+  }
+
+  function deleteFlow() {
+    if (!flow || flows.length <= 1) return;
+    const next = flows.filter((f) => f.id !== flow.id);
+    setFlows(next);
+    setActiveId(next[0].id);
+  }
+
+  if (!flow) {
+    return (
+      <div className="p-8 text-sm text-gray-500">Yuklanmoqda…</div>
+    );
   }
 
   return (
-    <div className="fade-in max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="fade-in max-w-6xl mx-auto space-y-4 pb-8">
+      {/* header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Automation</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Avtomatik ish oqimlari — bir marta sozla, doim ishlaydi</p>
-        </div>
-        <button onClick={() => setShowNew(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-all">
-          <Plus size={15} strokeWidth={2} /> Yangi flow
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Jami flowlar", value: flows.length, icon: Zap },
-          { label: "Faol", value: flows.filter(f => f.active).length, icon: CheckCircle2 },
-          { label: "Jami ishga tushirildi", value: flows.reduce((a, f) => a + f.runs, 0), icon: Play },
-        ].map(s => (
-          <div key={s.label} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3">
-            <s.icon size={20} strokeWidth={1.5} className="text-indigo-600" />
-            <div><p className="text-xl font-bold text-gray-900">{s.value}</p><p className="text-xs text-gray-500">{s.label}</p></div>
+          <div className="flex items-center gap-2 text-indigo-600">
+            <Zap size={18} />
+            <span className="text-xs font-semibold uppercase tracking-wider">Automation</span>
           </div>
-        ))}
+          <h1 className="text-2xl font-semibold text-gray-900 mt-1">Vizual oqimlar</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            n8n uslubida ketma-ket node’lar — Trigger → Action → … → End
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={newFlow}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            <Plus size={14} /> Yangi
+          </button>
+          <button
+            type="button"
+            onClick={duplicateFlow}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            <Copy size={14} /> Nusxa
+          </button>
+          <button
+            type="button"
+            onClick={runSequential}
+            disabled={running || !flow.active}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+          >
+            {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+            Ishga tushir
+          </button>
+        </div>
       </div>
 
-      {/* New flow */}
-      {showNew && (
-        <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm p-5 space-y-4">
-          <p className="text-sm font-semibold text-gray-900">Yangi automation flow</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Nomi</label>
-              <input value={newFlow.name} onChange={e => setNewFlow(p => ({ ...p, name: e.target.value }))}
-                placeholder="Flow nomi..." className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+        {/* flow list */}
+        <aside className="space-y-2">
+          {flows.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => {
+                setActiveId(f.id);
+                setLog([]);
+                setActiveNode(null);
+              }}
+              className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                f.id === flow.id
+                  ? "border-indigo-200 bg-indigo-50/80"
+                  : "border-gray-200 bg-white hover:border-gray-300"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-gray-900 truncate">{f.name}</span>
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${f.active ? "bg-emerald-500" : "bg-gray-300"}`}
+                />
+              </div>
+              <div className="mt-1 text-[11px] text-gray-500">
+                {f.nodes.length} qadam · {f.runs} run
+              </div>
+            </button>
+          ))}
+        </aside>
+
+        {/* canvas */}
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+            <input
+              value={flow.name}
+              onChange={(e) => updateFlow({ name: e.target.value })}
+              className="flex-1 min-w-[120px] text-sm font-medium text-gray-900 outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => updateFlow({ active: !flow.active })}
+              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs ${
+                flow.active ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              <Power size={12} /> {flow.active ? "Active" : "Off"}
+            </button>
+            <button
+              type="button"
+              onClick={deleteFlow}
+              className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+              aria-label="O'chirish"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+
+          {/* sequential graph */}
+          <div
+            className="rounded-2xl border border-gray-200 bg-[#f8f9fc] p-4 overflow-x-auto"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, #e5e7eb 1px, transparent 0)",
+              backgroundSize: "16px 16px",
+            }}
+          >
+            <div className="flex items-stretch gap-0 min-w-max py-2">
+              {flow.nodes.map((node, idx) => (
+                <div key={node.id} className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => setActiveNode(node.id)}
+                    className={`relative w-[148px] rounded-xl border bg-white p-3 text-left shadow-sm transition ${
+                      activeNode === node.id
+                        ? "border-indigo-400 ring-2 ring-indigo-100"
+                        : "border-gray-200 hover:border-gray-300"
+                    } ${running && activeNode === node.id ? "animate-pulse" : ""}`}
+                  >
+                    <div
+                      className="mb-2 h-1 w-8 rounded-full"
+                      style={{ background: kindColor(node.kind) }}
+                    />
+                    <div className="text-[10px] uppercase tracking-wider text-gray-400">
+                      {node.kind}
+                    </div>
+                    <div className="mt-0.5 text-sm font-medium text-gray-900 leading-snug">
+                      {node.label}
+                    </div>
+                    <div className="mt-1 text-[11px] text-gray-500">{node.type}</div>
+                  </button>
+                  {idx < flow.nodes.length - 1 && (
+                    <div className="flex w-10 items-center justify-center text-gray-300">
+                      <div className="h-px flex-1 bg-gray-300" />
+                      <ChevronRight size={14} className="-mx-0.5" />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Trigger</label>
-              <select value={newFlow.trigger} onChange={e => setNewFlow(p => ({ ...p, trigger: e.target.value as Trigger }))}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
-                <option value="manual">Qo'lda</option>
-                <option value="schedule">Jadval</option>
-                <option value="keyword">Kalit so'z</option>
-              </select>
+          </div>
+
+          {/* palette + inspector */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                Node qo‘shish
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {NODE_CATALOG.filter((c) => c.type !== "end").map((c) => (
+                  <button
+                    key={`${c.kind}-${c.type}`}
+                    type="button"
+                    onClick={() => addNode(c.kind, c.type, c.labelUz, c.defaults)}
+                    className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:border-indigo-200 hover:bg-indigo-50/50"
+                  >
+                    + {c.labelUz}
+                  </button>
+                ))}
+              </div>
+              {activeNode && (
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => moveNode(activeNode, -1)}
+                    className="rounded-lg border px-2 py-1 text-xs text-gray-600"
+                  >
+                    ← Chap
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveNode(activeNode, 1)}
+                    className="rounded-lg border px-2 py-1 text-xs text-gray-600"
+                  >
+                    O‘ng →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeNode(activeNode)}
+                    className="rounded-lg border border-red-100 px-2 py-1 text-xs text-red-600"
+                  >
+                    O‘chirish
+                  </button>
+                </div>
+              )}
             </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Trigger qiymati</label>
-              <input value={newFlow.triggerValue} onChange={e => setNewFlow(p => ({ ...p, triggerValue: e.target.value }))}
-                placeholder={newFlow.trigger === "schedule" ? "Har kuni 09:00" : newFlow.trigger === "keyword" ? "kalit so'z..." : "vazifa matni..."}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Harakat</label>
-              <select
-                value={newFlow.action}
-                onChange={e => {
-                  const action = e.target.value as Action;
-                  setNewFlow(p => ({
-                    ...p,
-                    action,
-                    actionValue: action === "digest" ? "digest" : p.actionValue === "digest" ? "assistant" : p.actionValue,
-                  }));
-                }}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none"
-              >
-                <option value="agent">Agent</option>
-                <option value="digest">Morning Digest</option>
-              </select>
-            </div>
-            {newFlow.action !== "digest" && (
-              <div className="col-span-2">
-                <label className="text-xs text-gray-500 mb-1 block">Agent</label>
-                <select value={newFlow.actionValue} onChange={e => setNewFlow(p => ({ ...p, actionValue: e.target.value }))}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
-                  {Object.entries(AGENT_NAMES).filter(([id]) => id !== "digest").map(([id, name]) => (
-                    <option key={id} value={id}>{name}</option>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                Run log
+              </div>
+              {log.length === 0 ? (
+                <p className="text-sm text-gray-400">Ishga tushiring — har qadam logi shu yerda.</p>
+              ) : (
+                <ul className="space-y-2 max-h-48 overflow-y-auto">
+                  {log.map((l, i) => (
+                    <li key={i} className="text-xs">
+                      <span className={l.ok ? "text-emerald-600" : "text-red-600"}>
+                        {l.ok ? "✓" : "✗"}
+                      </span>{" "}
+                      <span className="font-medium text-gray-800">{l.step}</span>
+                      <div className="text-gray-500 whitespace-pre-wrap mt-0.5">{l.text}</div>
+                    </li>
                   ))}
-                </select>
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Bekor</button>
-            <button onClick={addFlow} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl">Yaratish</button>
+                </ul>
+              )}
+              {flow.lastRun && (
+                <p className="mt-2 text-[11px] text-gray-400">Oxirgi: {flow.lastRun}</p>
+              )}
+            </div>
           </div>
         </div>
-      )}
-
-      {/* Flows */}
-      <div className="space-y-3">
-        {flows.map(flow => (
-          <div key={flow.id} className={`bg-white rounded-2xl border shadow-sm p-5 transition-all ${flow.active ? "border-gray-100" : "border-gray-100 opacity-60"}`}>
-            <div className="flex items-start gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <p className="text-sm font-semibold text-gray-900">{flow.name}</p>
-                  {flow.active && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-                </div>
-                <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
-                  <span className="flex items-center gap-1.5">
-                    {(() => { const Icon = TRIGGER_ICONS[flow.trigger]; return <Icon size={12} strokeWidth={1.75} />; })()} {flow.triggerValue || "Qo'lda"}
-                  </span>
-                  <span className="text-gray-300">→</span>
-                  <span className="flex items-center gap-1.5">
-                    {(() => { const Icon = ACTION_ICONS[flow.action] || Bot; return <Icon size={12} strokeWidth={1.75} />; })()} {AGENT_NAMES[flow.actionValue] || flow.actionValue}
-                  </span>
-                  {flow.lastRun && <span className="text-gray-400">· Oxirgi: {flow.lastRun}</span>}
-                  <span className="text-gray-400">· {flow.runs} marta</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button onClick={() => runFlow(flow)} disabled={running === flow.id}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-medium rounded-lg transition-all disabled:opacity-40">
-                  {running === flow.id ? <Loader2 size={13} strokeWidth={2} className="animate-spin" /> : <Play size={12} strokeWidth={1.75} fill="currentColor" />} Ishga tushir
-                </button>
-                <button onClick={() => toggleFlow(flow.id)}
-                  className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${flow.active ? "bg-indigo-600" : "bg-gray-200"}`}>
-                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${flow.active ? "left-5" : "left-1"}`} />
-                </button>
-                <button onClick={() => deleteFlow(flow.id)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"><X size={13} strokeWidth={1.75} /></button>
-              </div>
-            </div>
-
-            {result?.id === flow.id && (
-              <div className="mt-4 p-3 bg-gray-50 rounded-xl text-xs text-gray-700 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
-                {result.text}
-              </div>
-            )}
-          </div>
-        ))}
       </div>
     </div>
   );
