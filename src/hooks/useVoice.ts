@@ -90,29 +90,34 @@ async function playMpegBlob(blob: Blob, audioElRef: { current: HTMLAudioElement 
   });
 }
 
-/** Fetch TTS — stream preferred, buffer fallback */
-async function fetchTtsBlob(text: string, lang: string, preferStream: boolean): Promise<Blob> {
+/** Faqat server TTS — brauzer Google/speechSynthesis YO'Q */
+async function fetchTtsBlob(text: string, lang: string): Promise<{ blob: Blob; provider: string }> {
   const res = await fetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, lang, stream: preferStream }),
+    body: JSON.stringify({ text, lang, stream: false }),
   });
 
+  const provider = res.headers.get("X-TTS-Provider") || "unknown";
   const ct = res.headers.get("content-type") || "";
+
   if (!res.ok) {
-    let msg = `tts ${res.status}`;
+    let detail = `tts ${res.status}`;
     if (ct.includes("json")) {
       const j = await res.json().catch(() => ({}));
-      msg = j.error || j.hint || msg;
+      detail = j.detail || j.error || detail;
+      if (j.elevenlabs) detail += ` | ${j.elevenlabs}`;
     }
-    throw new Error(msg);
+    throw new Error(detail);
   }
 
   if (ct.includes("json")) {
     throw new Error("tts returned json, not audio");
   }
 
-  return res.blob();
+  const blob = await res.blob();
+  if (blob.size < 100) throw new Error("empty audio");
+  return { blob, provider };
 }
 
 export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") {
@@ -121,29 +126,21 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const [useGroq, setUseGroq] = useState<boolean | null>(null);
+  const [useServerStt, setUseServerStt] = useState(true);
 
   useEffect(() => {
-    fetch("/api/stt", { method: "POST", body: new FormData() })
-      .then((r) => setUseGroq(r.status !== 500))
-      .catch(() => setUseGroq(false));
-    const w = window as SpeechWindow;
-    setSupported(
-      Boolean(
-        navigator.mediaDevices?.getUserMedia ||
-          w.SpeechRecognition ||
-          w.webkitSpeechRecognition
-      )
-    );
+    setSupported(Boolean(navigator.mediaDevices?.getUserMedia));
+    // Server STT (Groq/Eleven) — brauzer Google STT ishlatilmaydi
+    setUseServerStt(true);
   }, []);
 
-  const stopGroq = useCallback(() => {
+  const stopRec = useCallback(() => {
     mediaRef.current?.stop();
     setListening(false);
     playMicTone(false);
   }, []);
 
-  const startGroq = useCallback(async () => {
+  const startServerStt = useCallback(async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
       ? "audio/webm;codecs=opus"
@@ -158,13 +155,15 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
       stream.getTracks().forEach((t) => t.stop());
       const blob = new Blob(chunksRef.current, { type: mimeType });
       const fd = new FormData();
+      // muhim: server "file" va "audio" ni qabul qiladi
       fd.append("file", blob, "audio.webm");
       try {
         const res = await fetch("/api/stt", { method: "POST", body: fd });
         const data = await res.json();
         if (data.text) onResult(data.text);
-      } catch {
-        /* ignore */
+        else console.warn("STT:", data.error || data.detail || data);
+      } catch (e) {
+        console.warn("STT network", e);
       }
     };
     rec.start();
@@ -174,15 +173,19 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
 
   const toggle = useCallback(() => {
     if (listening) {
-      if (mediaRef.current) stopGroq();
-      else recognitionRef.current?.stop();
+      stopRec();
+      recognitionRef.current?.stop();
       setListening(false);
       return;
     }
-    if (useGroq) {
-      startGroq().catch(() => setListening(false));
+    if (useServerStt) {
+      startServerStt().catch((e) => {
+        console.warn(e);
+        setListening(false);
+      });
       return;
     }
+    // fallback faqat server STT yo'q bo'lsa
     const w = window as SpeechWindow;
     const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SR) return;
@@ -198,18 +201,19 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     rec.start();
     setListening(true);
     playMicTone(true);
-  }, [listening, lang, onResult, startGroq, stopGroq, useGroq]);
+  }, [listening, lang, onResult, startServerStt, stopRec, useServerStt]);
 
-  return { listening, supported: supported || useGroq === true, toggle };
+  return { listening, supported: supported || useServerStt, toggle };
 }
 
-/** ElevenLabs TTS — sentence queue + stream/buffer, HTMLAudio (decodeAudioData MPEG xatolaridan qochish) */
+/** ElevenLabs-only TTS — brauzer Google ovozi O'CHIRILGAN */
 export function useVoiceOutput() {
   const [enabled, setEnabled] = useState(false);
   const [supported] = useState(true);
   const [speaking, setSpeaking] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [lastProvider, setLastProvider] = useState<string | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
-  const queueRef = useRef<string[]>([]);
   const cancelledRef = useRef(false);
 
   const toggleEnabled = useCallback(() => {
@@ -218,7 +222,6 @@ export function useVoiceOutput() {
 
   const stop = useCallback(() => {
     cancelledRef.current = true;
-    queueRef.current = [];
     if (audioElRef.current) {
       audioElRef.current.pause();
       audioElRef.current.src = "";
@@ -242,38 +245,28 @@ export function useVoiceOutput() {
       stop();
       cancelledRef.current = false;
       setSpeaking(true);
+      setLastError(null);
 
       const lang = detectLang(clean);
       const chunks = splitClientSentences(clean);
-      queueRef.current = chunks;
 
       try {
         for (const chunk of chunks) {
           if (cancelledRef.current) break;
           try {
-            // Avval stream, xato bo'lsa buffer
-            let blob: Blob;
-            try {
-              blob = await fetchTtsBlob(chunk, lang, true);
-            } catch {
-              blob = await fetchTtsBlob(chunk, lang, false);
+            const { blob, provider } = await fetchTtsBlob(chunk, lang);
+            setLastProvider(provider);
+            if (provider !== "elevenlabs" && provider !== "elevenlabs-stream") {
+              console.warn("TTS provider:", provider, "— ElevenLabs emas");
             }
             if (cancelledRef.current) break;
-            if (blob.size < 100) throw new Error("empty audio");
             await playMpegBlob(blob, audioElRef);
           } catch (e) {
-            console.warn("TTS chunk error:", e);
-            // oxirgi chora — speechSynthesis shu chunk uchun
-            if ("speechSynthesis" in window && !cancelledRef.current) {
-              await new Promise<void>((resolve) => {
-                const utter = new SpeechSynthesisUtterance(chunk);
-                utter.lang = lang === "ru" ? "ru-RU" : "tr-TR";
-                utter.rate = 0.95;
-                utter.onend = () => resolve();
-                utter.onerror = () => resolve();
-                window.speechSynthesis.speak(utter);
-              });
-            }
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error("TTS xato (Google fallback YO'Q):", msg);
+            setLastError(msg);
+            // Brauzer speechSynthesis ISHLATILMAYDI — Google ovoziga o'xshamasin
+            break;
           }
         }
       } finally {
@@ -283,5 +276,14 @@ export function useVoiceOutput() {
     [enabled, stop]
   );
 
-  return { enabled, setEnabled: toggleEnabled, supported, speak, stop, speaking };
+  return {
+    enabled,
+    setEnabled: toggleEnabled,
+    supported,
+    speak,
+    stop,
+    speaking,
+    lastError,
+    lastProvider,
+  };
 }
