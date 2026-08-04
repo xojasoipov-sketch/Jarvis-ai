@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import ClapListener from "@/components/ClapListener";
 
 type SkillInfo = { name: string; description: string; triggers: string[] };
 
@@ -19,6 +20,7 @@ export default function HudPage() {
   const [input, setInput] = useState("");
   const [log, setLog] = useState<{ t: string; role: "sys" | "you" | "pari"; text: string }[]>([
     { t: now(), role: "sys", text: "PARI HUD online · Speak → Route → Remember → Repeat" },
+    { t: now(), role: "sys", text: "Double-clap: Mikrofon yoqing → ikki marta qarsak → welcome" },
   ]);
   const [busy, setBusy] = useState(false);
   const [lastSkill, setLastSkill] = useState<string>("—");
@@ -64,7 +66,6 @@ export default function HudPage() {
 
   return (
     <div className="min-h-[100dvh] bg-[#07070a] text-zinc-200 font-mono text-sm">
-      {/* top bar */}
       <header className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
         <div className="flex items-center gap-3">
           <span className="text-[11px] tracking-[0.2em] text-zinc-500">P A R I · H U D</span>
@@ -82,23 +83,31 @@ export default function HudPage() {
         </div>
       </header>
 
-      <div className="grid lg:grid-cols-[220px_1fr_240px] min-h-[calc(100dvh-41px)]">
-        {/* vitals */}
-        <aside className="border-r border-zinc-800 p-3 space-y-4 hidden lg:block">
+      <div className="grid lg:grid-cols-[240px_1fr_240px] min-h-[calc(100dvh-41px)]">
+        <aside className="border-r border-zinc-800 p-3 space-y-4">
           <Section title="VITALS">
             <Row k="Loop" v="SPEAK·ROUTE·REM" />
             <Row k="Skills" v={String(skills.length || 6)} />
             <Row k="Last" v={lastSkill} />
             <Row k="Owner" v="Sadi" />
           </Section>
+
+          <ClapListener
+            onDoubleClap={() =>
+              setLog((L) => [
+                ...L,
+                { t: now(), role: "sys", text: "Double-clap detected → welcome TTS" },
+              ])
+            }
+          />
+
           <Section title="DAY">
             <p className="text-[11px] text-zinc-400 leading-relaxed">
-              07:00 Brief · 09:00 Plan · 14:00 Metrics · 19:00 Reflect · Anytime ask
+              07:00 Brief · 09:00 Plan · 14:00 Metrics · 19:00 Reflect
             </p>
           </Section>
         </aside>
 
-        {/* main deck */}
         <main className="flex flex-col min-h-[60vh]">
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {log.map((m, i) => (
@@ -134,7 +143,7 @@ export default function HudPage() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="buyruq yoki savol — plan / metrics / esla …"
+              placeholder="buyruq — plan / metrics / esla …"
               className="flex-1 bg-zinc-900/80 border border-zinc-800 rounded px-3 py-2.5 text-[13px] outline-none focus:border-zinc-600"
             />
             <button
@@ -147,8 +156,7 @@ export default function HudPage() {
           </form>
         </main>
 
-        {/* command deck */}
-        <aside className="border-l border-zinc-800 p-3 space-y-2">
+        <aside className="border-l border-zinc-800 p-3 space-y-2 hidden sm:block">
           <div className="text-[10px] tracking-[0.15em] text-zinc-500 mb-2">COMMAND DECK</div>
           <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5">
             {COMMANDS.map((c) => (
@@ -163,9 +171,6 @@ export default function HudPage() {
               </button>
             ))}
           </div>
-          <p className="text-[10px] text-zinc-600 pt-3 leading-relaxed">
-            Small single-purpose skills beat one giant prompt. Results land in vault/ as markdown.
-          </p>
         </aside>
       </div>
     </div>
@@ -191,5 +196,9 @@ function Row({ k, v }: { k: string; v: string }) {
 }
 
 function now() {
-  return new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return new Date().toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
