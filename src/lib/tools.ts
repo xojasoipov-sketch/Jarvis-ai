@@ -518,6 +518,62 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       };
     },
   },
+  // ── Phone / Device control tools ─────────────────────────────────────────
+  {
+    name: "phone_list",
+    description: "Ulangan barcha telefonlar / qurilmalarni ro'yxatla (nom, holat, batareya, platforma)",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const res = await fetch(`${base}/api/phones`);
+      return res.json();
+    },
+  },
+  {
+    name: "phone_command",
+    description: "Telefonga buyruq yubor: call (qo'ng'iroq), sms (xabar), notify (bildirishnoma), open_app, volume, custom",
+    parameters: {
+      type: "object",
+      properties: {
+        device_id: { type: "string", description: "Qurilma ID (phone_list dan olinadi)" },
+        action: { type: "string", enum: ["call", "sms", "notify", "open_app", "volume", "screen", "custom"], description: "Buyruq turi" },
+        payload: { type: "object", description: "Buyruq parametrlari. call: {number}, sms: {number, message}, notify: {title, message}, open_app: {package}, volume: {level: 0-100}, custom: istalgan" },
+      },
+      required: ["device_id", "action"],
+    },
+    run: async (args) => {
+      const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const res = await fetch(`${base}/api/phones?action=cmd`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args),
+      });
+      return res.json();
+    },
+  },
+  {
+    name: "phone_register",
+    description: "Yangi telefon/qurilma ro'yxatga olish. webhook_url — Tasker yoki HTTP Shortcuts URL",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Qurilma nomi" },
+        platform: { type: "string", enum: ["android", "ios", "other"] },
+        webhook_url: { type: "string", description: "Qurilmaning webhook URL (Tasker HTTP server yoki HTTP Shortcuts)" },
+      },
+      required: ["name"],
+    },
+    run: async (args) => {
+      const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const res = await fetch(`${base}/api/phones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args),
+      });
+      return res.json();
+    },
+  },
+
   {
     name: "railway_info",
     description: "Railway holati",

@@ -1,6 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useJarvisVoice } from "@/hooks/useJarvisVoice";
+
+const HermesOrb = dynamic(() => import("@/components/HermesOrb"), { ssr: false });
 
 // ── Graph layout (butterfly, viewBox 1200×1080) ─────────────────────────────
 const HUBS = [
@@ -172,6 +175,7 @@ export default function PariPage() {
   const [busy, setBusy]           = useState(false);
   const [answer, setAnswer]       = useState("");
   const [showInput, setShowInput] = useState(false);
+  const [view, setView]           = useState<"graph" | "orb">("graph");
   const jarvis = useJarvisVoice();
 
   // Hover / active node
@@ -343,6 +347,33 @@ export default function PariPage() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
+      {/* View toggle */}
+      <div style={{
+        position: "fixed", top: 14, right: 16, zIndex: 100,
+        display: "flex", gap: 4,
+        background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.07)",
+        borderRadius: 6, padding: 3,
+      }}>
+        {(["graph", "orb"] as const).map(v => (
+          <button key={v} onClick={() => setView(v)} style={{
+            padding: "4px 12px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+            cursor: "pointer", border: "none",
+            background: view === v ? "rgba(139,92,246,0.25)" : "transparent",
+            color: view === v ? "#c4b5fd" : "rgba(255,255,255,0.3)",
+            letterSpacing: "0.04em", textTransform: "uppercase",
+          }}>
+            {v === "graph" ? "🕸 Miya" : "🔮 Orb"}
+          </button>
+        ))}
+      </div>
+
+      {/* Orb view */}
+      {view === "orb" && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <HermesOrb showControls />
+        </div>
+      )}
+
       <ParticleCanvas />
 
       {/* Scholar reactions (fixed position overlays) */}

@@ -7,7 +7,7 @@ import {
   Store, Settings, LogOut, X, type LucideIcon,
   MessageSquare, CheckSquare, FolderKanban, Calendar, FolderOpen,
   Radio, Code2, Database, Wrench, ShieldCheck, CreditCard,
-  ScrollText, Sparkles, History, ChevronDown, ChevronRight, Plug,
+  ScrollText, Sparkles, History, ChevronDown, ChevronRight, Plug, Smartphone,
 } from "lucide-react";
 import { useState } from "react";
 import ThemeToggle from "./ThemeToggle";
@@ -73,6 +73,7 @@ const mainNav: NavGroup[] = [
     ],
   },
   { label: "Knowledge / Obsidian", icon: BookOpen, href: "/knowledge" },
+  { label: "Phones / Devices", icon: Smartphone, href: "/phones" },
   { label: "Analytics", icon: BarChart3, href: "/analytics" },
   { label: "Finance", icon: Wallet, href: "/billing" },
   { label: "Marketplace", icon: Store, href: "/marketplace" },
