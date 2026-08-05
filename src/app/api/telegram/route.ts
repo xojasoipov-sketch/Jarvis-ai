@@ -119,9 +119,16 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
     return;
   }
 
+  if (cmd === "/portfolio") {
+    await sendMessage(chatId, portfolioTelegramSummary(), {
+      inline_keyboard: [[{ text: "🏢 Portfolio mini-app", web_app: { url: PORTFOLIO_URL } }]],
+    });
+    return;
+  }
+
   if (cmd === "/app") {
-    await sendMessage(chatId, `🚀 *Pari AI* — to'liq ilovani oching:`, {
-      inline_keyboard: [[{ text: "🚀 Pari AI ni ochish", web_app: { url: APP_URL } }]],
+    await sendMessage(chatId, `🚀 *Pari AI*:`, {
+      inline_keyboard: [[{ text: "Ochish", web_app: { url: APP_URL } }]],
     });
     return;
   }
@@ -249,13 +256,13 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
 
   if (cmd === "/chat") {
     updateSession(chatId, { mode: "chat", agentId: undefined });
-    await sendMessage(chatId, "💬 *Chat rejimi* faollashdi. Savol bering:");
+    await sendMessage(chatId, "💬 Chat rejimi.");
     return;
   }
 
   if (cmd === "/clear") {
     clearHistory(chatId);
-    await sendMessage(chatId, "✅ Suhbat tarixi tozalandi.");
+    await sendMessage(chatId, "✅ Tozalandi.");
     return;
   }
 
@@ -364,7 +371,7 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
         }
       );
     } catch {
-      await sendMessage(chatId, "❌ Agent bilan bog'lanishda xato. Qayta urinib ko'ring.");
+      await sendMessage(chatId, "❌ Agent xato.");
     }
     return;
   }
@@ -441,12 +448,28 @@ async function regularChat(chatId: number, text: string, _history: Array<{ role:
     addToHistory(chatId, "assistant", reply);
     await sendMessage(chatId, cleanMarkdown(reply));
   } catch {
-    await sendMessage(chatId, "❌ Javob olishda xato. Qayta urinib ko'ring.");
+    await sendMessage(chatId, "❌ Xato.");
   }
 }
 
-async function handleCallback(callbackId: string, chatId: number, data: string, firstName: string) {
+async function handleCallback(
+  callbackId: string,
+  chatId: number,
+  data: string,
+  firstName: string,
+  isOwner: boolean
+) {
   await answerCallbackQuery(callbackId);
+
+  if (data === "guest:projects" || data === "guest:services") {
+    await sendMessage(chatId, portfolioTelegramSummary(), GUEST_KEYBOARD);
+    return;
+  }
+
+  if (!isOwner) {
+    await sendMessage(chatId, guestStartText(firstName), GUEST_KEYBOARD);
+    return;
+  }
 
   if (data.startsWith("agent:")) {
     const agentId = data.split(":")[1];
@@ -459,19 +482,16 @@ async function handleCallback(callbackId: string, chatId: number, data: string, 
     );
     return;
   }
-
   if (data === "menu:chat") {
     updateSession(chatId, { mode: "chat", agentId: undefined });
-    await sendMessage(chatId, "💬 *Chat rejimi faollashdi.*\n\nSavol bering:");
+    await sendMessage(chatId, "💬 Chat.");
     return;
   }
-
   if (data === "menu:agents") {
     updateSession(chatId, { mode: "agent", agentId: undefined });
     await sendMessage(chatId, "🤖 Qaysi agent bilan ishlashni xohlaysiz?", AGENT_KEYBOARD);
     return;
   }
-
   if (data === "menu:tasks") {
     await sendMessage(chatId, `📋 *Vazifalar*\n\nVazifalarni web ilovadan boshqaring:`,
       { inline_keyboard: [[{ text: "📋 Vazifalar", web_app: { url: `${APP_URL}/tasks` } }]] }
@@ -594,12 +614,35 @@ export async function POST(req: NextRequest) {
 
     if (update.message?.text) {
       const { chat, text, from } = update.message;
-      log("info", "telegram", `Xabar: "${text.slice(0, 60)}" from @${from.first_name}`);
-      await handleMessage(chat.id, text, from.first_name);
+      const owner = isOwnerTelegram(from);
+      log("info", "telegram", `from ${from?.username || from?.id} owner=${owner}`);
+      if (!owner) {
+        const lim = checkGuestTelegramLimit(from.id);
+        if (!lim.allowed) {
+          await sendMessage(
+            chat.id,
+            `⛔ Limit (${lim.limit}/24s).\n*${SADIPRIME.brand}* — @${SADIPRIME.telegram}\nPortfolio: ${PORTFOLIO_URL}`
+          );
+          return NextResponse.json({ ok: true });
+        }
+        consumeGuestTelegram(from.id);
+      }
+      await handleMessage(chat.id, text, from.first_name, owner);
     }
 
     if (update.message?.voice || update.message?.audio) {
       const { chat, from } = update.message;
+      const owner = isOwnerTelegram(from);
+      if (!owner) {
+        const lim = checkGuestTelegramLimit(from.id);
+        if (!lim.allowed) {
+          await sendMessage(chat.id, `⛔ Limit. @${SADIPRIME.telegram}`);
+          return NextResponse.json({ ok: true });
+        }
+        consumeGuestTelegram(from.id);
+        await sendMessage(chat.id, guestStartText(from.first_name), GUEST_KEYBOARD);
+        return NextResponse.json({ ok: true });
+      }
       const fileId = (update.message.voice || update.message.audio)!.file_id;
       await sendChatAction(chat.id, "typing");
       try {
@@ -609,12 +652,11 @@ export async function POST(req: NextRequest) {
           addToHistory(chat.id, "assistant", result.reply);
           await sendMessage(chat.id, `🎤 _"${result.transcript}"_\n\n${cleanMarkdown(result.reply)}`);
         } else {
-          await sendMessage(chat.id, "Ovozni tushunmadim, qayta yuboring.");
+          await sendMessage(chat.id, "Ovozni tushunmadim.");
         }
       } catch {
-        await sendMessage(chat.id, "Ovoz xabarida xato yuz berdi.");
+        await sendMessage(chat.id, "Ovoz xatosi.");
       }
-      log("info", "telegram", `Ovoz xabari from @${from.first_name}`);
     }
 
     if (update.message?.photo) {
@@ -665,7 +707,7 @@ export async function POST(req: NextRequest) {
 
     if (update.callback_query) {
       const { id, message, data, from } = update.callback_query;
-      await handleCallback(id, message.chat.id, data, from.first_name);
+      await handleCallback(id, message.chat.id, data, from.first_name, isOwnerTelegram(from));
     }
 
     return NextResponse.json({ ok: true });
@@ -677,5 +719,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json({ status: "Pari AI Telegram Bot webhook aktiv" });
+  return NextResponse.json({
+    ok: true,
+    owner: OWNER.username,
+    portfolio: PORTFOLIO_URL,
+    brand: SADIPRIME.brand,
+  });
 }

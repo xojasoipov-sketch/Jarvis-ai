@@ -9,13 +9,14 @@ const GEMINI_KEYS = [
   process.env.GEMINI_API_KEY3,
 ].filter(Boolean) as string[];
 
-const PARI_SYSTEM = `Sen Pari — Sadining shaxsiy ovozli AI yordamchisissan.
+const PARI_SYSTEM = `${ownerSystemBlock()}
+
+Sen Pari — ${OWNER.shortName}ning shaxsiy ovozli AI yordamchisissan.
 Qoidalar:
-- Foydalanuvchi o'zbek tilida gapirsa — o'zbek tilida javob ber
-- Javob qisqa va tabiiy bo'lsin (ovozda qulay eshitilsin)
-- Markdown, ro'yxat, kod bloki, maxsus belgilar ishlatma — faqat oddiy gap
-- Maksimal 3-4 gap
-- Agar savol bo'lmasa ham, samimiy muloqot qil`;
+- Egasi bilan gaplashayotganingizni biling (@${OWNER.username})
+- O'zbek tilida qisqa, tabiiy javob
+- Markdown/kod bloki ishlatma — oddiy gap
+- Maksimal 3-4 gap`;
 
 function normalizeMime(raw: string): string {
   const m = raw.toLowerCase().split(";")[0].trim();
@@ -23,22 +24,17 @@ function normalizeMime(raw: string): string {
     "audio/webm": "audio/webm",
     "audio/ogg": "audio/ogg",
     "audio/mp4": "audio/mp4",
-    "audio/x-m4a": "audio/mp4",
-    "audio/m4a": "audio/mp4",
     "audio/mpeg": "audio/mpeg",
-    "audio/mp3": "audio/mpeg",
     "audio/wav": "audio/wav",
-    "audio/wave": "audio/wav",
   };
   return map[m] || "audio/webm";
 }
 
 function mimeToFilename(mime: string): string {
-  const m = mime.toLowerCase().split(";")[0].trim();
-  if (m.includes("mp4") || m.includes("m4a")) return "audio.mp4";
-  if (m.includes("ogg")) return "audio.ogg";
-  if (m.includes("mpeg") || m.includes("mp3")) return "audio.mp3";
-  if (m.includes("wav")) return "audio.wav";
+  if (mime.includes("mp4")) return "audio.mp4";
+  if (mime.includes("ogg")) return "audio.ogg";
+  if (mime.includes("mpeg")) return "audio.mp3";
+  if (mime.includes("wav")) return "audio.wav";
   return "audio.webm";
 }
 
@@ -158,7 +154,6 @@ export async function POST(req: NextRequest) {
     if (!audio || !(audio instanceof Blob)) {
       return NextResponse.json({ error: "audio yo'q" }, { status: 400 });
     }
-
     const mimeType = audio.type || "audio/webm";
     const buf = Buffer.from(await audio.arrayBuffer());
 
@@ -193,7 +188,6 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (e) {
-    console.error("Voice route error:", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }

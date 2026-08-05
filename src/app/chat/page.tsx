@@ -3,22 +3,19 @@ import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Mic, Send, History, Volume2, VolumeX, ChevronDown, Code2, Eye } from "lucide-react";
 import { useVoiceInput, useVoiceOutput } from "@/hooks/useVoice";
+import ChatSkillsBar from "@/components/ChatSkillsBar";
 
 type Message = { role: "user" | "assistant"; content: string; ts?: number };
 
-// ─── Dust Particle Canvas ─────────────────────────────────────────────────────
 function DustCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
-    let raf: number;
+    let raf = 0;
     const pts: { x: number; y: number; vx: number; vy: number; r: number; a: number; da: number }[] = [];
-
     function resize() {
       if (!canvas) return;
       canvas.width = canvas.offsetWidth;
@@ -26,34 +23,20 @@ function DustCanvas() {
     }
     resize();
     window.addEventListener("resize", resize);
-
-    // Butterfly-shaped distribution
-    const N = 120;
-    for (let i = 0; i < N; i++) {
-      const t = (i / N) * Math.PI * 2;
-      // Butterfly curve parametric (r = e^sin(t) - 2cos(4t) + sin^5((2t-π)/24))
-      const r = (Math.exp(Math.sin(t)) - 2 * Math.cos(4 * t) + Math.pow(Math.sin((2 * t - Math.PI) / 24), 5));
-      const cx = (canvas.width ?? 600) / 2;
-      const cy = (canvas.height ?? 400) / 2;
-      const scale = Math.min(canvas.width, canvas.height) * 0.18;
-      const px = cx + r * Math.cos(t) * scale;
-      const py = cy - r * Math.sin(t) * scale * 0.7;
+    for (let i = 0; i < 80; i++) {
       pts.push({
-        x: px + (Math.random() - 0.5) * 40,
-        y: py + (Math.random() - 0.5) * 40,
-        vx: (Math.random() - 0.5) * 0.15,
-        vy: (Math.random() - 0.5) * 0.15,
+        x: Math.random() * (canvas.width || 300),
+        y: Math.random() * (canvas.height || 400),
+        vx: (Math.random() - 0.5) * 0.2,
+        vy: (Math.random() - 0.5) * 0.2,
         r: Math.random() * 1.2 + 0.3,
         a: Math.random(),
         da: (Math.random() - 0.5) * 0.004,
       });
     }
-
     function draw() {
       if (!ctx || !canvas) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Update
       for (const p of pts) {
         p.x += p.vx;
         p.y += p.vy;
@@ -61,51 +44,20 @@ function DustCanvas() {
         if (p.a > 1 || p.a < 0.05) p.da *= -1;
         if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
         if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-      }
-
-      // Connections (only close pairs)
-      for (let i = 0; i < pts.length; i++) {
-        for (let j = i + 1; j < pts.length; j++) {
-          const dx = pts[i].x - pts[j].x;
-          const dy = pts[i].y - pts[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 70) {
-            ctx.beginPath();
-            ctx.moveTo(pts[i].x, pts[i].y);
-            ctx.lineTo(pts[j].x, pts[j].y);
-            const alpha = (1 - dist / 70) * 0.12;
-            ctx.strokeStyle = `rgba(160, 130, 255, ${alpha})`;
-            ctx.lineWidth = 0.4;
-            ctx.stroke();
-          }
-        }
-      }
-
-      // Particles
-      for (const p of pts) {
         ctx.beginPath();
+        ctx.fillStyle = `rgba(180,140,255,${0.15 + p.a * 0.25})`;
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(180, 150, 255, ${p.a * 0.55})`;
         ctx.fill();
       }
-
       raf = requestAnimationFrame(draw);
     }
     draw();
-
     return () => {
-      window.removeEventListener("resize", resize);
       cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
     };
   }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ opacity: 0.85 }}
-    />
-  );
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
 }
 
 // ─── HTML Artifact preview ────────────────────────────────────────────────────
@@ -234,8 +186,25 @@ async function saveConversation(id: string | null, messages: Message[]): Promise
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.id;
-  } catch { return null; }
+    return data.id as string | null;
+  } catch {
+    return null;
+  }
+}
+
+function Bubble({ role, content }: { role: "user" | "assistant"; content: string }) {
+  const isUser = role === "user";
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`text-sm leading-relaxed max-w-xs sm:max-w-md rounded-2xl px-3.5 py-2.5 ${
+          isUser ? "bg-violet-600/40 text-white/90" : "bg-white/5 text-white/75"
+        }`}
+      >
+        {content}
+      </div>
+    </div>
+  );
 }
 
 // Intent chip labels shown above input
@@ -303,27 +272,42 @@ function ChatInner() {
       initialized.current = true;
       setConvId(id);
       fetch(`/api/conversations?id=${id}`)
-        .then(r => r.json())
-        .then(data => { if (data.messages) setMessages(data.messages); })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.messages) setMessages(data.messages);
+        })
         .catch(() => {});
     } else if (q && !initialized.current) {
       initialized.current = true;
       sendMessage(q);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streaming]);
 
-  async function sendMessage(text?: string) {
+  async function runSkill(skillId: string, text: string) {
+    const res = await fetch("/api/skills", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, skill: skillId || undefined, remember: true }),
+      signal: AbortSignal.timeout(45000),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `skill ${res.status}`);
+    return String(data.answer || "");
+  }
+
+  async function sendMessage(text?: string, skillId?: string) {
     const msg = (text || input).trim();
-    if (!msg || loading) return;
+    if ((!msg && !skillId) || loading) return;
     setInput("");
     setIntentHint(null);
 
-    const newMessages: Message[] = [...messages, { role: "user", content: msg, ts: Date.now() }];
+    const display = msg || skillId || "";
+    const newMessages: Message[] = [...messages, { role: "user", content: display, ts: Date.now() }];
     setMessages(newMessages);
     setLoading(true);
     setStreaming("");
@@ -342,13 +326,39 @@ function ChatInner() {
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let full = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        full += decoder.decode(value);
+      const skillTriggers =
+        /\b(plan|reja|metrics|holat|brifing|brief|inbox|reflect|yakun|trend|esla|xotira)\b/i;
+
+      if (skillId || skillTriggers.test(display)) {
+        full = await runSkill(skillId || "", display);
         setStreaming(full);
+      } else {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: newMessages.map(({ role, content }) => ({ role, content })),
+          }),
+          signal: AbortSignal.timeout(25000),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.error || `HTTP ${res.status}`);
+        }
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          full += decoder.decode(value);
+          setStreaming(full);
+        }
       }
-      const finalMessages: Message[] = [...newMessages, { role: "assistant", content: full, ts: Date.now() }];
+
+      const finalMessages: Message[] = [
+        ...newMessages,
+        { role: "assistant", content: full, ts: Date.now() },
+      ];
       setMessages(finalMessages);
       setStreaming("");
       voiceOut.speak(full);
@@ -376,18 +386,11 @@ function ChatInner() {
 
   return (
     <div
-      className="flex flex-col relative"
-      style={{
-        height: "calc(100vh - 8rem)",
-        background: "linear-gradient(160deg, #0d0b1a 0%, #100e22 60%, #0f0c1e 100%)",
-        borderRadius: "1.25rem",
-        overflow: "hidden",
-      }}
+      className="flex flex-col relative pb-16 lg:pb-0"
+      style={{ height: "100dvh", background: "#050510" }}
     >
-      {/* Particle background */}
       <DustCanvas />
 
-      {/* Header */}
       <div className="relative z-10 flex items-center justify-between px-5 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
           <span className="w-2 h-2 rounded-full bg-purple-400/70 animate-pulse" />
@@ -403,40 +406,39 @@ function ChatInner() {
             </button>
           )}
           <button
+            type="button"
+            onClick={() => voiceOut.setEnabled()}
+            className={`p-1.5 rounded-lg transition-all ${
+              voiceOut.enabled ? "text-purple-300" : "text-white/20 hover:text-white/50"
+            }`}
+            aria-label="Ovoz"
+          >
+            {voiceOut.enabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+          </button>
+          <button
+            type="button"
             onClick={newChat}
             className="flex items-center gap-1 text-xs text-white/25 hover:text-white/50 transition-colors px-2 py-1"
           >
-            <History size={12} strokeWidth={1.75} />
+            <History size={12} /> Yangi
           </button>
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-5 py-3 space-y-3">
-        {messages.length === 0 && !streaming && !loading && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p className="text-white/15 text-xs tracking-widest uppercase select-none">
-              xabar yozing
-            </p>
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 space-y-3">
+        {messages.length === 0 && !streaming && (
+          <div className="flex flex-col items-center justify-center h-full opacity-50 pt-20">
+            <p className="text-sm text-white/40">Yozing yoki chip tanlang</p>
+            <p className="text-xs text-white/25 mt-1">reja · brifing · holat · trend</p>
           </div>
         )}
-
         {messages.map((m, i) => (
-          <MessageBubble key={i} m={m} />
+          <Bubble key={i} role={m.role} content={m.content} />
         ))}
-
-        {streaming && (
-          <div className="flex justify-start">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-400/60 animate-pulse" />
-              <span className="text-xs text-purple-200/50 italic">{streaming.slice(0, 60)}{streaming.length > 60 ? "…" : ""}</span>
-            </div>
-          </div>
-        )}
-
+        {streaming && <Bubble role="assistant" content={streaming} />}
         {loading && !streaming && (
-          <div className="flex items-center gap-1.5 pl-4">
-            {[0, 1, 2].map(i => (
+          <div className="flex items-center gap-1.5 pl-2">
+            {[0, 1, 2].map((i) => (
               <span
                 key={i}
                 className="w-1 h-1 rounded-full bg-purple-400/40"
@@ -445,7 +447,6 @@ function ChatInner() {
             ))}
           </div>
         )}
-
         <div ref={bottomRef} />
       </div>
 
@@ -484,6 +485,7 @@ function ChatInner() {
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {voiceIn.supported && (
               <button
+                type="button"
                 onClick={voiceIn.toggle}
                 className={`p-1.5 rounded-lg transition-all ${
                   voiceIn.listening ? "text-red-400 animate-pulse" : "text-white/25 hover:text-white/50"
@@ -493,11 +495,13 @@ function ChatInner() {
               </button>
             )}
             <button
+              type="button"
               onClick={() => sendMessage()}
               disabled={!input.trim() || loading}
               className="w-8 h-8 rounded-xl flex items-center justify-center transition-all disabled:opacity-20"
               style={{
-                background: input.trim() && !loading ? "rgba(160,100,255,0.5)" : "rgba(255,255,255,0.05)",
+                background:
+                  input.trim() && !loading ? "rgba(160,100,255,0.5)" : "rgba(255,255,255,0.05)",
                 border: "1px solid rgba(160,100,255,0.2)",
               }}
             >
@@ -512,7 +516,13 @@ function ChatInner() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-64"><span className="text-white/20 text-sm">…</span></div>}>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-64">
+          <span className="text-white/20 text-sm">…</span>
+        </div>
+      }
+    >
       <ChatInner />
     </Suspense>
   );

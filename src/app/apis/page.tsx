@@ -9,6 +9,8 @@ type Status = "idle" | "checking" | "ok" | "error" | "present";
 
 const RAILWAY_VARS_HINT = "Railway → Service → Variables";
 
+const VERCEL_ENV_URL = "https://vercel.com/xojasoipov-6117s-projects/pari-ai/settings/environment-variables";
+
 const APIS = [
   { id: "pollinations", name: "Pollinations", desc: "Key shart emas — bepul", envKey: null as string | null, url: "https://pollinations.ai", cat: "AI Text" },
   { id: "groq", name: "Groq", desc: "LLaMA 3.3 — tool-calling", envKey: "GROQ_API_KEY", url: "https://groq.com/keys", cat: "AI Text" },
@@ -210,6 +212,8 @@ export default function ApisPage() {
         </div>
         <p className="px-5 py-2 text-[11px] text-gray-400 border-t border-gray-50">{RAILWAY_VARS_HINT}</p>
       </div>
+
+      <AddKeyPanel />
 
       {cats.map((cat) => (
         <div key={cat}>

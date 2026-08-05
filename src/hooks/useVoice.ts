@@ -55,7 +55,7 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const [useGroq, setUseGroq] = useState<boolean | null>(null);
+  const [useServerStt, setUseServerStt] = useState(true);
 
   useEffect(() => {
     fetch("/api/stt", { method: "POST", body: new FormData() })
@@ -65,7 +65,7 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     setSupported(Boolean(navigator.mediaDevices?.getUserMedia || w.SpeechRecognition || w.webkitSpeechRecognition));
   }, []);
 
-  const stopGroq = useCallback(() => {
+  const stopRec = useCallback(() => {
     mediaRef.current?.stop();
     setListening(false);
     playMicTone(false);
@@ -74,31 +74,34 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   const startGroq = useCallback(async () => {
     playMicTone(true);
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    chunksRef.current = [];
     const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
       ? "audio/webm;codecs=opus"
       : "audio/webm";
+    chunksRef.current = [];
     const rec = new MediaRecorder(stream, { mimeType });
     mediaRef.current = rec;
-
-    rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    rec.ondataavailable = (e) => {
+      if (e.data.size) chunksRef.current.push(e.data);
+    };
     rec.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      if (blob.size < 500) return;
-      const form = new FormData();
-      form.append("audio", blob, "audio.webm");
-      form.append("lang", lang.split("-")[0]);
+      const fd = new FormData();
+      // muhim: server "file" va "audio" ni qabul qiladi
+      fd.append("file", blob, "audio.webm");
       try {
-        const res = await fetch("/api/stt", { method: "POST", body: form });
-        if (!res.ok) return;
+        const res = await fetch("/api/stt", { method: "POST", body: fd });
         const data = await res.json();
         if (data.text) onResult(data.text);
-      } catch {}
+        else console.warn("STT:", data.error || data.detail || data);
+      } catch (e) {
+        console.warn("STT network", e);
+      }
     };
-    rec.start(200);
+    rec.start();
     setListening(true);
-  }, [lang, onResult]);
+    playMicTone(true);
+  }, [onResult]);
 
   const toggle = useCallback(() => {
     const hasMedia = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
@@ -114,6 +117,7 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     if (!Ctor) return;
 
     if (listening) {
+      stopRec();
       recognitionRef.current?.stop();
       setListening(false);
       playMicTone(false);
@@ -132,11 +136,19 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     rec.onerror = () => { setListening(false); playMicTone(false); };
     rec.onend = () => setListening(false);
     recognitionRef.current = rec;
+    rec.lang = lang;
+    rec.interimResults = false;
+    rec.onresult = (e: SpeechRecognitionEvent) => {
+      const t = e.results[e.resultIndex]?.[0]?.transcript;
+      if (t) onResult(t);
+    };
+    rec.onend = () => setListening(false);
     rec.start();
     setListening(true);
-  }, [listening, lang, onResult, useGroq, startGroq, stopGroq]);
+    playMicTone(true);
+  }, [listening, lang, onResult, startServerStt, stopRec, useServerStt]);
 
-  return { listening, supported: supported || useGroq === true, toggle };
+  return { listening, supported: supported || useServerStt, toggle };
 }
 
 // ─── Voice Output (ElevenLabs TTS via Web Audio API) ─────────────────────────

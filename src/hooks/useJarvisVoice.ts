@@ -112,21 +112,29 @@ export function useJarvisVoice() {
   const isSpeakingRef = useRef(false);
   const chunksRef = useRef<BlobPart[]>([]);
 
-  useEffect(() => { stateRef.current = state; }, [state]);
-  useEffect(() => { activeRef.current = active; }, [active]);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   useEffect(() => {
     const ok =
       typeof MediaRecorder !== "undefined" &&
       !!navigator.mediaDevices?.getUserMedia &&
-      (typeof AudioContext !== "undefined" || typeof (window as unknown as { webkitAudioContext: unknown }).webkitAudioContext !== "undefined");
+      (typeof AudioContext !== "undefined" ||
+        typeof (window as unknown as { webkitAudioContext: unknown }).webkitAudioContext !==
+          "undefined");
     setSupported(ok);
   }, []);
 
   const stopAll = useCallback(() => {
     cancelAnimationFrame(vadLoopRef.current);
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    try { recorderRef.current?.stop(); } catch {}
+    try {
+      recorderRef.current?.stop();
+    } catch {}
     streamRef.current?.getTracks().forEach((t) => t.stop());
     audioCtxRef.current?.close().catch(() => {});
     streamRef.current = null;
@@ -222,15 +230,63 @@ export function useJarvisVoice() {
             stopRecording();
           }, SILENCE_DURATION);
         }
-      } else if (isSpeakingRef.current && rms > SPEAK_THRESHOLD) {
-        if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+        speechStartRef.current = Date.now();
+        isSpeakingRef.current = true;
+      }
+
+      function stopRecording() {
+        isSpeakingRef.current = false;
+        if (recorderRef.current?.state === "recording") {
+          try {
+            recorderRef.current.stop();
+          } catch {}
+        }
+      }
+
+      function vadTick() {
+        if (!activeRef.current) return;
+        if (stateRef.current === "thinking" || stateRef.current === "speaking") {
+          vadLoopRef.current = requestAnimationFrame(vadTick);
+          return;
+        }
+
+        analyser.getFloatTimeDomainData(data);
+        let rms = 0;
+        for (let i = 0; i < data.length; i++) rms += data[i] * data[i];
+        rms = Math.sqrt(rms / data.length);
+        setLevel(Math.min(rms / 0.08, 1));
+
+        if (!isSpeakingRef.current && rms > SPEAK_THRESHOLD) {
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+          }
+          setState("listening");
+          startRecording();
+          setTimeout(() => {
+            if (isSpeakingRef.current) stopRecording();
+          }, MAX_SPEECH_MS);
+        } else if (isSpeakingRef.current && rms < SILENCE_THRESHOLD) {
+          if (!silenceTimerRef.current) {
+            silenceTimerRef.current = setTimeout(() => {
+              silenceTimerRef.current = null;
+              stopRecording();
+            }, SILENCE_DURATION);
+          }
+        } else if (isSpeakingRef.current && rms > SPEAK_THRESHOLD) {
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+          }
+        }
+
+        vadLoopRef.current = requestAnimationFrame(vadTick);
       }
 
       vadLoopRef.current = requestAnimationFrame(vadTick);
-    }
-
-    vadLoopRef.current = requestAnimationFrame(vadTick);
-  }, [processChunks]);
+    },
+    [processChunks]
+  );
 
   const startConversation = useCallback(async () => {
     if (activeRef.current) return;

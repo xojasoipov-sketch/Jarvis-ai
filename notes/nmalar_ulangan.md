@@ -1,0 +1,1 @@
+Nmalar ulangan, nima qilish kerak?

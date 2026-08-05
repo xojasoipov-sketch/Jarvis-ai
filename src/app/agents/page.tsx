@@ -126,7 +126,7 @@ function AgentsInner() {
 
   return (
     <div className="fade-in max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">AI Agents</h1>
           <p className="text-sm text-gray-500 mt-0.5">Ixtisoslashgan agentlar — har biri o'z sohasida mutaxassis</p>
@@ -212,7 +212,11 @@ function AgentsInner() {
           value={task}
           onChange={e => setTask(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleRun())}
-          placeholder="Vazifani yozing... (masalan: 'Pari AI uchun marketing strategiyasini ishlab chiq')"
+          placeholder={
+            mode === "research"
+              ? "Masalan: O'zbekistonda AI startaplar bozori 2026..."
+              : "Vazifani yozing... (masalan: 'Pari AI uchun marketing strategiyasini ishlab chiq')"
+          }
           rows={3}
           className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all"
         />
@@ -270,7 +274,7 @@ function AgentsInner() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <History size={15} strokeWidth={1.75} className="text-gray-400" />
-            <h2 className="text-sm font-semibold text-gray-900">So&apos;nggi ishga tushirishlar</h2>
+            <h2 className="text-sm font-semibold text-gray-900">So'nggi ishga tushirishlar</h2>
           </div>
           <div className="space-y-3">
             {history.slice(0, 6).map((h) => (

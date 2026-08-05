@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pari AI (Jarvis-ai)
 
-## Getting Started
+Next.js asosidagi shaxsiy AI assistant — chat, Telegram bot, knowledge base, SMM, business tools, local LLM (Ollama) va boshqalar.
 
-First, run the development server:
+**Asosiy deploy platformasi: [Railway](https://railway.app)**
+
+## Tez start (local)
 
 ```bash
+npm install
+cp .env.example .env.local
+# .env.local ga kalitlarni yozing
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Railway ga deploy
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. [Railway](https://railway.app) → **New Project** → **Deploy from GitHub** → `xojasoipov-sketch/Jarvis-ai`
+2. Root directory: (bo‘sh qoldiring)
+3. Build: `nixpacks` avtomatik (yoki `railway.toml` / `nixpacks.toml`)
+4. **Variables** ga `.env.example` dagi kalitlarni qo‘ying (kamida bitta LLM kaliti)
+5. Deploy tugagach domain beriladi: `https://xxx.up.railway.app`
 
-## Learn More
+Batafsil: **[docs/RAILWAY.md](docs/RAILWAY.md)**
 
-To learn more about Next.js, take a look at the following resources:
+### Ollama (local LLM) — ixtiyoriy
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Shu project ichida alohida service sifatida Ollama qo‘shing, so‘ng:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+OLLAMA_SERVICE=ollama
+OLLAMA_MODEL=llama3.2
+```
 
-## Deploy on Vercel
+Provider tartibi: **local → Pollinations → Groq / Cerebras / OpenRouter → … → OpenAI**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Asosiy endpointlar
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Endpoint | Vazifa |
+|----------|--------|
+| `GET /` | Dashboard |
+| `POST /api/chat` | Chat |
+| `POST /api/telegram` | Telegram webhook |
+| `GET /api/hermes` | Provider holati |
+| `GET /api/mcp` | MCP tools ro‘yxati |
+| `POST /api/react` | ReAct agent |
+
+## Stack
+
+- **Next.js 16** + React 19 + TypeScript
+- Tailwind CSS, Framer Motion, Lucide icons
+- Supabase (ixtiyoriy DB)
+- Sentry (ixtiyoriy)
+- Multi-provider LLM (Gemini, Groq, OpenRouter, Ollama, …)
+
+## Scripts
+
+```bash
+npm run dev      # development
+npm run build    # production build
+npm start        # production server (Railway shu bilan ishga tushadi)
+npm run lint
+```
+
+## License
+
+Private / personal use.

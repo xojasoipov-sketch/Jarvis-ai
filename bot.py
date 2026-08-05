@@ -1,0 +1,1 @@
+# Kod yangilandi. Bot yaxshilandi

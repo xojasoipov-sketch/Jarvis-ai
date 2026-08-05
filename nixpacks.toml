@@ -1,9 +1,9 @@
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = ["nodejs_22"]
 
 [phases.install]
 cmds = [
-  "npm install --include=dev --no-optional --cache=/tmp/.npm-cache"
+  "npm install --include=dev --no-audit --no-fund --cache=/tmp/.npm-cache"
 ]
 
 [phases.build]
@@ -11,3 +11,7 @@ cmds = ["npm run build"]
 
 [start]
 cmd = "npm start"
+
+[variables]
+NODE_ENV = "production"
+NPM_CONFIG_ENGINE_STRICT = "false"

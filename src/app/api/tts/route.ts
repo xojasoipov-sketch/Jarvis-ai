@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  synthesizeElevenLabs,
+  elevenLabsMeta,
+  elevenLabsConfigured,
+  defaultWelcomeText,
+  splitSentences,
+} from "@/lib/elevenlabs";
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY || "";
 const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
