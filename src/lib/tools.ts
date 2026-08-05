@@ -290,6 +290,124 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     },
   },
   {
+    name: "tts_generate",
+    description:
+      "Matnni ovozga aylantirish (ElevenLabs TTS). Ovoz, model, til va voice-settings tanlash mumkin.",
+    parameters: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "Ovozga aylantiriladigan matn (max 5000)" },
+        voice_id: { type: "string", description: "ElevenLabs voice ID (ixtiyoriy, default env)" },
+        model_id: { type: "string", description: "Model: eleven_turbo_v2_5, eleven_multilingual_v2 va h.k." },
+        lang: { type: "string", description: "Til: uz, ru, en" },
+      },
+      required: ["text"],
+    },
+    run: async (args) => {
+      const key = process.env.ELEVENLABS_API_KEY;
+      if (!key) throw new Error("ELEVENLABS_API_KEY yo'q");
+      const voiceId = String(args.voice_id || process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM");
+      const modelId = String(args.model_id || process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5");
+      const text = String(args.text || "").slice(0, 5000);
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: "POST",
+        headers: { "xi-api-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          model_id: modelId,
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) throw new Error(`ElevenLabs TTS xato: ${res.status}`);
+      return {
+        ok: true,
+        voice_id: voiceId,
+        model_id: modelId,
+        chars: text.length,
+        hint: "Audio /api/tts endpoint orqali olinadi",
+      };
+    },
+  },
+  {
+    name: "elevenlabs_voices",
+    description: "ElevenLabs mavjud ovozlar ro'yxati",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const key = process.env.ELEVENLABS_API_KEY;
+      if (!key) throw new Error("ELEVENLABS_API_KEY yo'q");
+      const res = await fetch("https://api.elevenlabs.io/v1/voices", {
+        headers: { "xi-api-key": key },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (data.voices || []).map((v: any) => ({
+        voice_id: v.voice_id,
+        name: v.name,
+        category: v.category,
+      }));
+    },
+  },
+  {
+    name: "elevenlabs_usage",
+    description: "ElevenLabs hisobdagi foydalanish statistikasi (chars, tier, limit)",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const key = process.env.ELEVENLABS_API_KEY;
+      if (!key) throw new Error("ELEVENLABS_API_KEY yo'q");
+      const res = await fetch("https://api.elevenlabs.io/v1/user", {
+        headers: { "xi-api-key": key },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const sub = data.subscription || {};
+      return {
+        tier: sub.tier,
+        character_count: sub.character_count,
+        character_limit: sub.character_limit,
+        voice_limit: sub.voice_limit,
+      };
+    },
+  },
+  {
+    name: "sound_effect_generate",
+    description: "Matndan ovozli effekt yaratish (ElevenLabs SFX). Masalan: 'yomg'ir shovqini', 'portlash'",
+    parameters: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "Effekt tavsifi" },
+        duration_seconds: { type: "number", description: "Davomiylik (0.5-22 soniya)" },
+      },
+      required: ["text"],
+    },
+    run: async (args) => {
+      const key = process.env.ELEVENLABS_API_KEY;
+      if (!key) throw new Error("ELEVENLABS_API_KEY yo'q");
+      const payload: Record<string, unknown> = {
+        text: String(args.text || "").slice(0, 500),
+        prompt_influence: 0.3,
+      };
+      if (args.duration_seconds) {
+        payload.duration_seconds = Math.min(22, Math.max(0.5, Number(args.duration_seconds)));
+      }
+      const res = await fetch("https://api.elevenlabs.io/v1/sound-generation", {
+        method: "POST",
+        headers: { "xi-api-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) throw new Error(`ElevenLabs SFX xato: ${res.status}`);
+      return {
+        ok: true,
+        text: args.text,
+        hint: "Audio /api/elevenlabs/sound-effects endpoint orqali olinadi",
+      };
+    },
+  },
+  {
     name: "railway_info",
     description: "Railway holati",
     parameters: { type: "object", properties: {} },
