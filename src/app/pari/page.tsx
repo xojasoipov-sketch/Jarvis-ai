@@ -151,11 +151,18 @@ function ParticleCanvas() {
 }
 
 // ── Voice API ───────────────────────────────────────────────────────────────
+const PARI_VOICE_SYSTEM = `Sen Pari — Sadining shaxsiy AI yordamchisi.
+QOIDA: Hech qachon "Nima qilmoqchisiz?" dema. Buyruq kelsa — darhol bajar.
+Javob: qisqa, o'zbek tilida, 1-3 gap. Markdown yo'q.`;
+
 async function askPariText(text: string): Promise<string> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: [{ role: "user", content: text }] }),
+    body: JSON.stringify({
+      system: PARI_VOICE_SYSTEM,
+      messages: [{ role: "user", content: text }],
+    }),
   });
   if (!res.ok) return "Kechirasiz, xato yuz berdi.";
   const reader = res.body!.getReader();
