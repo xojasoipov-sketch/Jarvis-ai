@@ -4,7 +4,8 @@ const TOKEN = ENV.github();
 const REPO =
   process.env.GITHUB_VAULT_REPO || process.env.GITHUB_REPOSITORY || "xojasoipov-sketch/Jarvis-ai";
 const BRANCH = process.env.GITHUB_VAULT_BRANCH || "main";
-const ROOT = (process.env.GITHUB_VAULT_PATH || "vault").replace(/^\/|\/$/g, "");
+// Empty string = vault root (when GITHUB_VAULT_PATH is not set or empty)
+const ROOT = (process.env.GITHUB_VAULT_PATH ?? "").replace(/^\/|\/$/g, "");
 
 export const vaultConfigured = Boolean(TOKEN && REPO);
 
@@ -21,11 +22,18 @@ function headers(extra: Record<string, string> = {}) {
   };
 }
 
+function vaultPath(subPath = ""): string {
+  if (ROOT && subPath) return `${ROOT}/${subPath}`;
+  if (ROOT) return ROOT;
+  if (subPath) return subPath;
+  return "";
+}
+
 export async function listVault(
   subPath = ""
 ): Promise<{ name: string; path: string; type: "file" | "dir" }[]> {
-  const dir = subPath ? `${ROOT}/${subPath}` : ROOT;
-  const res = await fetch(api(`contents/${dir}?ref=${BRANCH}`), {
+  const dir = vaultPath(subPath);
+  const res = await fetch(api(`contents/${dir || ""}?ref=${BRANCH}`), {
     headers: headers(),
     signal: AbortSignal.timeout(8000),
   });
@@ -104,7 +112,8 @@ export async function walkVault(subPath = ""): Promise<string[]> {
   const files: string[] = [];
   for (const item of items) {
     if (item.type === "dir") {
-      const sub = await walkVault(item.path.replace(`${ROOT}/`, ""));
+      const prefix = ROOT ? `${ROOT}/` : "";
+      const sub = await walkVault(item.path.replace(prefix, ""));
       files.push(...sub);
     } else {
       files.push(item.path);
