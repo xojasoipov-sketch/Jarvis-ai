@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Users, Plus, Search, MessageSquare, CheckSquare, Phone, Mail, Globe } from "lucide-react";
+import { Users, Plus, Search, MessageSquare, FileText, DollarSign, CheckSquare, Phone, Mail, Globe, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Client = {
@@ -48,39 +48,66 @@ export default function ClientsPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Mijozlar</h1>
           <p className="text-sm text-gray-500 mt-0.5">CRM — barcha mijozlar va loyihalar</p>
         </div>
-        <button onClick={() => setShowAdd(!showAdd)} className="flex items-center gap-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
-          <Plus size={14} /> Mijoz qo'sh
+        <button
+          onClick={() => setShowAdd(!showAdd)}
+          className="flex items-center gap-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors"
+        >
+          <Plus size={14} />
+          Mijoz qo'sh
         </button>
       </div>
 
+      {/* Add form */}
       {showAdd && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
           <p className="text-sm font-semibold text-gray-900">Yangi mijoz</p>
           <div className="grid grid-cols-2 gap-3">
-            {["name", "company", "email", "phone", "website"].map((key) => (
-              <input key={key} value={(form as any)[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
-                placeholder={key === "name" ? "Ism *" : key.charAt(0).toUpperCase() + key.slice(1)}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900" />
+            {[
+              { key: "name", placeholder: "Ism *" },
+              { key: "company", placeholder: "Kompaniya" },
+              { key: "email", placeholder: "Email" },
+              { key: "phone", placeholder: "Telefon" },
+              { key: "website", placeholder: "Website" },
+            ].map(({ key, placeholder }) => (
+              <input
+                key={key}
+                value={form[key as keyof typeof form]}
+                onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
+                placeholder={placeholder}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900"
+              />
             ))}
-            <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Izoh" rows={2}
-              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900 resize-none col-span-2" />
+            <textarea
+              value={form.notes}
+              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+              placeholder="Izoh"
+              rows={2}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900 resize-none col-span-2"
+            />
           </div>
           <div className="flex gap-2">
-            <button onClick={addClient} disabled={saving || !form.name.trim()} className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 disabled:opacity-50">{saving ? "Saqlanmoqda..." : "Saqlash"}</button>
-            <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm text-gray-500">Bekor</button>
+            <button onClick={addClient} disabled={saving || !form.name.trim()} className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors">
+              {saving ? "Saqlanmoqda..." : "Saqlash"}
+            </button>
+            <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+              Bekor
+            </button>
           </div>
         </div>
       )}
 
+      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
-        {[{"label": "Jami mijozlar", "value": clients.length},
-          {"label": "Faol loyihalar", "value": clients.filter(c => (c.total_orders || 0) > 0).length},
-          {"label": "Jami to'langan", "value": clients.reduce((s, c) => s + (c.total_paid || 0), 0) ? `$${clients.reduce((s,c)=>s+(c.total_paid||0),0).toLocaleString()}` : "—"},
+        {[
+          { label: "Jami mijozlar", value: clients.length },
+          { label: "Faol loyihalar", value: clients.filter(c => (c.total_orders || 0) > 0).length },
+          { label: "Jami to'langan", value: clients.reduce((s, c) => s + (c.total_paid || 0), 0) ? `$${clients.reduce((s,c)=>s+(c.total_paid||0),0).toLocaleString()}` : "—" },
         ].map(s => (
           <div key={s.label} className="bg-white border border-gray-100 rounded-xl p-4">
             <p className="text-xs text-gray-400">{s.label}</p>
@@ -89,12 +116,18 @@ export default function ClientsPage() {
         ))}
       </div>
 
+      {/* Search */}
       <div className="relative max-w-xs">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Ism, kompaniya, email..."
-          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Ism, kompaniya, email..."
+          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900"
+        />
       </div>
 
+      {/* Client list */}
       {loading ? (
         <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}</div>
       ) : filtered.length === 0 ? (
@@ -107,7 +140,9 @@ export default function ClientsPage() {
           {filtered.map(c => (
             <div key={c.id} className="bg-white border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors">
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">{c.name.charAt(0).toUpperCase()}</div>
+                <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                  {c.name.charAt(0).toUpperCase()}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-gray-900">{c.name}</p>
@@ -121,8 +156,24 @@ export default function ClientsPage() {
                   {c.notes && <p className="text-xs text-gray-400 mt-1 line-clamp-1">{c.notes}</p>}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <button onClick={() => router.push(`/chat?q=${encodeURIComponent(`Mijoz ${c.name} bilan ishlayapmiz.`)}`)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg" title="Chat"><MessageSquare size={14} /></button>
-                  <button onClick={() => router.push(`/orders?client=${c.id}`)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg" title="Buyurtmalar"><CheckSquare size={14} /></button>
+                  <button
+                    onClick={() => router.push(`/chat?q=${encodeURIComponent(`Mijoz ${c.name} bilan ishlayapmiz.`)}`)}
+                    className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Chat"
+                  >
+                    <MessageSquare size={14} />
+                  </button>
+                  <button
+                    onClick={() => router.push(`/orders?client=${c.id}`)}
+                    className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Buyurtmalar"
+                  >
+                    <CheckSquare size={14} />
+                  </button>
+                  <div className="text-right">
+                    {c.total_orders ? <p className="text-xs text-gray-500">{c.total_orders} buyurtma</p> : null}
+                    {c.total_paid ? <p className="text-xs font-medium text-gray-900">${c.total_paid.toLocaleString()}</p> : null}
+                  </div>
                 </div>
               </div>
             </div>

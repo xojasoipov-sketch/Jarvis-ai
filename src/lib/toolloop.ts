@@ -1,4 +1,5 @@
-// Umumiy function-calling loop — tool-capable provider orqali
+// Umumiy function-calling loop — tool-capable provider (masalan Groq) orqali
+// AGENTS/chat/telegram barchasi shu yerdan foydalanadi
 import { toolsAsOpenAIFunctions, runTool } from "@/lib/tools";
 import type { Provider } from "@/lib/providers";
 
@@ -9,6 +10,8 @@ export type ChatMessage = {
   tool_call_id?: string;
 };
 
+// Tool-capable provider bilan haqiqiy function-calling loop ishga tushiradi.
+// Model vositalarni chaqirishni to'xtatgach, yakuniy matnni qaytaradi.
 export async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise<string> {
   const tools = toolsAsOpenAIFunctions();
   const convo = [...messages];

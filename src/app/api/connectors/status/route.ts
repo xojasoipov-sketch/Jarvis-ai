@@ -10,6 +10,7 @@ function hasKeyFamily(...bases: string[]): { present: boolean; found: string[]; 
       const k = `${base}${i}`;
       if (process.env[k]?.trim()) found.push(k);
     }
+    // case-insensitive scan
     const lower = base.toLowerCase();
     for (const [k, v] of Object.entries(process.env)) {
       if (!v?.trim()) continue;
@@ -29,31 +30,40 @@ function mask(v: string): string {
 
 export async function GET() {
   const families = [
-    { id: "pollinations", name: "Pollinations", cat: "AI Text", env: [] as string[], alwaysOn: true },
-    { id: "groq", name: "Groq", cat: "AI Text", env: ["GROQ_API_KEY"] },
-    { id: "cerebras", name: "Cerebras", cat: "AI Text", env: ["CEREBRAS_API_KEY"] },
-    { id: "openrouter", name: "OpenRouter", cat: "AI Text", env: ["OPENROUTER_API_KEY"] },
-    { id: "deepseek", name: "DeepSeek", cat: "AI Text", env: ["DEEPSEEK_API_KEY"] },
-    { id: "kimi", name: "Kimi (Moonshot)", cat: "AI Text", env: ["MOONSHOT_API_KEY"] },
-    { id: "qwen", name: "Qwen", cat: "AI Text", env: ["DASHSCOPE_API_KEY"] },
-    { id: "mistral", name: "Mistral AI", cat: "AI Text", env: ["MISTRAL_API_KEY"] },
-    { id: "openai", name: "OpenAI", cat: "AI Text", env: ["OPENAI_API_KEY"] },
-    { id: "gemini", name: "Gemini", cat: "AI Text", env: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
+    {
+      id: "pollinations",
+      name: "Pollinations",
+      cat: "AI Text",
+      env: [] as string[],
+      required: false,
+      alwaysOn: true,
+    },
+    { id: "groq", name: "Groq", cat: "AI Text", env: ["GROQ_API_KEY"], required: false },
+    { id: "cerebras", name: "Cerebras", cat: "AI Text", env: ["CEREBRAS_API_KEY"], required: false },
+    { id: "openrouter", name: "OpenRouter", cat: "AI Text", env: ["OPENROUTER_API_KEY"], required: false },
+    { id: "deepseek", name: "DeepSeek", cat: "AI Text", env: ["DEEPSEEK_API_KEY"], required: false },
+    { id: "kimi", name: "Kimi (Moonshot)", cat: "AI Text", env: ["MOONSHOT_API_KEY"], required: false },
+    { id: "qwen", name: "Qwen", cat: "AI Text", env: ["DASHSCOPE_API_KEY"], required: false },
+    { id: "mistral", name: "Mistral AI", cat: "AI Text", env: ["MISTRAL_API_KEY"], required: false },
+    { id: "openai", name: "OpenAI", cat: "AI Text", env: ["OPENAI_API_KEY"], required: false },
+    { id: "gemini", name: "Gemini", cat: "AI Text", env: ["GEMINI_API_KEY", "GOOGLE_API_KEY"], required: false },
     {
       id: "elevenlabs",
       name: "ElevenLabs",
       cat: "Voice",
       env: ["ELEVENLABS_API_KEY"],
       extra: ["ELEVENLABS_VOICE_ID", "ELEVENLABS_MODEL_ID"],
+      required: false,
     },
-    { id: "groq-stt", name: "Groq Whisper STT", cat: "Voice", env: ["GROQ_API_KEY"] },
-    { id: "gemini-voice", name: "Gemini Audio", cat: "Voice", env: ["GEMINI_API_KEY"] },
+    { id: "groq-stt", name: "Groq Whisper STT", cat: "Voice", env: ["GROQ_API_KEY"], required: false },
+    { id: "gemini-voice", name: "Gemini Audio", cat: "Voice", env: ["GEMINI_API_KEY"], required: false },
     {
       id: "telegram",
       name: "Telegram Bot",
       cat: "Messaging",
       env: ["TELEGRAM_BOT_TOKEN", "TG_BOT_TOKEN"],
       extra: ["TELEGRAM_ADMIN_ID", "TELEGRAM_CHAT_ID"],
+      required: false,
     },
     {
       id: "github",
@@ -61,6 +71,7 @@ export async function GET() {
       cat: "Tools",
       env: ["GITHUB_TOKEN", "Github_token", "GH_TOKEN", "GITHUB_PERSONAL_ACCESS_TOKEN"],
       extra: ["GITHUB_VAULT_REPO", "GITHUB_VAULT_PATH", "GITHUB_VAULT_BRANCH"],
+      required: false,
     },
     {
       id: "supabase",
@@ -73,19 +84,27 @@ export async function GET() {
         "SUPABASE_ANON_KEY",
         "NEXT_PUBLIC_SUPABASE_ANON_KEY",
       ],
+      required: false,
     },
-    { id: "hermes", name: "Hermes", cat: "Tools", env: [] as string[], alwaysOn: true },
+    { id: "hermes", name: "Hermes", cat: "Tools", env: [], alwaysOn: true },
     {
       id: "railway",
       name: "Railway",
       cat: "Infra",
       env: ["RAILWAY_PUBLIC_DOMAIN", "RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID"],
+      required: false,
     },
-    { id: "mcp", name: "MCP Servers", cat: "Tools", env: ["MCP_TOOLS_JSON", "MCP_SERVERS_JSON"] },
+    {
+      id: "mcp",
+      name: "MCP Servers",
+      cat: "Tools",
+      env: ["MCP_TOOLS_JSON", "MCP_SERVERS_JSON"],
+      required: false,
+    },
   ];
 
   const connectors = families.map((f) => {
-    if ((f as { alwaysOn?: boolean }).alwaysOn) {
+    if (f.alwaysOn) {
       return {
         id: f.id,
         name: f.name,
@@ -114,7 +133,10 @@ export async function GET() {
       if (process.env[e]?.trim()) keys_found.push(e);
     }
 
-    if (f.id === "supabase") present = Boolean(ENV.supabaseUrl() && ENV.supabaseKey());
+    // special cases via ENV helpers
+    if (f.id === "supabase") {
+      present = Boolean(ENV.supabaseUrl() && ENV.supabaseKey());
+    }
     if (f.id === "telegram") present = Boolean(ENV.telegram());
     if (f.id === "github") present = Boolean(ENV.github());
     if (f.id === "groq" || f.id === "groq-stt") present = Boolean(ENV.groq());
@@ -139,11 +161,31 @@ export async function GET() {
     };
   });
 
+  // Raw inventory of ALL relevant env names present (names only, masked values)
   const interestingPrefixes = [
-    "GROQ", "OPENAI", "GEMINI", "GOOGLE", "MISTRAL", "DEEPSEEK", "MOONSHOT",
-    "CEREBRAS", "OPENROUTER", "DASHSCOPE", "ELEVENLABS", "SUPABASE", "TELEGRAM",
-    "TG_", "GITHUB", "GH_", "Github", "RAILWAY", "MCP_", "HERMES", "BRAVE",
-    "SITE_URL", "NEXT_PUBLIC",
+    "GROQ",
+    "OPENAI",
+    "GEMINI",
+    "GOOGLE",
+    "MISTRAL",
+    "DEEPSEEK",
+    "MOONSHOT",
+    "CEREBRAS",
+    "OPENROUTER",
+    "DASHSCOPE",
+    "ELEVENLABS",
+    "SUPABASE",
+    "TELEGRAM",
+    "TG_",
+    "GITHUB",
+    "GH_",
+    "Github",
+    "RAILWAY",
+    "MCP_",
+    "HERMES",
+    "BRAVE",
+    "SITE_URL",
+    "NEXT_PUBLIC",
   ];
 
   const env_present: { name: string; masked: string }[] = [];

@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { listOrders, createOrder, updateOrder, deleteOrder, getService, type OrderStatus } from "@/lib/services-store";
 import { supabase, dbConfigured } from "@/lib/supabase";
 
+// GET /api/services/orders?status=new
 export async function GET(req: NextRequest) {
   const status = new URL(req.url).searchParams.get("status") as OrderStatus | null;
   const orders = await listOrders(status || undefined);
   return NextResponse.json({ orders });
 }
 
+// POST /api/services/orders  { service_id, client_name, client_contact?, notes? }
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { service_id, client_name, client_contact, notes } = body;
@@ -42,6 +44,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ order });
 }
 
+// PATCH /api/services/orders  { id, ...patch }
 export async function PATCH(req: NextRequest) {
   const { id, ...patch } = await req.json();
   if (!id) return NextResponse.json({ error: "id kerak" }, { status: 400 });
@@ -58,6 +61,7 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
+// DELETE /api/services/orders?id=...
 export async function DELETE(req: NextRequest) {
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id kerak" }, { status: 400 });

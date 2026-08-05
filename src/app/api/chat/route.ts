@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProviders, type Provider } from "@/lib/providers";
 import { log } from "@/lib/logger";
-import { buildBrainContext, connectionsSummaryJson } from "@/lib/connections";
-import { toolsAsOpenAIFunctionsAll, runAnyTool } from "@/lib/mcp-tools";
-import { internetSearch, fetchUrl } from "@/lib/web";
-import { ownerChatSystem } from "@/lib/owner";
+import { ENV, envAny } from "@/lib/env";
 
-const SYSTEM_BASE = `${ownerChatSystem()}
+export const maxDuration = 60;
 
-Sen Pari AI Brain (shaxsiy OS).
-Faqat system dagi ✅/❌ ulanishlar va TOOL LAR ro'yxatidan foydalan.
-list_service_orders, get_order_details kabi nomlarni O'YLAMA — ular yo'q.
-O'zbek savol → o'zbek javob. Internet → web_search.
-Agent/buyruqda mavzudan chiqib chalkashtirma — aniq bajar.`;
+const SYSTEM_BASE = `Sen Pari AI Brain.
+Faqat haqiqiy ulanishlar va tool lardan foydalan.
+list_service_orders, create_telegram_bot, crm_integration, code_generator kabi nomlarni O'YLAMA — ular yo'q.
+O'zbek savol → o'zbek javob.`;
 
 type ChatMessage = {
   role: string;
@@ -21,74 +17,114 @@ type ChatMessage = {
   tool_call_id?: string;
 };
 
+/** Inventory — hech qanday circular import yo'q */
+function buildInventoryReport(): string {
+  const lines: string[] = ["## Haqiqiy ulanishlar (Railway process.env)\n"];
+
+  const checks: { name: string; ok: boolean; detail: string }[] = [
+    {
+      name: "Supabase",
+      ok: Boolean(ENV.supabaseUrl() && ENV.supabaseKey()),
+      detail: ENV.supabaseUrl() ? ENV.supabaseUrl().slice(0, 40) + "…" : "URL/KEY yo'q",
+    },
+    {
+      name: "Telegram Bot",
+      ok: Boolean(ENV.telegram()),
+      detail: ENV.telegram() ? "TELEGRAM_BOT_TOKEN bor" : "yo'q",
+    },
+    {
+      name: "GitHub",
+      ok: Boolean(ENV.github()),
+      detail: ENV.github() ? "Token bor" : "GITHUB_TOKEN yo'q",
+    },
+    {
+      name: "Groq",
+      ok: Boolean(ENV.groq()),
+      detail: ENV.groq() ? "Tool-calling OK" : "yo'q",
+    },
+    {
+      name: "Gemini",
+      ok: Boolean(ENV.gemini()),
+      detail: ENV.gemini() ? "Key bor" : "yo'q",
+    },
+    {
+      name: "OpenAI",
+      ok: Boolean(ENV.openai()),
+      detail: ENV.openai() ? "Key bor" : "yo'q",
+    },
+    {
+      name: "ElevenLabs",
+      ok: Boolean(ENV.elevenlabs()),
+      detail: ENV.elevenlabs() ? "TTS/STT" : "yo'q",
+    },
+    {
+      name: "Railway",
+      ok: envAny("RAILWAY_ENVIRONMENT", "RAILWAY_PUBLIC_DOMAIN", "RAILWAY_PROJECT_ID"),
+      detail: process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_ENVIRONMENT_NAME || "—",
+    },
+    { name: "Internet (web_search)", ok: true, detail: "server-side built-in" },
+    { name: "Hermes", ok: true, detail: "/api/hermes built-in" },
+  ];
+
+  for (const c of checks) {
+    lines.push(`${c.ok ? "✅" : "❌"} **${c.name}** — ${c.detail}`);
+  }
+
+  lines.push("\n## Haqiqiy tool lar (o'ylab chiqarilmagan)");
+  lines.push(
+    [
+      "list_connections",
+      "web_search",
+      "web_fetch",
+      "extract_emails",
+      "extract_social_links",
+      "extract_images",
+      "extract_page_text",
+      "extract_list",
+      "knowledge_search",
+      "knowledge_save",
+      "create_task",
+      "get_business_overview",
+      "create_file",
+      "read_file",
+      "vault_read",
+      "vault_write",
+      "propose_code_change",
+      "railway_info",
+      "datetime",
+    ]
+      .map((t) => `- \`${t}\``)
+      .join("\n")
+  );
+  lines.push("\n_Manba: process.env (LLM fantaziya emas)_");
+  return lines.join("\n");
+}
+
 function isInventoryQuestion(text: string): boolean {
-  return /nima ulan|qanday tool|qaysi tool|ulangan|connected|list_connections|nima bor|asosiy tool|vositalar|integratsiya|github|telegram|supabase|railway|obsidian|hermes|konnekt|toolar|funksiya|key|kalit|connect|monitoring|buyurtma|overview|mavjud/i.test(
+  return /nima ulan|qanday tool|qaysi tool|ulangan|connected|list_connections|nima bor|asosiy tool|vositalar|integratsiya|github|telegram|supabase|railway|obsidian|hermes|konnekt|toolar|funksiya|kalit|connect|monitoring|buyurtma|overview|mavjud|toollar|api.?lar/i.test(
     text
   );
 }
 
-function formatReport(): string {
-  try {
-    const s = connectionsSummaryJson();
-    return [
-      "## Haqiqiy ulanishlar (Railway process.env)\n",
-      ...s.connected.map((c) => `✅ **${c.name}** — ${c.detail}`),
-      "\n## Ulanmagan",
-      ...(s.disconnected.length
-        ? s.disconnected.map((c) => `❌ **${c.name}** — ${c.detail}`)
-        : ["(yo'q)"]),
-      "\n## Tool lar",
-      ...s.tools.map((n: string | { name: string }) =>
-        typeof n === "string" ? `- \`${n}\`` : `- \`${n.name}\``
-      ),
-    ].join("\n");
-  } catch (e) {
-    return String(e);
-  }
-}
-
-async function autoExtra(userText: string): Promise<string> {
-  const parts: string[] = [];
-  const t = userText.toLowerCase();
-  const urlM = userText.match(/https?:\/\/[^\s]+/i);
-
-  if (urlM) {
-    try {
-      if (/email/i.test(t)) {
-        parts.push(
-          "[extract_emails]\n" +
-            JSON.stringify(await runAnyTool("extract_emails", { url: urlM[0] })).slice(0, 3000)
-        );
-      } else if (/social|instagram|telegram/i.test(t)) {
-        parts.push(
-          "[extract_social_links]\n" +
-            JSON.stringify(await runAnyTool("extract_social_links", { url: urlM[0] })).slice(0, 3000)
-        );
-      } else {
-        const page = await fetchUrl(urlM[0]);
-        parts.push(`[web_fetch] ${page.title}\n${page.text.slice(0, 3500)}`);
-      }
-    } catch (e) {
-      parts.push(`[fetch xato] ${String(e)}`);
-    }
-  } else if (/internet|qidir|search|yangilik|hozir|bugun|raqobatch|crm tizim/i.test(userText)) {
-    try {
-      const s = await internetSearch(userText.slice(0, 200));
-      parts.push(
-        "[web_search]\n" +
-          s.hits.map((h, i) => `${i + 1}. ${h.title}\n${h.url}\n${h.snippet}`).join("\n")
-      );
-    } catch (e) {
-      parts.push(`[web_search xato] ${String(e)}`);
-    }
-  }
-  return parts.join("\n\n");
+function textStream(text: string): Response {
+  const enc = new TextEncoder();
+  return new Response(
+    new ReadableStream({
+      start(c) {
+        c.enqueue(enc.encode(text));
+        c.close();
+      },
+    }),
+    { headers: { "Content-Type": "text/plain; charset=utf-8" } }
+  );
 }
 
 async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise<string> {
+  // Lazy import — circular dependency oldini olish
+  const { toolsAsOpenAIFunctionsAll, runAnyTool } = await import("@/lib/mcp-tools");
   const tools = toolsAsOpenAIFunctionsAll();
   const convo = [...messages];
-  for (let round = 0; round < 8; round++) {
+  for (let round = 0; round < 6; round++) {
     const res = await fetch(provider.url, {
       method: "POST",
       headers: {
@@ -103,7 +139,7 @@ async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise
         tool_choice: "auto",
         stream: false,
       }),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(35000),
     });
     if (!res.ok) throw new Error(`Provider ${res.status}`);
     const data = await res.json();
@@ -121,57 +157,39 @@ async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise
       convo.push({
         role: "tool",
         tool_call_id: call.id,
-        content: JSON.stringify(result).slice(0, 12000),
+        content: JSON.stringify(result).slice(0, 10000),
       });
     }
   }
   return "Tool limit.";
 }
 
-function textStream(text: string): Response {
-  const enc = new TextEncoder();
-  return new Response(
-    new ReadableStream({
-      start(c) {
-        c.enqueue(enc.encode(text));
-        c.close();
-      },
-    }),
-    { headers: { "Content-Type": "text/plain; charset=utf-8" } }
-  );
-}
-
 export async function POST(req: NextRequest) {
   const start = Date.now();
-  const { messages, system } = await req.json();
+  let body: { messages?: ChatMessage[]; system?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const { messages = [], system } = body;
   const list = getProviders();
   if (!list.length) {
     return NextResponse.json({ error: "API key sozlanmagan" }, { status: 500 });
   }
 
-  const lastUser = [...messages].reverse().find((m: { role: string }) => m.role === "user");
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
   const lastText = typeof lastUser?.content === "string" ? lastUser.content : "";
 
+  // ★ Inventory — LLM ga umuman bermaymiz
   if (isInventoryQuestion(lastText)) {
     log("info", "chat-api", "inventory short-circuit");
-    return textStream(formatReport());
+    return textStream(buildInventoryReport());
   }
 
-  const live = JSON.stringify(connectionsSummaryJson(), null, 2).slice(0, 8000);
-  let extra = "";
-  try {
-    extra = await autoExtra(lastText);
-  } catch (e) {
-    extra = String(e);
-  }
-
-  const baseSystem =
-    (system || SYSTEM_BASE) +
-    "\n\n" +
-    buildBrainContext() +
-    "\n\n## LIVE JSON\n" +
-    live +
-    (extra ? "\n\n## EXTRA\n" + extra : "");
+  const invHint = buildInventoryReport().slice(0, 2500);
+  const baseSystem = (system || SYSTEM_BASE) + "\n\n" + invHint;
 
   const toolProviders = list.filter((p) => p.supportsTools && p.key !== "dummy");
   for (const toolProvider of toolProviders) {
@@ -187,6 +205,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Stream fallback — qisqa timeout, pipe xatosini kamaytirish
   for (const p of list) {
     try {
       const res = await fetch(p.url, {
@@ -201,9 +220,9 @@ export async function POST(req: NextRequest) {
           messages: [{ role: "system", content: baseSystem }, ...messages],
           stream: true,
         }),
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(40000),
       });
-      if (!res.ok) continue;
+      if (!res.ok || !res.body) continue;
 
       const enc = new TextEncoder();
       return new Response(
@@ -212,22 +231,32 @@ export async function POST(req: NextRequest) {
             const reader = res.body!.getReader();
             const dec = new TextDecoder();
             let buf = "";
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buf += dec.decode(value, { stream: true });
-              const lines = buf.split("\n");
-              buf = lines.pop() || "";
-              for (const line of lines) {
-                const d = line.replace(/^data: /, "").trim();
-                if (!d || d === "[DONE]") continue;
-                try {
-                  const t = JSON.parse(d).choices?.[0]?.delta?.content || "";
-                  if (t) ctrl.enqueue(enc.encode(t));
-                } catch {}
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += dec.decode(value, { stream: true });
+                const lines = buf.split("\n");
+                buf = lines.pop() || "";
+                for (const line of lines) {
+                  const d = line.replace(/^data: /, "").trim();
+                  if (!d || d === "[DONE]") continue;
+                  try {
+                    const t = JSON.parse(d).choices?.[0]?.delta?.content || "";
+                    if (t) ctrl.enqueue(enc.encode(t));
+                  } catch {}
+                }
               }
+            } catch (err) {
+              log("warn", "chat-api", `stream pipe: ${String(err)}`);
+              try {
+                ctrl.enqueue(enc.encode("\n\n[Javob uzildi — qayta urinib ko'ring]"));
+              } catch {}
+            } finally {
+              try {
+                ctrl.close();
+              } catch {}
             }
-            ctrl.close();
           },
         }),
         { headers: { "Content-Type": "text/plain; charset=utf-8" } }
@@ -237,5 +266,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return textStream("Provayder ishlamadi.\n\n" + formatReport());
+  return textStream("Provayder ishlamadi.\n\n" + buildInventoryReport());
 }

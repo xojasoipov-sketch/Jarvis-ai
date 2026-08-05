@@ -86,7 +86,8 @@ export default function SettingsPage() {
     setTelegramStatus("checking");
     try {
       const r = await fetch("/api/telegram/debug", { signal: AbortSignal.timeout(5000) });
-      setTelegramStatus(r.ok ? "ok" : "error");
+      const d = await r.json();
+      setTelegramStatus(r.ok && d.ok ? "ok" : "error");
     } catch { setTelegramStatus("error"); }
   }
 
@@ -103,11 +104,17 @@ export default function SettingsPage() {
       const r = await fetch("/api/telegram/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: baseUrl }),
+        body: JSON.stringify({ action: "set", appUrl: baseUrl }),
       });
       const d = await r.json();
-      if (d.ok) { alert("Webhook o'rnatildi!"); checkTelegram(); }
-      else alert("Xato: " + (d.error || "Noma'lum"));
+      if (d.error) {
+        alert("Xato: " + d.error);
+      } else if (d.webhook?.ok === false) {
+        alert("Telegram xatosi: " + (d.webhook.description || "Noma'lum"));
+      } else {
+        alert(`Webhook o'rnatildi! Bot: @${d.bot?.result?.username || "?"}`);
+        checkTelegram();
+      }
     } catch { alert("Ulanishda xato"); }
   }
 

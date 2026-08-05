@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pari-ai-v2-production.up.railway.app";
+import { getProviders } from "@/lib/providers";
 
 const SYSTEM = `Sen professional Telegram kanal SMM mutaxassisisan.
 Qoidalar:
 - O'zbek tilida, jonli va tabiiy yoz
-- Telegram uchun optimallashtirilgan matn: qisqa paragraflar, emoji-lar oqilona
+- Telegram uchun optimallashtirilgan: qisqa paragraflar, emoji-lar o'rinli
 - Hashtag-lar oxirida: 3-5 ta tegishli hashtag
 - Markdown ishlatma — faqat oddiy matn va emoji
-- Har bir post: diqqat tortadigan sarlavha + asosiy fikr + CTA (call-to-action)
-- Uzunlik: 150-400 belgi (ideal Telegram post)`;
+- Har bir post: diqqat tortadigan bosh qism + asosiy fikr + CTA (harakat chaqiruvi)
+- Uzunlik: 150-400 belgi (ideal Telegram post uzunligi)`;
 
 export async function POST(req: NextRequest) {
   const { topic, channel_category = "general", tone = "professional", count = 3 } = await req.json();
@@ -21,37 +20,45 @@ export async function POST(req: NextRequest) {
   const prompt = `Mavzu: "${topic}"
 Kanal kategoriyasi: ${channel_category}
 Ohang: ${tone}
-Iltimos, ${count} ta turlicha Telegram post yar. Har birini --- bilan ajrat.
+${count} ta turlicha Telegram post yar. Har birini --- bilan ajrat.
 Faqat post matnini ber, boshqa izoh yozma.`;
 
-  try {
-    const res = await fetch(`${BASE_URL}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: prompt }],
-        system: SYSTEM,
-      }),
-    });
+  const providers = getProviders();
 
-    if (!res.ok) throw new Error("AI xato berdi");
+  for (const p of providers) {
+    try {
+      const res = await fetch(p.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${p.key}`,
+          ...(p.headers || {}),
+        },
+        body: JSON.stringify({
+          model: p.model,
+          messages: [
+            { role: "system", content: SYSTEM },
+            { role: "user", content: prompt },
+          ],
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
 
-    const reader = res.body!.getReader();
-    const dec = new TextDecoder();
-    let full = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      full += dec.decode(value);
-    }
+      if (!res.ok) continue;
+      const data = await res.json();
+      const full = data.choices?.[0]?.message?.content || "";
+      if (!full.trim()) continue;
 
-    const posts = full
-      .split(/---+/)
-      .map((p) => p.trim())
-      .filter((p) => p.length > 20);
+      const posts = full
+        .split(/---+/)
+        .map((p: string) => p.trim())
+        .filter((p: string) => p.length > 20)
+        .slice(0, count);
 
-    return NextResponse.json({ posts });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+      return NextResponse.json({ posts, provider: p.name });
+    } catch { continue; }
   }
+
+  return NextResponse.json({ error: "AI javob bermadi" }, { status: 500 });
 }

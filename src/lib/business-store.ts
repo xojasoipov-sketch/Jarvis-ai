@@ -1,4 +1,4 @@
-// Biznes modullari — monetizatsiya yo'nalishlari (in-memory + Supabase fallback)
+// Biznes modullari — Sadining monetizatsiya yo'nalishlari (in-memory + Supabase fallback)
 import { supabase, dbConfigured } from "./supabase";
 
 export type ModuleKey = "youtube" | "smm" | "courses" | "blogging" | "ai_tools";
@@ -23,6 +23,7 @@ export type BusinessIdea = {
   created_at: string;
 };
 
+// Static module definitions — the 5 business lines
 export const MODULE_DEFS: Record<ModuleKey, { name: string; icon: string; tagline: string; description: string }> = {
   youtube: {
     name: "Faceless YouTube",

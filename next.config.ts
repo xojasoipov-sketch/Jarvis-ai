@@ -2,20 +2,17 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
+  // Next 15+: experimental.serverComponentsExternalPackages → serverExternalPackages
   serverExternalPackages: ["pdf-parse", "mammoth"],
-  transpilePackages: ["three"],
-  // Railway / low-memory builds
-  experimental: {
-    // keep default
-  },
 };
 
 export default withSentryConfig(nextConfig, {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
-  silent: true,
+  silent: !process.env.CI,
   widenClientFileUpload: true,
   tunnelRoute: "/monitoring",
   disableLogger: true,
+  // Railway, not Vercel
   automaticVercelMonitors: false,
 });

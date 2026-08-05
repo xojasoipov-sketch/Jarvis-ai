@@ -58,7 +58,6 @@ export function stripHtml(html: string): string {
 
 export type SearchHit = { title: string; url: string; snippet: string; source: string };
 
-/** DuckDuckGo Instant Answer API */
 async function searchDdgInstant(query: string): Promise<SearchHit[]> {
   const res = await fetch(
     `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
@@ -98,7 +97,6 @@ async function searchDdgInstant(query: string): Promise<SearchHit[]> {
   return hits.slice(0, 8);
 }
 
-/** DuckDuckGo HTML scrape (more results when Instant is empty) */
 async function searchDdgHtml(query: string): Promise<SearchHit[]> {
   const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
     signal: AbortSignal.timeout(10000),
@@ -107,15 +105,14 @@ async function searchDdgHtml(query: string): Promise<SearchHit[]> {
   if (!res.ok) return [];
   const html = await res.text();
   const hits: SearchHit[] = [];
-  // result blocks
   const blocks = html.split(/class="result__a"/i).slice(1);
   for (const b of blocks.slice(0, 8)) {
     const hrefM = b.match(/href="([^"]+)"/i);
     const titleM = b.match(/>([^<]+)<\/a>/i);
-    const snipM = b.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/i)
-      || b.match(/class="result__snippet"[^>]*>([\s\S]*?)<\//i);
+    const snipM =
+      b.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/i) ||
+      b.match(/class="result__snippet"[^>]*>([\s\S]*?)<\//i);
     let url = hrefM?.[1] || "";
-    // DDG redirect links
     if (url.includes("uddg=")) {
       try {
         const u = new URL(url, "https://duckduckgo.com");
@@ -129,7 +126,6 @@ async function searchDdgHtml(query: string): Promise<SearchHit[]> {
   return hits;
 }
 
-/** Wikipedia opensearch */
 async function searchWikipedia(query: string): Promise<SearchHit[]> {
   const res = await fetch(
     `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=5&namespace=0&format=json`,
@@ -148,7 +144,6 @@ async function searchWikipedia(query: string): Promise<SearchHit[]> {
   }));
 }
 
-/** Brave Search API (optional BRAVE_API_KEY) */
 async function searchBrave(query: string): Promise<SearchHit[]> {
   const key = process.env.BRAVE_API_KEY;
   if (!key) return [];
@@ -169,18 +164,15 @@ async function searchBrave(query: string): Promise<SearchHit[]> {
   }));
 }
 
-/** Unified internet search */
 export async function internetSearch(query: string): Promise<{ query: string; hits: SearchHit[]; backends: string[] }> {
   const backends: string[] = [];
   const all: SearchHit[] = [];
-
   const parts = await Promise.allSettled([
     searchBrave(query),
     searchDdgInstant(query),
     searchDdgHtml(query),
     searchWikipedia(query),
   ]);
-
   const names = ["brave", "ddg-instant", "ddg-html", "wikipedia"];
   parts.forEach((p, i) => {
     if (p.status === "fulfilled" && p.value.length) {
@@ -188,8 +180,6 @@ export async function internetSearch(query: string): Promise<{ query: string; hi
       all.push(...p.value);
     }
   });
-
-  // dedupe by url
   const seen = new Set<string>();
   const hits: SearchHit[] = [];
   for (const h of all) {
@@ -199,13 +189,14 @@ export async function internetSearch(query: string): Promise<{ query: string; hi
     hits.push(h);
     if (hits.length >= 10) break;
   }
-
   return { query, hits, backends };
 }
 
-export async function extractFromPage(url: string, mode: "text" | "emails" | "social" | "images" | "list") {
+export async function extractFromPage(
+  url: string,
+  mode: "text" | "emails" | "social" | "images" | "list"
+) {
   const page = await fetchUrl(url);
-  // need raw html for extractors — refetch as html
   const res = await fetch(url, {
     signal: AbortSignal.timeout(15000),
     headers: { "User-Agent": UA, Accept: "text/html" },
@@ -213,12 +204,7 @@ export async function extractFromPage(url: string, mode: "text" | "emails" | "so
   const html = await res.text();
 
   if (mode === "text") {
-    return {
-      url: page.url,
-      title: page.title,
-      text: page.text,
-      chars: page.text.length,
-    };
+    return { url: page.url, title: page.title, text: page.text, chars: page.text.length };
   }
   if (mode === "emails") {
     const re = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -229,7 +215,13 @@ export async function extractFromPage(url: string, mode: "text" | "emails" | "so
   }
   if (mode === "social") {
     const platforms: Record<string, string[]> = {
-      telegram: [], instagram: [], twitter: [], linkedin: [], youtube: [], facebook: [], tiktok: [],
+      telegram: [],
+      instagram: [],
+      twitter: [],
+      linkedin: [],
+      youtube: [],
+      facebook: [],
+      tiktok: [],
     };
     const patterns: [string, RegExp][] = [
       ["telegram", /https?:\/\/(?:t\.me|telegram\.me)\/[^\s"'<>]+/gi],
@@ -249,11 +241,12 @@ export async function extractFromPage(url: string, mode: "text" | "emails" | "so
     const base = new URL(url);
     const set = new Set<string>();
     for (const m of html.matchAll(/(?:src|data-src)=["']([^"']+\.(?:jpg|jpeg|png|webp|gif)[^"']*)["']/gi)) {
-      try { set.add(new URL(m[1], base).href); } catch {}
+      try {
+        set.add(new URL(m[1], base).href);
+      } catch {}
     }
     return { url, count: set.size, images: [...set].slice(0, 40) };
   }
-  // list
   const items: string[] = [];
   for (const m of html.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)) {
     const t = stripHtml(m[1]).slice(0, 300);

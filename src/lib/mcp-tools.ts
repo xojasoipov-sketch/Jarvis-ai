@@ -1,12 +1,5 @@
 /**
  * MCP-style tools + HTTP MCP servers.
- *
- * Env:
- * MCP_TOOLS_JSON='[{"name":"x","description":"...","url":"https://.../run"}]'
- * MCP_SERVERS_JSON='[{"name":"my-server","url":"https://mcp.example.com","headers":{}}]'
- *   Server must support:
- *   GET  {url}/tools  or POST {url} with {"method":"tools/list"}
- *   POST {url}/call or POST {url} with {"method":"tools/call","params":{name,arguments}}
  */
 import { BUILTIN_TOOLS, type ToolDef, runTool as runBuiltin } from "./tools";
 
@@ -66,19 +59,11 @@ function httpToolToDef(t: McpHttpTool): ToolDef {
   };
 }
 
-/** Discover tools from one MCP HTTP server */
-export async function listServerTools(server: McpServer): Promise<
-  { name: string; description: string }[]
-> {
+export async function listServerTools(server: McpServer): Promise<{ name: string; description: string }[]> {
   const base = server.url.replace(/\/$/, "");
   const headers = { "Content-Type": "application/json", ...(server.headers || {}) };
-
-  // Try GET /tools
   try {
-    const r = await fetch(`${base}/tools`, {
-      headers,
-      signal: AbortSignal.timeout(10000),
-    });
+    const r = await fetch(`${base}/tools`, { headers, signal: AbortSignal.timeout(10000) });
     if (r.ok) {
       const data = await r.json();
       const arr = data.tools || data || [];
@@ -90,8 +75,6 @@ export async function listServerTools(server: McpServer): Promise<
       }
     }
   } catch {}
-
-  // Try JSON-RPC tools/list
   try {
     const r = await fetch(base, {
       method: "POST",
@@ -110,7 +93,6 @@ export async function listServerTools(server: McpServer): Promise<
       }
     }
   } catch {}
-
   return [];
 }
 
@@ -121,8 +103,6 @@ export async function callServerTool(
 ): Promise<unknown> {
   const base = server.url.replace(/\/$/, "");
   const headers = { "Content-Type": "application/json", ...(server.headers || {}) };
-
-  // POST /call
   try {
     const r = await fetch(`${base}/call`, {
       method: "POST",
@@ -136,8 +116,6 @@ export async function callServerTool(
       return { text: (await r.text()).slice(0, 8000) };
     }
   } catch {}
-
-  // JSON-RPC tools/call
   const r = await fetch(base, {
     method: "POST",
     headers,
@@ -158,8 +136,7 @@ export async function callServerTool(
 function serverToolDefs(): ToolDef[] {
   const servers = loadMcpServersFromEnv();
   if (!servers.length) return [];
-
-  const defs: ToolDef[] = [
+  return [
     {
       name: "mcp_list_servers",
       description: "Ulangan MCP serverlar va ularning tool larini ko'rsatadi",
@@ -175,14 +152,13 @@ function serverToolDefs(): ToolDef[] {
     },
     {
       name: "mcp_call",
-      description:
-        "MCP server tool chaqirish. server = MCP_SERVERS_JSON dagi name, tool = tool nomi, args = argumentlar",
+      description: "MCP server tool chaqirish",
       parameters: {
         type: "object",
         properties: {
-          server: { type: "string", description: "MCP server name" },
-          tool: { type: "string", description: "Tool name" },
-          args: { type: "object", description: "Arguments" },
+          server: { type: "string" },
+          tool: { type: "string" },
+          args: { type: "object" },
         },
         required: ["server", "tool"],
       },
@@ -190,12 +166,11 @@ function serverToolDefs(): ToolDef[] {
         const serverName = String(args.server || "");
         const toolName = String(args.tool || "");
         const server = servers.find((s) => s.name === serverName);
-        if (!server) throw new Error(`MCP server topilmadi: ${serverName}. mcp_list_servers chaqiring.`);
+        if (!server) throw new Error(`MCP server topilmadi: ${serverName}`);
         return callServerTool(server, toolName, (args.args as Record<string, unknown>) || {});
       },
     },
   ];
-  return defs;
 }
 
 export function getAllTools(): ToolDef[] {

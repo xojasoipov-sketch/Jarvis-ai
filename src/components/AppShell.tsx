@@ -3,7 +3,7 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
-import { MessageSquare, LayoutGrid, Briefcase, Settings, Menu, X, Bot } from "lucide-react";
+import { MessageSquare, LayoutGrid, Briefcase, Settings, Bot, Menu, X } from "lucide-react";
 
 const BOTTOM = [
   { href: "/pari", label: "Pari", icon: LayoutGrid },
@@ -15,22 +15,15 @@ const BOTTOM = [
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
-  const path = usePathname() || "/";
+  const path = usePathname();
   const router = useRouter();
+  const darkImmersive = false;
+  const isPari = path === "/pari" || path.startsWith("/pari/");
 
-  if (
-    path === "/login" ||
-    path === "/portfolio" ||
-    path.startsWith("/portfolio/") ||
-    path === "/orb" ||
-    path.startsWith("/orb/")
-  ) {
+  // Kapalak miya — to'liq ekran, dark, shell yo'q
+  if (path === "/pari" || path === "/login") {
     return <>{children}</>;
   }
-
-  const isPari = path === "/pari" || path === "/";
-  const isChat = path === "/chat" || path.startsWith("/chat");
-  const darkImmersive = isPari || isChat;
 
   return (
     <div

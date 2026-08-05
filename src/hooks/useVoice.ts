@@ -25,10 +25,7 @@ type SpeechWindow = Window & {
   webkitAudioContext?: typeof AudioContext;
 };
 
-function detectLang(text: string): "ru" | "uz" {
-  return /[а-яёА-ЯЁ]/.test(text) ? "ru" : "uz";
-}
-
+// Short UI tone: mic on → ascending ping, mic off → descending
 function playMicTone(on: boolean) {
   try {
     const w = window as SpeechWindow;
@@ -48,78 +45,10 @@ function playMicTone(on: boolean) {
     osc.start(t);
     osc.stop(t + 0.13);
     osc.onended = () => ctx.close().catch(() => {});
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
 }
 
-function splitClientSentences(text: string, maxLen = 280): string[] {
-  const clean = text.replace(/\s+/g, " ").trim();
-  if (!clean) return [];
-  const parts = clean.split(/(?<=[.!?…])\s+/).filter(Boolean);
-  const out: string[] = [];
-  let buf = "";
-  for (const p of parts) {
-    if ((buf + " " + p).trim().length > maxLen && buf) {
-      out.push(buf.trim());
-      buf = p;
-    } else {
-      buf = buf ? `${buf} ${p}` : p;
-    }
-  }
-  if (buf.trim()) out.push(buf.trim());
-  return out.length ? out : [clean.slice(0, maxLen)];
-}
-
-async function playMpegBlob(blob: Blob, audioElRef: { current: HTMLAudioElement | null }) {
-  const url = URL.createObjectURL(blob);
-  const audio = new Audio();
-  audio.preload = "auto";
-  audio.src = url;
-  audioElRef.current = audio;
-  await new Promise<void>((resolve, reject) => {
-    audio.onended = () => {
-      URL.revokeObjectURL(url);
-      resolve();
-    };
-    audio.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("audio element error"));
-    };
-    audio.play().catch(reject);
-  });
-}
-
-/** Faqat server TTS — brauzer Google/speechSynthesis YO'Q */
-async function fetchTtsBlob(text: string, lang: string): Promise<{ blob: Blob; provider: string }> {
-  const res = await fetch("/api/tts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, lang, stream: false }),
-  });
-
-  const provider = res.headers.get("X-TTS-Provider") || "unknown";
-  const ct = res.headers.get("content-type") || "";
-
-  if (!res.ok) {
-    let detail = `tts ${res.status}`;
-    if (ct.includes("json")) {
-      const j = await res.json().catch(() => ({}));
-      detail = j.detail || j.error || detail;
-      if (j.elevenlabs) detail += ` | ${j.elevenlabs}`;
-    }
-    throw new Error(detail);
-  }
-
-  if (ct.includes("json")) {
-    throw new Error("tts returned json, not audio");
-  }
-
-  const blob = await res.blob();
-  if (blob.size < 100) throw new Error("empty audio");
-  return { blob, provider };
-}
-
+// ─── Voice Input ──────────────────────────────────────────────────────────────
 export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") {
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -129,9 +58,11 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   const [useServerStt, setUseServerStt] = useState(true);
 
   useEffect(() => {
-    setSupported(Boolean(navigator.mediaDevices?.getUserMedia));
-    // Server STT (Groq/Eleven) — brauzer Google STT ishlatilmaydi
-    setUseServerStt(true);
+    fetch("/api/stt", { method: "POST", body: new FormData() })
+      .then((r) => setUseServerStt(r.status !== 500))
+      .catch(() => setUseServerStt(false));
+    const w = window as SpeechWindow;
+    setSupported(Boolean(navigator.mediaDevices?.getUserMedia || w.SpeechRecognition || w.webkitSpeechRecognition));
   }, []);
 
   const stopRec = useCallback(() => {
@@ -140,7 +71,8 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     playMicTone(false);
   }, []);
 
-  const startServerStt = useCallback(async () => {
+  const startGroq = useCallback(async () => {
+    playMicTone(true);
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
       ? "audio/webm;codecs=opus"
@@ -172,24 +104,37 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
   }, [onResult]);
 
   const toggle = useCallback(() => {
+    const hasMedia = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
+    if (useServerStt && hasMedia) {
+      if (listening) { stopRec(); return; }
+      startGroq().catch(() => { setListening(false); playMicTone(false); });
+      return;
+    }
+
+    // Fallback: Web Speech API
+    const w = window as SpeechWindow;
+    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Ctor) return;
+
     if (listening) {
       stopRec();
       recognitionRef.current?.stop();
       setListening(false);
+      playMicTone(false);
       return;
     }
-    if (useServerStt) {
-      startServerStt().catch((e) => {
-        console.warn(e);
-        setListening(false);
-      });
-      return;
-    }
-    // fallback faqat server STT yo'q bo'lsa
-    const w = window as SpeechWindow;
-    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!SR) return;
-    const rec = new SR();
+
+    playMicTone(true);
+    const rec = new Ctor();
+    rec.lang = lang;
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      const transcript = Array.from({ length: e.results.length }, (_, i) => e.results[i][0].transcript).join(" ");
+      onResult(transcript);
+    };
+    rec.onerror = () => { setListening(false); playMicTone(false); };
+    rec.onend = () => setListening(false);
     recognitionRef.current = rec;
     rec.lang = lang;
     rec.interimResults = false;
@@ -201,89 +146,94 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     rec.start();
     setListening(true);
     playMicTone(true);
-  }, [listening, lang, onResult, startServerStt, stopRec, useServerStt]);
+  }, [listening, lang, onResult, startGroq, stopRec, useServerStt]);
 
   return { listening, supported: supported || useServerStt, toggle };
 }
 
-/** ElevenLabs-only TTS — brauzer Google ovozi O'CHIRILGAN */
+// ─── Voice Output (ElevenLabs TTS via Web Audio API) ─────────────────────────
 export function useVoiceOutput() {
   const [enabled, setEnabled] = useState(false);
   const [supported] = useState(true);
-  const [speaking, setSpeaking] = useState(false);
-  const [lastError, setLastError] = useState<string | null>(null);
-  const [lastProvider, setLastProvider] = useState<string | null>(null);
-  const audioElRef = useRef<HTMLAudioElement | null>(null);
-  const cancelledRef = useRef(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+  // Create + unlock AudioContext on user gesture (volume toggle)
   const toggleEnabled = useCallback(() => {
-    setEnabled((v) => !v);
-  }, []);
+    const next = !enabled;
+    if (next && typeof window !== "undefined") {
+      const w = window as SpeechWindow;
+      const AudioCtx = window.AudioContext || w.webkitAudioContext;
+      if (AudioCtx && !audioCtxRef.current) {
+        const ctx = new AudioCtx();
+        audioCtxRef.current = ctx;
+        ctx.resume().catch(() => {});
+        // Silent buffer to fully unlock iOS audio output
+        const buf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(0);
+      } else if (audioCtxRef.current?.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+    }
+    setEnabled(next);
+  }, [enabled]);
+
+  const speak = useCallback(async (text: string) => {
+    if (!enabled) return;
+    const clean = text
+      .replace(/```[\s\S]*?```/g, " kod bloki ")
+      .replace(/[*_#`~]/g, "")
+      .replace(/\n+/g, ". ")
+      .trim()
+      .slice(0, 500);
+    if (!clean) return;
+
+    // Stop previous audio
+    try { sourceRef.current?.stop(); } catch {}
+    sourceRef.current = null;
+
+    const lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru" : "uz";
+    const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
+
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state !== "closed") {
+      try {
+        if (ctx.state === "suspended") await ctx.resume();
+        const res = await fetch(url);
+        if (res.ok) {
+          const buf = await res.arrayBuffer();
+          const decoded = await ctx.decodeAudioData(buf);
+          if (ctx.state === "suspended") await ctx.resume();
+          const src = ctx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(ctx.destination);
+          sourceRef.current = src;
+          src.start(0);
+          return;
+        }
+      } catch (e) {
+        console.warn("TTS Web Audio failed:", e);
+      }
+    }
+
+    // Fallback: speechSynthesis
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(clean);
+      utter.lang = /[а-яёА-ЯЁ]/.test(clean) ? "ru-RU" : "en-US";
+      utter.rate = 0.95;
+      window.speechSynthesis.speak(utter);
+    }
+  }, [enabled]);
 
   const stop = useCallback(() => {
-    cancelledRef.current = true;
-    if (audioElRef.current) {
-      audioElRef.current.pause();
-      audioElRef.current.src = "";
-      audioElRef.current = null;
-    }
+    try { sourceRef.current?.stop(); } catch {}
+    sourceRef.current = null;
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    setSpeaking(false);
   }, []);
 
-  const speak = useCallback(
-    async (text: string) => {
-      if (!enabled) return;
-      const clean = text
-        .replace(/```[\s\S]*?```/g, " kod bloki ")
-        .replace(/[*_#`~]/g, "")
-        .replace(/\n+/g, ". ")
-        .trim()
-        .slice(0, 4000);
-      if (!clean) return;
-
-      stop();
-      cancelledRef.current = false;
-      setSpeaking(true);
-      setLastError(null);
-
-      const lang = detectLang(clean);
-      const chunks = splitClientSentences(clean);
-
-      try {
-        for (const chunk of chunks) {
-          if (cancelledRef.current) break;
-          try {
-            const { blob, provider } = await fetchTtsBlob(chunk, lang);
-            setLastProvider(provider);
-            if (provider !== "elevenlabs" && provider !== "elevenlabs-stream") {
-              console.warn("TTS provider:", provider, "— ElevenLabs emas");
-            }
-            if (cancelledRef.current) break;
-            await playMpegBlob(blob, audioElRef);
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            console.error("TTS xato (Google fallback YO'Q):", msg);
-            setLastError(msg);
-            // Brauzer speechSynthesis ISHLATILMAYDI — Google ovoziga o'xshamasin
-            break;
-          }
-        }
-      } finally {
-        setSpeaking(false);
-      }
-    },
-    [enabled, stop]
-  );
-
-  return {
-    enabled,
-    setEnabled: toggleEnabled,
-    supported,
-    speak,
-    stop,
-    speaking,
-    lastError,
-    lastProvider,
-  };
+  return { enabled, setEnabled: toggleEnabled, supported, speak, stop };
 }

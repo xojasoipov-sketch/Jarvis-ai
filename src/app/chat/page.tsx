@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Mic, Send, History, Volume2, VolumeX } from "lucide-react";
+import { Mic, Send, History, Volume2, VolumeX, ChevronDown, Code2, Eye } from "lucide-react";
 import { useVoiceInput, useVoiceOutput } from "@/hooks/useVoice";
 import ChatSkillsBar from "@/components/ChatSkillsBar";
 
@@ -60,7 +60,124 @@ function DustCanvas() {
   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
 }
 
-async function saveConversation(id: string | null, messages: Message[]) {
+// ─── HTML Artifact preview ────────────────────────────────────────────────────
+function ArtifactCard({ html }: { html: string }) {
+  const [view, setView] = useState<"preview" | "code">("preview");
+
+  return (
+    <div className="mt-2 rounded-xl border border-purple-500/20 bg-black/30 overflow-hidden max-w-xs sm:max-w-md">
+      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-purple-500/15">
+        <span className="text-[10px] text-purple-300/60 uppercase tracking-wider">Artifact</span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setView("preview")}
+            className={`p-1 rounded transition-colors ${view === "preview" ? "text-purple-300 bg-purple-500/15" : "text-purple-300/40 hover:text-purple-300/70"}`}
+          >
+            <Eye size={11} strokeWidth={1.75} />
+          </button>
+          <button
+            onClick={() => setView("code")}
+            className={`p-1 rounded transition-colors ${view === "code" ? "text-purple-300 bg-purple-500/15" : "text-purple-300/40 hover:text-purple-300/70"}`}
+          >
+            <Code2 size={11} strokeWidth={1.75} />
+          </button>
+        </div>
+      </div>
+      {view === "preview" ? (
+        <iframe
+          srcDoc={html}
+          sandbox="allow-scripts"
+          className="w-full bg-white"
+          style={{ height: 280 }}
+        />
+      ) : (
+        <pre className="text-purple-200 text-xs p-3 overflow-auto font-mono" style={{ maxHeight: 280 }}>
+          {html}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function splitArtifacts(text: string): { type: "text" | "html"; content: string }[] {
+  const parts: { type: "text" | "html"; content: string }[] = [];
+  const re = /```html\n?([\s\S]*?)```/g;
+  let last = 0;
+  let match;
+  while ((match = re.exec(text))) {
+    if (match.index > last) parts.push({ type: "text", content: text.slice(last, match.index) });
+    parts.push({ type: "html", content: match[1].trim() });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push({ type: "text", content: text.slice(last) });
+  return parts;
+}
+
+// ─── Message bubble (hidden until clicked) ────────────────────────────────────
+function MessageBubble({ m }: { m: Message }) {
+  const [open, setOpen] = useState(false);
+  const isUser = m.role === "user";
+
+  function formatText(text: string) {
+    return text
+      .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, _lang, code) =>
+        `<pre class="bg-black/40 text-purple-200 rounded-lg p-3 text-xs overflow-x-auto my-2 font-mono">${code.trim()}</pre>`)
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>")
+      .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+      .replace(/\n/g, "<br />");
+  }
+
+  const segments = !isUser ? splitArtifacts(m.content) : null;
+
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div className={`group relative flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={`flex items-center gap-2 transition-all duration-300 ${isUser ? "flex-row-reverse" : ""}`}
+        >
+          {/* Dot indicator */}
+          <span
+            className={`flex-shrink-0 rounded-full transition-all duration-300 ${
+              open ? "w-2 h-2" : "w-2.5 h-2.5"
+            } ${isUser ? "bg-orange-400/70" : "bg-purple-400/60"}`}
+            style={{ boxShadow: open ? "0 0 6px 2px rgba(160,100,255,0.3)" : "none" }}
+          />
+
+          {/* Content — hidden until open */}
+          <span
+            className={`text-sm leading-relaxed transition-all duration-300 text-left max-w-xs sm:max-w-md rounded-2xl px-3 py-2 ${
+              open
+                ? isUser
+                  ? "opacity-100 bg-orange-500/15 text-orange-100 border border-orange-500/20"
+                  : "opacity-100 bg-purple-500/10 text-purple-100 border border-purple-500/15"
+                : "opacity-0 w-0 px-0 py-0 overflow-hidden"
+            }`}
+          >
+            {segments ? (
+              segments.filter((s) => s.type === "text" && s.content.trim()).map((s, i) => (
+                <span key={i} dangerouslySetInnerHTML={{ __html: formatText(s.content) }} />
+              ))
+            ) : (
+              m.content
+            )}
+          </span>
+
+          {open && (
+            <ChevronDown size={10} className={`text-purple-400/50 flex-shrink-0 ${isUser ? "rotate-180" : ""}`} />
+          )}
+        </button>
+
+        {open && segments && segments.filter((s) => s.type === "html").map((s, i) => (
+          <ArtifactCard key={i} html={s.content} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function saveConversation(id: string | null, messages: Message[]): Promise<string | null> {
   try {
     const res = await fetch("/api/conversations", {
       method: "POST",
@@ -90,6 +207,25 @@ function Bubble({ role, content }: { role: "user" | "assistant"; content: string
   );
 }
 
+// Intent chip labels shown above input
+const INTENT_LABELS: Record<string, string> = {
+  task: "✅ Vazifa",
+  code: "💻 Kod",
+  search: "🔍 Qidiruv",
+  analyze: "📊 Tahlil",
+  write: "✍️ Yozish",
+  devops: "⚙️ DevOps",
+  plan: "🗺️ Reja",
+  calendar: "📅 Taqvim",
+  finance: "💰 Moliya",
+  legal: "⚖️ Huquq",
+  knowledge_save: "💾 Xotira",
+  knowledge_search: "🧠 Qidirish",
+  navigate: "🔗 Sahifa",
+  hermes: "🪄 Agent",
+  agent: "🤖 Agent",
+};
+
 function ChatInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -98,9 +234,30 @@ function ChatInner() {
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState("");
   const [convId, setConvId] = useState<string | null>(null);
+  const [intentHint, setIntentHint] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const initialized = useRef(false);
+  const intentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Detect intent as user types (debounced, 600ms)
+  const detectIntent = useCallback((text: string) => {
+    if (intentTimer.current) clearTimeout(intentTimer.current);
+    if (!text.trim() || text.length < 5) { setIntentHint(null); return; }
+    intentTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch("/api/fatosat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const d = await r.json();
+        const t = d.intent?.type;
+        if (t && t !== "chat") setIntentHint(INTENT_LABELS[t] || t);
+        else setIntentHint(null);
+      } catch { setIntentHint(null); }
+    }, 600);
+  }, []);
 
   const onVoiceResult = useCallback((text: string) => {
     setInput((prev) => (prev ? `${prev} ${text}` : text));
@@ -147,6 +304,7 @@ function ChatInner() {
     const msg = (text || input).trim();
     if ((!msg && !skillId) || loading) return;
     setInput("");
+    setIntentHint(null);
 
     const display = msg || skillId || "";
     const newMessages: Message[] = [...messages, { role: "user", content: display, ts: Date.now() }];
@@ -155,6 +313,18 @@ function ChatInner() {
     setStreaming("");
 
     try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages.map(({ role, content }) => ({ role, content })) }),
+        signal: AbortSignal.timeout(25000),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error || `HTTP ${res.status}`);
+      }
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
       let full = "";
       const skillTriggers =
         /\b(plan|reja|metrics|holat|brifing|brief|inbox|reflect|yakun|trend|esla|xotira)\b/i;
@@ -198,11 +368,10 @@ function ChatInner() {
         router.replace(`/chat?id=${savedId}`, { scroll: false });
       }
     } catch (err) {
-      const errMsg =
-        err instanceof Error && err.message && err.message !== "Failed to fetch"
-          ? `Xato: ${err.message}. Qayta urinib ko'ring.`
-          : "Xato yuz berdi. Qayta urinib ko'ring.";
-      setMessages((prev) => [...prev, { role: "assistant", content: errMsg, ts: Date.now() }]);
+      const msg = err instanceof Error && err.message && err.message !== "Failed to fetch"
+        ? `Xato: ${err.message}. Qayta urinib ko'ring.`
+        : "Xato yuz berdi. Qayta urinib ko'ring.";
+      setMessages(prev => [...prev, { role: "assistant", content: msg, ts: Date.now() }]);
       setStreaming("");
     }
     setLoading(false);
@@ -228,6 +397,14 @@ function ChatInner() {
           <span className="text-sm font-medium text-purple-200/80 tracking-wide">Pari</span>
         </div>
         <div className="flex items-center gap-2">
+          {voiceOut.supported && (
+            <button
+              onClick={() => { if (voiceOut.enabled) voiceOut.stop(); voiceOut.setEnabled(); }}
+              className={`p-1.5 rounded-lg transition-all ${voiceOut.enabled ? "text-purple-300" : "text-white/20 hover:text-white/40"}`}
+            >
+              {voiceOut.enabled ? <Volume2 size={13} strokeWidth={1.75} /> : <VolumeX size={13} strokeWidth={1.75} />}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => voiceOut.setEnabled()}
@@ -273,8 +450,20 @@ function ChatInner() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="relative z-10 px-4 pb-4 space-y-2">
-        <ChatSkillsBar disabled={loading} onPick={(id, label) => sendMessage(label, id)} />
+      {/* Intent hint chip */}
+      {intentHint && (
+        <div className="relative z-10 px-5 pb-1">
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+            style={{ background: "rgba(160,100,255,0.15)", color: "rgba(200,170,255,0.8)", border: "1px solid rgba(160,100,255,0.2)" }}
+          >
+            {intentHint}
+          </span>
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="relative z-10 px-4 pb-4">
         <div
           className="flex items-end gap-2 px-4 py-3 rounded-2xl"
           style={{
@@ -286,10 +475,8 @@ function ChatInner() {
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) =>
-              e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())
-            }
+            onChange={e => { setInput(e.target.value); detectIntent(e.target.value); }}
+            onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())}
             placeholder="…"
             rows={1}
             className="flex-1 resize-none text-sm bg-transparent focus:outline-none text-white/80 placeholder-white/15 max-h-28 leading-relaxed py-0.5"

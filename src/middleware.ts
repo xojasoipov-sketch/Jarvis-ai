@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authConfigured, verifySessionToken } from "@/lib/auth";
 
+// Sliding window rate limiter — in-memory (per Edge invocation)
+// For production, replace with Upstash Redis (same API, durable across invocations)
 const ratemap = new Map<string, { count: number; reset: number }>();
 
 function rateLimit(
@@ -28,6 +30,7 @@ function rateLimit(
   return null;
 }
 
+// Clean up stale entries every ~100 requests (cheap enough for edge)
 let cleanupCounter = 0;
 function maybeCleanup() {
   if (++cleanupCounter < 100) return;
@@ -42,48 +45,33 @@ export async function middleware(req: NextRequest) {
   maybeCleanup();
   const path = req.nextUrl.pathname;
 
-  // Public: login, portfolio (SADIPRIME mehmonlar), static, auth, telegram webhook
-  if (
-    path === "/login" ||
-    path === "/portfolio" ||
-    path.startsWith("/portfolio/") ||
-    path.startsWith("/_next") ||
-    path.startsWith("/api/auth") ||
-    path === "/favicon.ico" ||
-    path === "/icon" ||
-    path.startsWith("/logo")
-  ) {
-    return NextResponse.next();
-  }
-
+  // Per-route rate limits
   if (path.startsWith("/api/chat")) {
-    const limited = rateLimit(req, 60, 60_000);
+    const limited = rateLimit(req, 60, 60_000); // 60 req/min
     if (limited) return limited;
   }
   if (path.startsWith("/api/agent")) {
-    const limited = rateLimit(req, 30, 60_000);
+    const limited = rateLimit(req, 30, 60_000); // 30 req/min (agent calls are heavier)
     if (limited) return limited;
   }
   if (path.startsWith("/api/hermes")) {
-    const limited = rateLimit(req, 20, 60_000);
+    const limited = rateLimit(req, 20, 60_000); // 20 req/min
     if (limited) return limited;
   }
   if (path.startsWith("/api/tts") || path.startsWith("/api/stt") || path.startsWith("/api/voice")) {
-    const limited = rateLimit(req, 30, 60_000);
+    const limited = rateLimit(req, 10, 60_000); // 10 req/min (ElevenLabs quota)
     if (limited) return limited;
   }
 
+  // Password gate — opt-in via APP_PASSWORD env var
   if (authConfigured) {
     const session = req.cookies.get("pari_session")?.value;
-    const ok = await verifySessionToken(session);
-    if (!ok) {
+    if (!(await verifySessionToken(session))) {
       if (path.startsWith("/api/")) {
         return NextResponse.json({ error: "Autentifikatsiya talab qilinadi" }, { status: 401 });
       }
-      if (path === "/login") return NextResponse.next();
       const loginUrl = new URL("/login", req.url);
-      const nextPath = path.startsWith("/login") ? "/" : path;
-      loginUrl.searchParams.set("next", nextPath);
+      loginUrl.searchParams.set("next", path);
       return NextResponse.redirect(loginUrl);
     }
   }
@@ -93,6 +81,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon|login|portfolio|api/auth/login|api/telegram|monitoring|logo.png).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon|login|api/auth/login|api/telegram|monitoring).*)",
   ],
 };

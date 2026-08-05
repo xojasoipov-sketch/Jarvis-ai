@@ -1,17 +1,18 @@
 // Provider chain: local-first → free cloud → paid.
-import { envAll, envFirst, ENV } from "@/lib/env";
+import { envFirst, envAny, ENV } from "@/lib/env";
 
+// Cost per 1M tokens (input+output average, USD) — used by Cost Optimizer
 export const PROVIDER_COSTS: Record<string, number> = {
   local: 0,
   pollinations: 0,
-  groq: 0.06,
-  cerebras: 0,
-  openrouter: 0,
-  deepseek: 0.35,
-  kimi: 0.2,
-  qwen: 0.4,
-  mistral: 2.0,
-  openai: 0.3,
+  groq: 0.06,       // LLaMA 3.3 70B — $0.05 in + $0.08 out /1M
+  cerebras: 0,       // free tier
+  openrouter: 0,     // gemini-2.0-flash-exp:free
+  deepseek: 0.35,    // deepseek-chat $0.27/$0.11 per 1M
+  kimi: 0.20,
+  qwen: 0.40,
+  mistral: 2.0,      // mistral-large
+  openai: 0.30,      // gpt-4o-mini $0.15/$0.60 per 1M
   gemini: 0,
 };
 
@@ -22,13 +23,28 @@ export type Provider = {
   model: string;
   headers?: Record<string, string>;
   supportsTools: boolean;
-  costPer1M: number;
-  local?: boolean;
+  costPer1M: number; // USD per 1M tokens (avg input+output)
 };
 
-/** BASE + BASE2… + case-insensitive */
-function envKeys(base: string): string[] {
-  return envAll(base, 12);
+function resolveSiteUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.RAILWAY_PUBLIC_DOMAIN ||
+    process.env.VERCEL_URL ||
+    "https://pari-ai.up.railway.app"
+  );
+}
+
+/** Get all numbered variants of an env var: BASE, BASE2, BASE3, … up to max */
+function envKeys(base: string, max = 12): string[] {
+  const keys: string[] = [];
+  const first = envFirst(base);
+  if (first) keys.push(first);
+  for (let i = 2; i <= max; i++) {
+    const v = envFirst(`${base}${i}`);
+    if (v) keys.push(v);
+  }
+  return keys;
 }
 
 function providerEntries(
@@ -49,62 +65,24 @@ function providerEntries(
   }));
 }
 
+// Cost optimizer: given task complexity, pick the cheapest capable provider
+// "simple" = short Q&A; "complex" = code/analysis; "tools" = must support tool-calling
 export function getCheapestProvider(
   providers: Provider[],
   requirement: "free" | "tools" | "any" = "any"
 ): Provider | null {
-  let candidates = providers.filter((p) => p.key && p.key !== "dummy");
-  if (requirement === "free") candidates = candidates.filter((p) => p.costPer1M === 0);
-  if (requirement === "tools") candidates = candidates.filter((p) => p.supportsTools);
+  let candidates = providers.filter(p => p.key && p.key !== "dummy");
+  if (requirement === "free") candidates = candidates.filter(p => p.costPer1M === 0);
+  if (requirement === "tools") candidates = candidates.filter(p => p.supportsTools);
   if (!candidates.length) return null;
   return candidates.sort((a, b) => a.costPer1M - b.costPer1M)[0];
-}
-
-function resolveLocalChatUrl(): string {
-  if (process.env.LOCAL_LLM_URL) return process.env.LOCAL_LLM_URL.replace(/\/$/, "");
-  const base = (process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
-  if (base) {
-    if (base.includes("/v1/chat/completions")) return base;
-    if (base.endsWith("/v1")) return `${base}/chat/completions`;
-    return `${base}/v1/chat/completions`;
-  }
-  const svc = process.env.OLLAMA_SERVICE || process.env.RAILWAY_OLLAMA_SERVICE;
-  if (svc) {
-    const host = svc.includes(".") ? svc : `${svc}.railway.internal`;
-    const port = process.env.OLLAMA_PORT || "11434";
-    return `http://${host}:${port}/v1/chat/completions`;
-  }
-  return "";
-}
-
-function getLocalProviders(): Provider[] {
-  const url = resolveLocalChatUrl();
-  if (!url) return [];
-  return [
-    {
-      name: "local",
-      url,
-      key: process.env.LOCAL_LLM_KEY || "ollama",
-      model: process.env.LOCAL_LLM_MODEL || process.env.OLLAMA_MODEL || "llama3.2",
-      supportsTools: process.env.LOCAL_LLM_TOOLS === "1",
-      costPer1M: 0,
-      local: true,
-    },
-  ];
-}
-
-function resolveSiteUrl(): string {
-  const s = ENV.siteUrl();
-  if (!s) return "https://pari-ai.up.railway.app";
-  return s.startsWith("http") ? s.replace(/\/$/, "") : `https://${s}`;
 }
 
 export function getProviders(): Provider[] {
   const list: Provider[] = [];
   const site = resolveSiteUrl();
 
-  list.push(...getLocalProviders());
-
+  // 1. Pollinations — no API key required, works immediately
   list.push({
     name: "pollinations",
     url: "https://text.pollinations.ai/openai",
@@ -114,6 +92,7 @@ export function getProviders(): Provider[] {
     costPer1M: 0,
   });
 
+  // 2. Groq — fastest free tier
   list.push(
     ...providerEntries(
       "groq",
@@ -124,6 +103,7 @@ export function getProviders(): Provider[] {
     )
   );
 
+  // 3. OpenRouter — free models available
   list.push(
     ...providerEntries(
       "openrouter",
@@ -140,6 +120,7 @@ export function getProviders(): Provider[] {
     )
   );
 
+  // 4. Cerebras — 1M token/day free
   list.push(
     ...providerEntries(
       "cerebras",
@@ -149,6 +130,7 @@ export function getProviders(): Provider[] {
     )
   );
 
+  // 5. DeepSeek
   list.push(
     ...providerEntries(
       "deepseek",
@@ -158,6 +140,7 @@ export function getProviders(): Provider[] {
     )
   );
 
+  // 6. Kimi (Moonshot)
   list.push(
     ...providerEntries(
       "kimi",
@@ -167,6 +150,7 @@ export function getProviders(): Provider[] {
     )
   );
 
+  // 7. Qwen (Alibaba DashScope)
   list.push(
     ...providerEntries(
       "qwen",
@@ -176,6 +160,7 @@ export function getProviders(): Provider[] {
     )
   );
 
+  // 8. Mistral
   list.push(
     ...providerEntries(
       "mistral",
@@ -185,6 +170,7 @@ export function getProviders(): Provider[] {
     )
   );
 
+  // 9. OpenAI — paid, kept last since it's not free; gpt-4o-mini is the cheapest capable model
   list.push(
     ...providerEntries(
       "openai",
@@ -199,13 +185,13 @@ export function getProviders(): Provider[] {
 }
 
 export function getLocalOnly(): Provider[] {
-  return getLocalProviders();
+  return [];
 }
 
 /** Nechta provider key yuklangan (debug) */
 export function providerKeyStats() {
   return {
     total_providers: getProviders().filter((p) => p.key && p.key !== "dummy").length,
-    by_family: ENV.inventory(),
+    by_family: {},
   };
 }

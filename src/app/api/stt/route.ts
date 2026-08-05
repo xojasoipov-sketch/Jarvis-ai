@@ -1,46 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ENV } from "@/lib/env";
 
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+const ELEVENLABS_KEY = () => process.env.ELEVENLABS_API_KEY || "";
+const GROQ_KEYS = () =>
+  [process.env.GROQ_API_KEY, process.env.GROQ_API_KEY2].filter(Boolean) as string[];
 
-async function transcribeElevenLabs(audio: Blob): Promise<{ text: string } | { error: string } | null> {
-  const key = ENV.elevenlabs();
+async function transcribeElevenLabs(
+  audio: File | Blob
+): Promise<{ text: string } | { error: string } | null> {
+  const key = ELEVENLABS_KEY();
   if (!key) return null;
   try {
     const fd = new FormData();
-    fd.append("file", audio, "audio.webm");
+    fd.append("audio", audio);
     fd.append("model_id", "scribe_v1");
-    // language hint — auto often better; optional
     const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
       method: "POST",
       headers: { "xi-api-key": key },
       body: fd,
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      return { error: `eleven_stt ${res.status}: ${t.slice(0, 120)}` };
-    }
+    if (!res.ok) return { error: `ElevenLabs ${res.status}` };
     const data = await res.json();
-    const text = String(data?.text || "").trim();
-    return text ? { text } : { error: "eleven empty" };
+    return data?.text ? { text: data.text as string } : { error: "empty" };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "eleven stt fail" };
+    return { error: String(e) };
   }
 }
 
-async function transcribeGroq(audio: Blob): Promise<{ text: string } | { error: string } | null> {
-  const keys = ENV.groq();
-  if (!keys.length) return null;
-
+async function transcribeGroq(
+  audio: File | Blob
+): Promise<{ text: string } | { error: string } | null> {
+  const keys = GROQ_KEYS();
   for (const key of keys) {
     try {
       const body = new FormData();
       body.append("file", audio, "audio.webm");
       body.append("model", "whisper-large-v3");
       body.append("response_format", "json");
-      // language bermaymiz — Whisper o'zi aniqlaydi (uz/ru/en aralash uchun yaxshiroq)
       const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}` },
@@ -49,23 +46,20 @@ async function transcribeGroq(audio: Blob): Promise<{ text: string } | { error: 
       });
       if (!res.ok) continue;
       const data = await res.json();
-      const text = String(data.text || "").trim();
-      if (text) return { text };
-    } catch {
-      continue;
-    }
+      if (data.text) return { text: data.text as string };
+    } catch { continue; }
   }
-  return { error: "groq stt failed" };
+  return { error: "Groq failed" };
 }
 
 export async function POST(req: NextRequest) {
-  // Probe: empty body → capability
+  // Probe: empty body → capability check
   const ct = req.headers.get("content-type") || "";
   if (!ct.includes("multipart")) {
     return NextResponse.json({
       ok: true,
       elevenlabs: Boolean(ENV.elevenlabs()),
-      groq: ENV.groq().length > 0,
+      groq: GROQ_KEYS().length > 0,
       hint: "POST multipart field: file yoki audio",
     });
   }
@@ -94,7 +88,10 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(
     {
       error: "STT xato",
-      detail: [groq && "error" in groq ? groq.error : null, el && "error" in el ? el.error : null]
+      detail: [
+        groq && "error" in groq ? groq.error : null,
+        el && "error" in el ? el.error : null,
+      ]
         .filter(Boolean)
         .join(" | "),
     },

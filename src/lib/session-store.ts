@@ -11,13 +11,15 @@
 import { supabase, dbConfigured } from "@/lib/supabase";
 
 export type Session = {
-  mode: "chat" | "agent" | "smm_post" | "smm_generated";
+  mode: "chat" | "agent" | "smm_post" | "smm_generated" | "service_order";
   agentId?: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
   waitingFor?: "agent_task";
   smmChannelId?: string;
   smmContent?: string;
   smmDrafts?: string[];
+  orderServiceId?: number;
+  orderClientName?: string;
 };
 
 const DEFAULT: Session = { mode: "chat", history: [] };

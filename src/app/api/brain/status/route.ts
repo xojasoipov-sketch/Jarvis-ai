@@ -22,9 +22,6 @@ export async function GET() {
 
   const tools = [
     "list_connections",
-    "list_mcp_tools",
-    "telegram_send",
-    "telegram_get_me",
     "web_search",
     "web_fetch",
     "extract_emails",
