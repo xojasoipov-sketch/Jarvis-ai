@@ -213,8 +213,6 @@ export default function ApisPage() {
         <p className="px-5 py-2 text-[11px] text-gray-400 border-t border-gray-50">{RAILWAY_VARS_HINT}</p>
       </div>
 
-      <AddKeyPanel />
-
       {cats.map((cat) => (
         <div key={cat}>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{cat}</p>

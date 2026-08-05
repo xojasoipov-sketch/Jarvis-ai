@@ -59,8 +59,8 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
 
   useEffect(() => {
     fetch("/api/stt", { method: "POST", body: new FormData() })
-      .then((r) => setUseGroq(r.status !== 500))
-      .catch(() => setUseGroq(false));
+      .then((r) => setUseServerStt(r.status !== 500))
+      .catch(() => setUseServerStt(false));
     const w = window as SpeechWindow;
     setSupported(Boolean(navigator.mediaDevices?.getUserMedia || w.SpeechRecognition || w.webkitSpeechRecognition));
   }, []);
@@ -105,8 +105,8 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
 
   const toggle = useCallback(() => {
     const hasMedia = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
-    if (useGroq && hasMedia) {
-      if (listening) { stopGroq(); return; }
+    if (useServerStt && hasMedia) {
+      if (listening) { stopRec(); return; }
       startGroq().catch(() => { setListening(false); playMicTone(false); });
       return;
     }
@@ -146,7 +146,7 @@ export function useVoiceInput(onResult: (text: string) => void, lang = "uz-UZ") 
     rec.start();
     setListening(true);
     playMicTone(true);
-  }, [listening, lang, onResult, startServerStt, stopRec, useServerStt]);
+  }, [listening, lang, onResult, startGroq, stopRec, useServerStt]);
 
   return { listening, supported: supported || useServerStt, toggle };
 }

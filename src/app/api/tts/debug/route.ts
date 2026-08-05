@@ -19,7 +19,7 @@ export async function GET() {
   return NextResponse.json({
     meta: elevenLabsMeta(),
     env_names_matching_eleven: elevenNames,
-    inventory: ENV.inventory(),
+    inventory: (ENV as unknown as Record<string, () => unknown>).inventory?.() ?? {},
     looks_like_sk: sample.startsWith("sk_"),
     key_length: sample.length,
     railway_service: process.env.RAILWAY_SERVICE_NAME || null,

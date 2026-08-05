@@ -213,7 +213,7 @@ function AgentsInner() {
           onChange={e => setTask(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleRun())}
           placeholder={
-            mode === "research"
+            (mode as string) === "research"
               ? "Masalan: O'zbekistonda AI startaplar bozori 2026..."
               : "Vazifani yozing... (masalan: 'Pari AI uchun marketing strategiyasini ishlab chiq')"
           }

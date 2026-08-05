@@ -4,8 +4,8 @@
 import { ENV } from "@/lib/env";
 
 const KEY = () => ENV.elevenlabs();
-const VOICE = () => ENV.elevenlabsVoice();
-const MODEL = () => ENV.elevenlabsModel();
+const VOICE = () => process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL";
+const MODEL = () => process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5";
 
 const CACHE = new Map<string, { buf: ArrayBuffer; ts: number }>();
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
@@ -30,7 +30,7 @@ export function elevenLabsMeta() {
     key_len: key ? key.length : 0,
     looks_like_sk: key.startsWith("sk_"),
     fallbacks_allowed: process.env.ALLOW_TTS_FALLBACK === "true",
-    inventory: ENV.inventory(),
+    inventory: (ENV as unknown as Record<string, () => unknown>).inventory?.() ?? {},
   };
 }
 

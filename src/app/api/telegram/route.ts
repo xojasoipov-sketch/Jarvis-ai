@@ -10,6 +10,8 @@ import { classifyFast, normalizeUzbek } from "@/lib/fatosat";
 import { getProviders } from "@/lib/providers";
 import { runToolLoop, type ChatMessage } from "@/lib/toolloop";
 import { log } from "@/lib/logger";
+import { portfolioTelegramSummary, guestStartText, SADIPRIME } from "@/lib/sadiprime";
+import { isOwnerTelegram, checkGuestTelegramLimit, consumeGuestTelegram, OWNER } from "@/lib/owner";
 
 const TG_SYSTEM = `Sen Pari AI — Sadining shaxsiy AI yordamchisisan, Telegram orqali gaplashyapsan.
 Qisqa, tabiiy va aniq javob ber. Kerak bo'lganda vositalarni (tools) chaqir — taxmin qilmasdan haqiqiy ma'lumot ol:
@@ -23,6 +25,8 @@ Markdown ishlatma — Telegram uchun oddiy matn yoz.`;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL
   || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://pari-ai-ten.vercel.app");
 
+const PORTFOLIO_URL = process.env.PORTFOLIO_URL || `${APP_URL}/portfolio`;
+
 const MAIN_KEYBOARD = {
   inline_keyboard: [
     [
@@ -35,6 +39,13 @@ const MAIN_KEYBOARD = {
     ],
     [{ text: "🛍️ Xizmatlar", callback_data: "menu:services" }],
     [{ text: "🚀 Pari AI ni ochish", web_app: { url: APP_URL } }],
+  ],
+};
+
+const GUEST_KEYBOARD = {
+  inline_keyboard: [
+    [{ text: "🏢 Portfolio ko'rish", web_app: { url: PORTFOLIO_URL } }],
+    [{ text: "📧 Bog'lanish", callback_data: "guest:contact" }],
   ],
 };
 
@@ -627,7 +638,7 @@ export async function POST(req: NextRequest) {
         }
         consumeGuestTelegram(from.id);
       }
-      await handleMessage(chat.id, text, from.first_name, owner);
+      await handleMessage(chat.id, text, from.first_name);
     }
 
     if (update.message?.voice || update.message?.audio) {

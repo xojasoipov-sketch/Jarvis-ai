@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    inventory: ENV.inventory(),
+    inventory: (ENV as unknown as Record<string, () => unknown>).inventory?.() ?? {},
     providers: providerKeyStats(),
     elevenlabs: elevenLabsMeta(),
     hint: "Redeploy after adding Variables. Names: PROVIDER_API_KEY, PROVIDER_API_KEY2…",

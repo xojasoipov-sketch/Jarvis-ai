@@ -230,63 +230,18 @@ export function useJarvisVoice() {
             stopRecording();
           }, SILENCE_DURATION);
         }
-        speechStartRef.current = Date.now();
-        isSpeakingRef.current = true;
-      }
-
-      function stopRecording() {
-        isSpeakingRef.current = false;
-        if (recorderRef.current?.state === "recording") {
-          try {
-            recorderRef.current.stop();
-          } catch {}
+      } else if (isSpeakingRef.current && rms > SPEAK_THRESHOLD) {
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
         }
-      }
-
-      function vadTick() {
-        if (!activeRef.current) return;
-        if (stateRef.current === "thinking" || stateRef.current === "speaking") {
-          vadLoopRef.current = requestAnimationFrame(vadTick);
-          return;
-        }
-
-        analyser.getFloatTimeDomainData(data);
-        let rms = 0;
-        for (let i = 0; i < data.length; i++) rms += data[i] * data[i];
-        rms = Math.sqrt(rms / data.length);
-        setLevel(Math.min(rms / 0.08, 1));
-
-        if (!isSpeakingRef.current && rms > SPEAK_THRESHOLD) {
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
-          }
-          setState("listening");
-          startRecording();
-          setTimeout(() => {
-            if (isSpeakingRef.current) stopRecording();
-          }, MAX_SPEECH_MS);
-        } else if (isSpeakingRef.current && rms < SILENCE_THRESHOLD) {
-          if (!silenceTimerRef.current) {
-            silenceTimerRef.current = setTimeout(() => {
-              silenceTimerRef.current = null;
-              stopRecording();
-            }, SILENCE_DURATION);
-          }
-        } else if (isSpeakingRef.current && rms > SPEAK_THRESHOLD) {
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
-          }
-        }
-
-        vadLoopRef.current = requestAnimationFrame(vadTick);
       }
 
       vadLoopRef.current = requestAnimationFrame(vadTick);
-    },
-    [processChunks]
-  );
+    }
+
+    vadLoopRef.current = requestAnimationFrame(vadTick);
+  }, [processChunks]);
 
   const startConversation = useCallback(async () => {
     if (activeRef.current) return;

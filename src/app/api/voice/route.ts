@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProviders } from "@/lib/providers";
+import { ownerSystemBlock, OWNER } from "@/lib/owner";
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY || "";
 const GROQ_KEY = process.env.GROQ_API_KEY || "";
