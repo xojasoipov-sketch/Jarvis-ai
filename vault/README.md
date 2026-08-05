@@ -1,13 +1,21 @@
-# Pari Vault (Memory)
+---
+title: Pari AI Vault
+date: 2026-08-05
+tags: [pari-ai, vault]
+---
 
-If it's not in the vault, it didn't happen.
+# Pari AI — Obsidian Vault
 
-```
-vault/
-  raw/       — everything captured
-  wiki/      — distilled knowledge
-  outputs/   — everything Pari ships
-  daily/     — day logs / reflection
-```
+Bu vault Pari AI tizimi tomonidan boshqariladi.
 
-Markdown only. Linked notes. No separate database required for core memory.
+## Papkalar
+
+- `Daily/` — Kunlik yozuvlar
+- `Projects/` — Loyihalar
+- `Notes/` — Umumiy yozuvlar
+- `Resources/` — Manbalar
+- `assets/` — Rasmlar va fayllar
+
+## Sinxronizatsiya
+
+Obsidian Git plagin orqali bu vault avtomatik yangilanadi.
