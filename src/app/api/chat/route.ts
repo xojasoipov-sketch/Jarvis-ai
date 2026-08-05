@@ -1,167 +1,270 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProviders } from "@/lib/providers";
-import { runToolLoop, type ChatMessage } from "@/lib/toolloop";
+import { getProviders, type Provider } from "@/lib/providers";
 import { log } from "@/lib/logger";
-import { supabase, dbConfigured } from "@/lib/supabase";
-import { classifyFast, normalizeUzbek, intentToContext } from "@/lib/fatosat";
+import { ENV, envAny } from "@/lib/env";
 
-const SYSTEM = `Sen Pari AI — Sadining shaxsiy AI ish stoli va ijrochi yordamchisissan.
+export const maxDuration = 60;
 
-## Kim sansen
-Sadi — AI va texnologiya xizmatlar ko'rsatuvchi mutaxassis. Sen uning:
-- **Ish stolisi**: hamma narsani shu yerdan boshqaradi
-- **Ijrochi yordamchisi**: xizmatlarni haqiqatda bajaradi (kod yozadi, kontent yaratadi, tahlil qiladi)
-- **Biznes AI'si**: buyurtmalar, mijozlar, daromad, strategiya — hammani kuzatadi
+const SYSTEM_BASE = `Sen Pari AI Brain.
+Faqat haqiqiy ulanishlar va tool lardan foydalan.
+list_service_orders, create_telegram_bot, crm_integration, code_generator kabi nomlarni O'YLAMA — ular yo'q.
+O'zbek savol → o'zbek javob.`;
 
-## Nima qila olasan (xizmatlar ro'yxati)
-**AI & Avtomatlashtirish**: Telegram bot, AI agent, Voice AI, AI chatbot, call-center, sales robot, HR automation, CRM integratsiya, n8n/Make.com workflow
-**Dasturlash**: Next.js/React sayt, Telegram Mini App, CRM tizimi, ERP, mobil ilova, landing page
-**SMM & Marketing**: kontent strategiya, post/caption yozish, hashtag research, reklama kampaniya, Google Ads, SEO, email marketing
-**Kontent**: blog maqola, copywriting, video skript, YouTube strategiya, online kurs yaratish
-**Dizayn & Media**: UI/UX (Figma konsept), brending/logo brief, dashboard UI, reklama rolik skript, motion brief, AI avatar video
-**Konsultatsiya**: biznes strategiya, digital transformatsiya, sotuv tizimi, KPI/OKR, franchise hujjat, CRM audit
+type ChatMessage = {
+  role: string;
+  content: string | null;
+  tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string } }[];
+  tool_call_id?: string;
+};
 
-## Qoidalar
-1. **O'zbek tilida so'rasa — o'zbek tilida javob ber**
-2. **Ish konteksti bo'lsa — darhol ishni boshlash**, savol ber, keyin ijro et
-3. **Haqiqiy ma'lumot kerak bo'lsa — tool chaqir**, taxmin qilma:
-   - Hozirgi faktlar/yangiliklar: web_search
-   - Shaxsiy bilim bazasi: knowledge_search
-   - Biznes holati (buyurtmalar, daromad, xizmatlar): get_business_overview, list_service_orders
-4. **Kod yozganda** — to'liq ishlaydigann, copy-paste qilsa bo'ladigan kod ber
-5. **Vizual narsa so'rasa** (sahifa, grafik, animatsiya, UI mockup) — mustaqil HTML \`\`\`html blokida ber
-6. **Muhim ma'lumot aytilsa** — knowledge_save taklif qil
-7. **Propose_code_change** — Pari AI ilovasining o'z kodiga o'zgartirish kerak bo'lsagina
+/** Inventory — hech qanday circular import yo'q */
+function buildInventoryReport(): string {
+  const lines: string[] = ["## Haqiqiy ulanishlar (Railway process.env)\n"];
 
-## Tone
-Professional lekin samimiy. Sadi bilan ishchi muhitda gaplash — ortiqcha ta'rif yo'q, natijaga yo'nalgan.`;
+  const checks: { name: string; ok: boolean; detail: string }[] = [
+    {
+      name: "Supabase",
+      ok: Boolean(ENV.supabaseUrl() && ENV.supabaseKey()),
+      detail: ENV.supabaseUrl() ? ENV.supabaseUrl().slice(0, 40) + "…" : "URL/KEY yo'q",
+    },
+    {
+      name: "Telegram Bot",
+      ok: Boolean(ENV.telegram()),
+      detail: ENV.telegram() ? "TELEGRAM_BOT_TOKEN bor" : "yo'q",
+    },
+    {
+      name: "GitHub",
+      ok: Boolean(ENV.github()),
+      detail: ENV.github() ? "Token bor" : "GITHUB_TOKEN yo'q",
+    },
+    {
+      name: "Groq",
+      ok: Boolean(ENV.groq()),
+      detail: ENV.groq() ? "Tool-calling OK" : "yo'q",
+    },
+    {
+      name: "Gemini",
+      ok: Boolean(ENV.gemini()),
+      detail: ENV.gemini() ? "Key bor" : "yo'q",
+    },
+    {
+      name: "OpenAI",
+      ok: Boolean(ENV.openai()),
+      detail: ENV.openai() ? "Key bor" : "yo'q",
+    },
+    {
+      name: "ElevenLabs",
+      ok: Boolean(ENV.elevenlabs()),
+      detail: ENV.elevenlabs() ? "TTS/STT" : "yo'q",
+    },
+    {
+      name: "Railway",
+      ok: envAny("RAILWAY_ENVIRONMENT", "RAILWAY_PUBLIC_DOMAIN", "RAILWAY_PROJECT_ID"),
+      detail: process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_ENVIRONMENT_NAME || "—",
+    },
+    { name: "Internet (web_search)", ok: true, detail: "server-side built-in" },
+    { name: "Hermes", ok: true, detail: "/api/hermes built-in" },
+  ];
 
+  for (const c of checks) {
+    lines.push(`${c.ok ? "✅" : "❌"} **${c.name}** — ${c.detail}`);
+  }
 
-async function ragSearch(query: string): Promise<string> {
-  if (!dbConfigured) return "";
-  try {
-    const { data } = await supabase!
-      .from("pari_knowledge")
-      .select("title, content")
-      .or(`title.ilike.%${query.slice(0, 50)}%,content.ilike.%${query.slice(0, 50)}%`)
-      .limit(3);
-    if (!data?.length) return "";
-    const snippets = data.map(r => `[${r.title}]: ${r.content.slice(0, 300)}`).join("\n");
-    return `\n\n📚 **Bilim bazasidan (RAG):**\n${snippets}`;
-  } catch { return ""; }
+  lines.push("\n## Haqiqiy tool lar (o'ylab chiqarilmagan)");
+  lines.push(
+    [
+      "list_connections",
+      "web_search",
+      "web_fetch",
+      "extract_emails",
+      "extract_social_links",
+      "extract_images",
+      "extract_page_text",
+      "extract_list",
+      "knowledge_search",
+      "knowledge_save",
+      "create_task",
+      "get_business_overview",
+      "create_file",
+      "read_file",
+      "vault_read",
+      "vault_write",
+      "propose_code_change",
+      "railway_info",
+      "datetime",
+    ]
+      .map((t) => `- \`${t}\``)
+      .join("\n")
+  );
+  lines.push("\n_Manba: process.env (LLM fantaziya emas)_");
+  return lines.join("\n");
 }
 
-async function webSearch(query: string): Promise<string> {
-  try {
-    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
-    const data = await res.json();
-    const parts: string[] = [];
-    if (data.AbstractText) parts.push(`**${data.Heading}**: ${data.AbstractText}`);
-    for (const t of (data.RelatedTopics || []).slice(0, 4)) {
-      if (t.Text) parts.push(`- ${t.Text}`);
-    }
-    return parts.length ? `\n\n🔍 **Web qidiruv natijalari (${query}):**\n${parts.join("\n")}` : "";
-  } catch { return ""; }
+function isInventoryQuestion(text: string): boolean {
+  return /nima ulan|qanday tool|qaysi tool|ulangan|connected|list_connections|nima bor|asosiy tool|vositalar|integratsiya|github|telegram|supabase|railway|obsidian|hermes|konnekt|toolar|funksiya|kalit|connect|monitoring|buyurtma|overview|mavjud|toollar|api.?lar/i.test(
+    text
+  );
 }
 
 function textStream(text: string): Response {
   const enc = new TextEncoder();
-  return new Response(new ReadableStream({
-    start(ctrl) {
-      ctrl.enqueue(enc.encode(text));
-      ctrl.close();
-    },
-  }), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  return new Response(
+    new ReadableStream({
+      start(c) {
+        c.enqueue(enc.encode(text));
+        c.close();
+      },
+    }),
+    { headers: { "Content-Type": "text/plain; charset=utf-8" } }
+  );
+}
+
+async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise<string> {
+  // Lazy import — circular dependency oldini olish
+  const { toolsAsOpenAIFunctionsAll, runAnyTool } = await import("@/lib/mcp-tools");
+  const tools = toolsAsOpenAIFunctionsAll();
+  const convo = [...messages];
+  for (let round = 0; round < 6; round++) {
+    const res = await fetch(provider.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${provider.key}`,
+        ...(provider.headers || {}),
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        messages: convo,
+        tools,
+        tool_choice: "auto",
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(35000),
+    });
+    if (!res.ok) throw new Error(`Provider ${res.status}`);
+    const data = await res.json();
+    const msg = data.choices?.[0]?.message;
+    if (!msg) throw new Error("Bo'sh javob");
+    if (!msg.tool_calls?.length) return msg.content || "";
+    convo.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
+    for (const call of msg.tool_calls) {
+      let result: unknown;
+      try {
+        result = await runAnyTool(call.function.name, JSON.parse(call.function.arguments || "{}"));
+      } catch (err) {
+        result = { error: (err as Error).message };
+      }
+      convo.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result).slice(0, 10000),
+      });
+    }
+  }
+  return "Tool limit.";
 }
 
 export async function POST(req: NextRequest) {
   const start = Date.now();
-  const { messages, system } = await req.json();
-
-  // Fatosat: normalize + classify last message
-  const rawLast = messages[messages.length - 1]?.content || "";
-  const normalizedLast = normalizeUzbek(rawLast);
-  const fastIntent = classifyFast(normalizedLast);
-
-  // Auto-create task if intent detected
-  if (fastIntent?.type === "task" && dbConfigured) {
-    void supabase!.from("pari_tasks").insert({ title: fastIntent.title, status: "todo" });
-  }
-  // Auto-save to knowledge if intent detected
-  if (fastIntent?.type === "knowledge_save" && dbConfigured) {
-    void supabase!.from("pari_knowledge").insert({ title: "Chat'dan saqlangan", content: rawLast.slice(0, 1000) });
+  let body: { messages?: ChatMessage[]; system?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const { messages = [], system } = body;
   const list = getProviders();
   if (!list.length) {
-    log("error", "chat-api", "POST /api/chat — 500 — hech qanday provider key sozlanmagan");
     return NextResponse.json({ error: "API key sozlanmagan" }, { status: 500 });
   }
 
-  // Fatosat: enrich system with intent hint so AI knows what user wants
-  const intentHint = fastIntent ? intentToContext(fastIntent) : "";
-  const baseSystem = (system || SYSTEM) + (intentHint ? `\n\n${intentHint}` : "");
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  const lastText = typeof lastUser?.content === "string" ? lastUser.content : "";
 
-  // Prefer the tool-capable provider so the agent can actually call vault/code/web tools.
-  // Only if a real key is set — skip tool loop for keyless providers like Pollinations.
-  const toolProvider = list.find((p) => p.supportsTools && p.key !== "dummy");
-  if (toolProvider) {
+  // ★ Inventory — LLM ga umuman bermaymiz
+  if (isInventoryQuestion(lastText)) {
+    log("info", "chat-api", "inventory short-circuit");
+    return textStream(buildInventoryReport());
+  }
+
+  const invHint = buildInventoryReport().slice(0, 2500);
+  const baseSystem = (system || SYSTEM_BASE) + "\n\n" + invHint;
+
+  const toolProviders = list.filter((p) => p.supportsTools && p.key !== "dummy");
+  for (const toolProvider of toolProviders) {
     try {
-      const convo: ChatMessage[] = [{ role: "system", content: baseSystem }, ...messages];
-      const finalText = await runToolLoop(toolProvider, convo);
-      log("info", "chat-api", `POST /api/chat — 200 OK (${((Date.now() - start) / 1000).toFixed(1)}s) — ${toolProvider.name}/${toolProvider.model}`);
+      const finalText = await runToolLoop(toolProvider, [
+        { role: "system", content: baseSystem },
+        ...messages,
+      ]);
+      log("info", "chat-api", `tools ${toolProvider.name} ${(Date.now() - start) / 1000}s`);
       return textStream(finalText);
-    } catch {
-      log("warn", "chat-api", `${toolProvider.name} tool-loop xato berdi, boshqa providerga o'tildi`);
+    } catch (e) {
+      log("warn", "chat-api", `tool-loop fail ${toolProvider.name}: ${String(e)}`);
     }
   }
 
-  // Context enrichment for non-tool-capable providers
-  const lastMsg = messages[messages.length - 1]?.content || "";
-  const [ragCtx, searchCtx] = await Promise.all([
-    ragSearch(lastMsg.slice(0, 100)),
-    /hozir|bugun|yangi|oxirgi|so'ngi|qidiruv|search|latest|news|2024|2025|2026/i.test(lastMsg)
-      ? webSearch(lastMsg.slice(0, 100))
-      : Promise.resolve(""),
-  ]);
-  const extra = ragCtx + searchCtx;
-  const sysMsg = extra ? baseSystem + `\n\nQo'shimcha kontekst:${extra}` : baseSystem;
-
-  const body = { model: "", messages: [{ role: "system", content: sysMsg }, ...messages], stream: true };
-
-  for (const p of list.filter((p) => !p.supportsTools)) {
+  // Stream fallback — qisqa timeout, pipe xatosini kamaytirish
+  for (const p of list) {
     try {
       const res = await fetch(p.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}`, ...(p.headers || {}) },
-        body: JSON.stringify({ ...body, model: p.model }),
-        signal: AbortSignal.timeout(9000),
-      });
-      if (!res.ok) continue;
-
-      log("info", "chat-api", `POST /api/chat — 200 OK (${((Date.now() - start) / 1000).toFixed(1)}s) — ${p.name}/${p.model}`);
-      const enc = new TextEncoder();
-      return new Response(new ReadableStream({
-        async start(ctrl) {
-          const reader = res.body!.getReader();
-          const dec = new TextDecoder();
-          let buf = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += dec.decode(value, { stream: true });
-            const lines = buf.split("\n"); buf = lines.pop() || "";
-            for (const line of lines) {
-              const d = line.replace(/^data: /, "").trim();
-              if (!d || d === "[DONE]") continue;
-              try { const t = JSON.parse(d).choices?.[0]?.delta?.content || ""; if (t) ctrl.enqueue(enc.encode(t)); } catch {}
-            }
-          }
-          ctrl.close();
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${p.key}`,
+          ...(p.headers || {}),
         },
-      }), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
-    } catch { continue; }
+        body: JSON.stringify({
+          model: p.model,
+          messages: [{ role: "system", content: baseSystem }, ...messages],
+          stream: true,
+        }),
+        signal: AbortSignal.timeout(40000),
+      });
+      if (!res.ok || !res.body) continue;
+
+      const enc = new TextEncoder();
+      return new Response(
+        new ReadableStream({
+          async start(ctrl) {
+            const reader = res.body!.getReader();
+            const dec = new TextDecoder();
+            let buf = "";
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += dec.decode(value, { stream: true });
+                const lines = buf.split("\n");
+                buf = lines.pop() || "";
+                for (const line of lines) {
+                  const d = line.replace(/^data: /, "").trim();
+                  if (!d || d === "[DONE]") continue;
+                  try {
+                    const t = JSON.parse(d).choices?.[0]?.delta?.content || "";
+                    if (t) ctrl.enqueue(enc.encode(t));
+                  } catch {}
+                }
+              }
+            } catch (err) {
+              log("warn", "chat-api", `stream pipe: ${String(err)}`);
+              try {
+                ctrl.enqueue(enc.encode("\n\n[Javob uzildi — qayta urinib ko'ring]"));
+              } catch {}
+            } finally {
+              try {
+                ctrl.close();
+              } catch {}
+            }
+          },
+        }),
+        { headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      );
+    } catch {
+      continue;
+    }
   }
-  log("error", "chat-api", "POST /api/chat — 500 — barcha provayderlar ishlamadi");
-  return NextResponse.json({ error: "Barcha provayderlar ishlamadi" }, { status: 500 });
+
+  return textStream("Provayder ishlamadi.\n\n" + buildInventoryReport());
 }

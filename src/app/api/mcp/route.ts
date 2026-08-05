@@ -10,31 +10,79 @@ function hermesHeaders() {
   return headers;
 }
 
-// GET /api/mcp — list available tools (built-in + external Hermes if configured)
+function parseJsonEnv(name: string): unknown[] {
+  const raw = process.env[name];
+  if (!raw?.trim()) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+type ToolSource = "builtin" | "hermes" | "mcp_json";
+
 export async function GET() {
-  const tools = BUILTIN_TOOLS.map((t) => ({ name: t.name, description: t.description, source: "builtin" }));
+  const tools: { name: string; description: string; source: ToolSource }[] = BUILTIN_TOOLS.map(
+    (t) => ({
+      name: t.name,
+      description: t.description,
+      source: "builtin",
+    })
+  );
 
   if (HERMES_URL) {
     try {
-      const res = await fetch(`${HERMES_URL}/tools`, { headers: hermesHeaders(), signal: AbortSignal.timeout(3000) });
+      const res = await fetch(`${HERMES_URL}/tools`, {
+        headers: hermesHeaders(),
+        signal: AbortSignal.timeout(3000),
+      });
       if (res.ok) {
         const data = await res.json();
         const external = (data.tools || data || []).map((t: { name: string; description?: string }) => ({
           name: t.name,
           description: t.description || "",
-          source: "hermes",
+          source: "hermes" as const,
         }));
         tools.push(...external);
       }
     } catch {
-      // external gateway unreachable — built-in tools still work
+      // ignore
     }
   }
 
-  return NextResponse.json({ tools, configured: true });
+  const mcpTools = parseJsonEnv("MCP_TOOLS_JSON");
+  for (const t of mcpTools as { name?: string; description?: string }[]) {
+    if (t?.name) {
+      tools.push({
+        name: t.name,
+        description: t.description || "MCP_TOOLS_JSON",
+        source: "mcp_json",
+      });
+    }
+  }
+
+  const mcpServers = parseJsonEnv("MCP_SERVERS_JSON");
+
+  return NextResponse.json({
+    configured: true,
+    tools,
+    tool_count: tools.length,
+    mcp: {
+      hermes_url: Boolean(HERMES_URL),
+      mcp_tools_json_count: mcpTools.length,
+      mcp_servers_json_count: mcpServers.length,
+      servers: (mcpServers as { name?: string; url?: string }[]).map((s) => ({
+        name: s.name || "server",
+        url: s.url ? String(s.url).slice(0, 60) : null,
+      })),
+    },
+    telegram_tool: tools.some((t) => t.name === "telegram_send"),
+    note: "Telegram = telegram_send / telegram_get_me. MCP = builtin + HERMES_URL + MCP_*_JSON",
+  });
 }
 
-// POST /api/mcp — run a tool  { tool, args }
 export async function POST(req: NextRequest) {
   const { tool, args } = await req.json();
 

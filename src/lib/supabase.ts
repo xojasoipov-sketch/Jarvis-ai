@@ -1,14 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
+import { ENV } from "@/lib/env";
 
-const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "";
+const rawUrl = ENV.supabaseUrl();
+const KEY = ENV.supabaseKey();
 
 function isValidUrl(u: string): boolean {
-  try { return /^https?:\/\/.+/.test(new URL(u).href); } catch { return false; }
+  try {
+    return /^https?:\/\/.+/.test(new URL(u).href);
+  } catch {
+    return false;
+  }
 }
 
 const validUrl = isValidUrl(rawUrl) ? rawUrl : "";

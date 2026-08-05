@@ -20,103 +20,116 @@ type NavGroup = {
 };
 
 const mainNav: NavGroup[] = [
-  { label: "Dashboard",      icon: LayoutDashboard, href: "/" },
+  { label: "Asosiy (Pari)", icon: Sparkles, href: "/pari" },
   {
-    label: "AI Brain",       icon: Brain,           href: "/chat",
+    label: "AI Brain",
+    icon: Brain,
+    href: "/chat",
     items: [
-      { label: "Chat",       href: "/chat",         icon: MessageSquare },
-      { label: "Tarix",      href: "/history",      icon: History },
-      { label: "Pari",       href: "/pari",         icon: Sparkles },
+      { label: "Kapalak miya", href: "/pari", icon: Sparkles },
+      { label: "Chat", href: "/chat", icon: MessageSquare },
+      { label: "Tarix", href: "/history", icon: History },
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     ],
   },
   {
-    label: "Business",       icon: Briefcase,       href: "/services",
+    label: "Business",
+    icon: Briefcase,
+    href: "/services",
     items: [
-      { label: "Xizmatlar",  href: "/services",     icon: Briefcase },
-      { label: "Buyurtmalar",href: "/orders",       icon: ShoppingCart },
-      { label: "Mijozlar",   href: "/clients",      icon: Users },
+      { label: "Xizmatlar", href: "/services", icon: Briefcase },
+      { label: "Buyurtmalar", href: "/orders", icon: ShoppingCart },
+      { label: "Mijozlar", href: "/clients", icon: Users },
     ],
   },
   {
-    label: "AI Employees",   icon: Bot,             href: "/agents",
+    label: "AI Employees",
+    icon: Bot,
+    href: "/agents",
     items: [
-      { label: "Agentlar",   href: "/agents",       icon: Bot },
-      { label: "Vazifalar",  href: "/tasks",        icon: CheckSquare },
-      { label: "Loyihalar",  href: "/projects",     icon: FolderKanban },
+      { label: "Agentlar", href: "/agents", icon: Bot },
+      { label: "Vazifalar", href: "/tasks", icon: CheckSquare },
+      { label: "Loyihalar", href: "/projects", icon: FolderKanban },
     ],
   },
   {
-    label: "Content Factory",icon: Tv2,             href: "/smm",
+    label: "Content Factory",
+    icon: Tv2,
+    href: "/smm",
     items: [
-      { label: "SMM",        href: "/smm",          icon: Radio },
-      { label: "Biznes",     href: "/business",     icon: Briefcase },
+      { label: "SMM", href: "/smm", icon: Radio },
+      { label: "Biznes", href: "/business", icon: Briefcase },
     ],
   },
-  { label: "Media Studio",   icon: Clapperboard,   href: "/media" },
+  { label: "Media Studio", icon: Clapperboard, href: "/media" },
   {
-    label: "Automation",     icon: Zap,             href: "/automation",
+    label: "Automation",
+    icon: Zap,
+    href: "/automation",
     items: [
-      { label: "Workflows",  href: "/automation",   icon: Zap },
-      { label: "Calendar",   href: "/calendar",     icon: Calendar },
-      { label: "Fayllar",    href: "/files",        icon: FolderOpen },
+      { label: "Workflows", href: "/automation", icon: Zap },
+      { label: "Calendar", href: "/calendar", icon: Calendar },
+      { label: "Fayllar", href: "/files", icon: FolderOpen },
     ],
   },
-  { label: "Knowledge Hub",  icon: BookOpen,        href: "/knowledge" },
-  { label: "Analytics",      icon: BarChart3,       href: "/analytics" },
-  { label: "Finance",        icon: Wallet,          href: "/billing" },
-  { label: "Marketplace",    icon: Store,           href: "/marketplace" },
+  { label: "Knowledge / Obsidian", icon: BookOpen, href: "/knowledge" },
+  { label: "Analytics", icon: BarChart3, href: "/analytics" },
+  { label: "Finance", icon: Wallet, href: "/billing" },
+  { label: "Marketplace", icon: Store, href: "/marketplace" },
   {
-    label: "Settings",       icon: Settings,        href: "/settings",
+    label: "Settings",
+    icon: Settings,
+    href: "/settings",
     items: [
-      { label: "Sozlamalar", href: "/settings",     icon: Settings },
-      { label: "Xavfsizlik", href: "/security",     icon: ShieldCheck },
-      { label: "Billing",    href: "/billing",      icon: CreditCard },
-      { label: "Loglar",     href: "/logs",         icon: ScrollText },
-      { label: "Dev Tools",  href: "/devtools",     icon: Wrench },
-      { label: "Code",       href: "/code",         icon: Code2 },
-      { label: "Databases",  href: "/databases",    icon: Database },
-      { label: "Connectors", href: "/apis",         icon: Plug },
+      { label: "Sozlamalar", href: "/settings", icon: Settings },
+      { label: "Xavfsizlik", href: "/security", icon: ShieldCheck },
+      { label: "Billing", href: "/billing", icon: CreditCard },
+      { label: "Loglar", href: "/logs", icon: ScrollText },
+      { label: "Dev Tools", href: "/devtools", icon: Wrench },
+      { label: "Code", href: "/code", icon: Code2 },
+      { label: "Databases", href: "/databases", icon: Database },
+      { label: "Connectors", href: "/apis", icon: Plug },
     ],
   },
 ];
 
 function NavGroupItem({ group, onClose }: { group: NavGroup; onClose?: () => void }) {
   const path = usePathname();
-  const isTop = group.href === "/" ? path === "/" : path.startsWith(group.href);
-  const hasActive = group.items?.some(i => path === i.href);
+  const isTop = path === group.href || path.startsWith(group.href + "/");
+  const hasActive = group.items?.some((i) => path === i.href);
   const [open, setOpen] = useState(isTop || Boolean(hasActive));
   const Icon = group.icon;
 
   if (!group.items) {
     return (
-      <Link href={group.href} onClick={onClose}
+      <Link
+        href={group.href}
+        onClick={onClose}
         className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${
           isTop ? "bg-gray-900 text-white font-medium" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
         }`}
       >
         <Icon size={15} strokeWidth={1.75} className="flex-shrink-0" />
         <span className="flex-1">{group.label}</span>
-        {group.badge && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded-full font-medium">
-            {group.badge}
-          </span>
-        )}
       </Link>
     );
   }
 
   return (
     <div>
-      <button onClick={() => setOpen(!open)}
+      <button
+        onClick={() => setOpen(!open)}
         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${
           isTop || hasActive ? "text-gray-900 font-semibold" : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
         }`}
       >
         <Icon size={15} strokeWidth={1.75} className="flex-shrink-0" />
         <span className="flex-1 text-left">{group.label}</span>
-        {open
-          ? <ChevronDown size={12} strokeWidth={2} className="text-gray-400 flex-shrink-0" />
-          : <ChevronRight size={12} strokeWidth={2} className="text-gray-400 flex-shrink-0" />}
+        {open ? (
+          <ChevronDown size={12} strokeWidth={2} className="text-gray-400 flex-shrink-0" />
+        ) : (
+          <ChevronRight size={12} strokeWidth={2} className="text-gray-400 flex-shrink-0" />
+        )}
       </button>
       {open && (
         <div className="ml-3.5 mt-0.5 mb-1 pl-3 border-l border-gray-100 space-y-0.5">
@@ -124,7 +137,10 @@ function NavGroupItem({ group, onClose }: { group: NavGroup; onClose?: () => voi
             const active = path === item.href;
             const IIcon = item.icon;
             return (
-              <Link key={item.href} href={item.href} onClick={onClose}
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
                 className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-all ${
                   active ? "bg-gray-900 text-white font-medium" : "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
                 }`}
@@ -157,17 +173,16 @@ function LogoutButton() {
 function SidebarContent({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gray-900 flex items-center justify-center flex-shrink-0">
-            <Brain size={14} strokeWidth={2} className="text-white" />
+        <Link href="/pari" className="flex items-center gap-2.5" onClick={onClose}>
+          <div className="w-7 h-7 rounded-lg bg-violet-700 flex items-center justify-center flex-shrink-0">
+            <Sparkles size={14} strokeWidth={2} className="text-white" />
           </div>
           <div>
             <p className="text-sm font-bold text-gray-900 leading-none">Pari AI</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">Business OS</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Kapalak miya</p>
           </div>
-        </div>
+        </Link>
         <div className="flex items-center gap-0.5">
           <NotificationBell />
           <ThemeToggle />
@@ -180,16 +195,18 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        {mainNav.map((g) => <NavGroupItem key={g.label} group={g} onClose={onClose} />)}
+        {mainNav.map((g) => (
+          <NavGroupItem key={g.label} group={g} onClose={onClose} />
+        ))}
       </nav>
 
-      {/* Footer */}
       <div className="px-4 py-2.5 border-t border-gray-100">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">S</div>
-          <p className="text-xs text-gray-500 flex-1">Sadi · AI Business OS</p>
+          <div className="w-6 h-6 rounded-full bg-violet-700 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+            P
+          </div>
+          <p className="text-xs text-gray-500 flex-1">Pari · Second Brain</p>
         </div>
       </div>
     </div>
