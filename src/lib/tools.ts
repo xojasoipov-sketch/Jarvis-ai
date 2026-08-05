@@ -518,6 +518,93 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       };
     },
   },
+  // ── Computer control tools ───────────────────────────────────────────────
+  {
+    name: "computer_list",
+    description: "Ulangan kompyuterlar ro'yxati (pari-bridge.py orqali ulangan PClar)",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const res = await fetch(`${base}/api/computer?action=devices`);
+      return res.json();
+    },
+  },
+  {
+    name: "computer_screenshot",
+    description: "Kompyuter ekranini ko'r (screenshot olish). device_id bo'lmasa birinchi onlayn kompyuter ishlatiladi.",
+    parameters: {
+      type: "object",
+      properties: {
+        device_id: { type: "string", description: "Kompyuter ID (computer_list dan)" },
+      },
+    },
+    run: async (args) => {
+      const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      // If no device_id, get first online computer
+      let deviceId = String(args.device_id || "");
+      if (!deviceId) {
+        const list = await fetch(`${base}/api/computer?action=devices`).then(r => r.json()) as { computers: Array<{ id: string; status: string }> };
+        const online = list.computers?.find((c) => c.status === "online");
+        if (!online) return { error: "Hech qanday kompyuter ulanmagan" };
+        deviceId = online.id;
+      }
+      // Request fresh screenshot via command
+      const res = await fetch(`${base}/api/computer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId, action: "screenshot", payload: {} }),
+      });
+      const data = await res.json() as { ok: boolean; result?: { resolution?: string } };
+      if (data.ok) {
+        // Get the stored screenshot
+        const ss = await fetch(`${base}/api/computer?action=screenshot&device_id=${deviceId}`).then(r => r.json()) as { b64?: string; resolution?: string };
+        return { ok: true, resolution: ss.resolution, screenshot_url: `${base}/api/computer?action=screenshot&device_id=${deviceId}`, note: "Screenshot bazega saqlandi" };
+      }
+      return data;
+    },
+  },
+  {
+    name: "computer_command",
+    description: `Kompyuterni boshqar. action turlari:
+- screenshot: ekran surati
+- shell: buyruq ishlatish (command: "dir" / "ls" / "notepad")
+- open: dastur/URL ochish (app: "chrome" / "notepad" / "https://...")
+- type: matn yozish (text: "Hello world")
+- hotkey: tugmalar kombinatsiyasi (keys: ["ctrl", "c"])
+- click: sichqoncha bosish (x, y koordinatlar)
+- volume: ovoz balandligi (level: 0-100)
+- notify: bildirishnoma (title, message)
+- sysinfo: CPU/RAM/disk ma'lumoti
+- clipboard_get: bufer mazmuni
+- clipboard_set: buferni o'rnatish (text: "...")
+- lock: ekranni qulflash`,
+    parameters: {
+      type: "object",
+      properties: {
+        device_id: { type: "string", description: "Kompyuter ID" },
+        action: { type: "string", description: "Buyruq turi" },
+        payload: { type: "object", description: "Buyruq parametrlari" },
+      },
+      required: ["action"],
+    },
+    run: async (args) => {
+      const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      let deviceId = String(args.device_id || "");
+      if (!deviceId) {
+        const list = await fetch(`${base}/api/computer?action=devices`).then(r => r.json()) as { computers: Array<{ id: string; status: string }> };
+        const online = (list.computers || []).find((c) => c.status === "online");
+        if (!online) return { error: "Hech qanday kompyuter ulanmagan. pari-bridge.py ni ishga tushiring." };
+        deviceId = online.id;
+      }
+      const res = await fetch(`${base}/api/computer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId, action: args.action, payload: args.payload || {} }),
+      });
+      return res.json();
+    },
+  },
+
   // ── Phone / Device control tools ─────────────────────────────────────────
   {
     name: "phone_list",

@@ -73,7 +73,7 @@ const mainNav: NavGroup[] = [
     ],
   },
   { label: "Knowledge / Obsidian", icon: BookOpen, href: "/knowledge" },
-  { label: "Phones / Devices", icon: Smartphone, href: "/phones" },
+  { label: "Qurilmalar (PC + Tel)", icon: Smartphone, href: "/devices" },
   { label: "Analytics", icon: BarChart3, href: "/analytics" },
   { label: "Finance", icon: Wallet, href: "/billing" },
   { label: "Marketplace", icon: Store, href: "/marketplace" },
