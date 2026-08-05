@@ -3,13 +3,14 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Brain, Search, RefreshCw, FileText, FolderOpen, ChevronRight,
   Plus, Send, X, AlertCircle, Zap, BookOpen, Clock, Trash2, Sparkles, Tag,
+  PenLine, Settings, CheckCircle2, Copy, Check,
 } from "lucide-react";
 
 type VaultFile = { path: string; stat?: { mtime: number; ctime: number; size: number } };
 type SearchResult = { filename: string; score: number; context?: string };
 type MemoryItem = { id?: string; title: string; content: string; tags?: string[]; created_at?: string; createdAt?: number };
 
-type Tab = "vault" | "search" | "memory" | "hermes";
+type Tab = "vault" | "search" | "memory" | "hermes" | "notes" | "setup";
 
 export default function KnowledgePage() {
   const [tab, setTab] = useState<Tab>("vault");
@@ -139,11 +140,48 @@ export default function KnowledgePage() {
     setToolRunning(false);
   }
 
+  // Note creation state
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteContent, setNoteContent] = useState("");
+  const [noteTags, setNoteTags] = useState("");
+  const [noteFolder, setNoteFolder] = useState("vault/notes");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteSaved, setNoteSaved] = useState<string | null>(null);
+  const [copiedCmd, setCopiedCmd] = useState("");
+
+  async function saveNote() {
+    if (!noteTitle.trim() || !noteContent.trim()) return;
+    setNoteSaving(true);
+    setNoteSaved(null);
+    try {
+      const tags = noteTags.split(",").map((t) => t.trim()).filter(Boolean);
+      const res = await fetch("/api/obsidian/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: noteTitle, content: noteContent, tags, folder: noteFolder }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setNoteSaved(d.path);
+        setNoteTitle(""); setNoteContent(""); setNoteTags("");
+        loadVault();
+      }
+    } finally { setNoteSaving(false); }
+  }
+
+  function copyCmd(cmd: string) {
+    navigator.clipboard.writeText(cmd);
+    setCopiedCmd(cmd);
+    setTimeout(() => setCopiedCmd(""), 2000);
+  }
+
   const tabs: { id: Tab; label: string; icon: typeof Brain }[] = [
     { id: "vault", label: "Vault", icon: FolderOpen },
+    { id: "notes", label: "Yangi note", icon: PenLine },
     { id: "search", label: "Qidiruv", icon: Search },
     { id: "memory", label: "Xotira", icon: Brain },
     { id: "hermes", label: "Hermes", icon: Zap },
+    { id: "setup", label: "MCP Setup", icon: Settings },
   ];
 
   return (
@@ -390,6 +428,227 @@ export default function KnowledgePage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* NOTES TAB — create a note */}
+      {tab === "notes" && (
+        <div className="max-w-2xl space-y-4">
+          <p className="text-sm text-gray-500">Note yarating — GitHub vault ga saqlanadi (frontmatter bilan).</p>
+          <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Sarlavha *</label>
+                <input
+                  value={noteTitle}
+                  onChange={(e) => setNoteTitle(e.target.value)}
+                  placeholder="Note sarlavhasi"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Papka</label>
+                <input
+                  value={noteFolder}
+                  onChange={(e) => setNoteFolder(e.target.value)}
+                  placeholder="vault/notes"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Teglar (vergul bilan)</label>
+              <input
+                value={noteTags}
+                onChange={(e) => setNoteTags(e.target.value)}
+                placeholder="ai, biznes, g'oyalar"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Mazmun * (Markdown)</label>
+              <textarea
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                placeholder="Note mazmunini kiriting..."
+                rows={8}
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900 resize-none font-mono"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={saveNote}
+                disabled={noteSaving || !noteTitle.trim() || !noteContent.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              >
+                {noteSaving ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                Saqlash
+              </button>
+              {noteSaved && (
+                <p className="flex items-center gap-1.5 text-xs text-green-600">
+                  <CheckCircle2 size={13} /> Saqlandi: <code className="font-mono">{noteSaved}</code>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* AI yordami */}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-2">
+            <p className="text-xs font-semibold text-gray-700">AI orqali note yaratish</p>
+            <p className="text-xs text-gray-500">Chat'da Pari'ga ayting:</p>
+            <div className="space-y-1.5">
+              {[
+                "Obsidian'ga 'Pari AI arxitekturasi' haqida note yoz",
+                "AI biznes g'oyalarini vault/ideas/ papkasiga saqlang",
+                "Bugungi uchrashuvning konspektini note qilib qo'y",
+              ].map((ex) => (
+                <code key={ex} className="block text-xs bg-white border border-gray-200 px-3 py-2 rounded-lg text-gray-700">&quot;{ex}&quot;</code>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SETUP TAB — Obsidian MCP qo'llanmasi */}
+      {tab === "setup" && (
+        <div className="max-w-3xl space-y-5">
+          <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                <Brain size={16} className="text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Obsidian MCP — Qo&apos;llanma</p>
+                <p className="text-xs text-gray-400">Claude Code → Obsidian to&apos;g&apos;ridan ulanish</p>
+              </div>
+            </div>
+
+            {/* Step 1 */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-800 flex items-center gap-2">
+                <span className="w-5 h-5 bg-gray-900 text-white rounded-full flex items-center justify-center text-[10px]">1</span>
+                Obsidian&apos;ga Local REST API plugin o&apos;rnating
+              </p>
+              <ol className="text-xs text-gray-600 space-y-1 ml-7 list-decimal">
+                <li>Obsidian → Settings → Community Plugins → Browse</li>
+                <li><strong>&quot;Local REST API&quot;</strong> qidiring va o&apos;rnating</li>
+                <li>Plugin&apos;ni yoqing, API key oling</li>
+                <li>Default port: <code className="bg-gray-100 px-1 rounded">27123</code></li>
+              </ol>
+            </div>
+
+            {/* Step 2 */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-800 flex items-center gap-2">
+                <span className="w-5 h-5 bg-gray-900 text-white rounded-full flex items-center justify-center text-[10px]">2</span>
+                .env.local fayliga qo&apos;shing
+              </p>
+              {[
+                "OBSIDIAN_API_KEY=your_key_from_plugin",
+                "OBSIDIAN_HOST=127.0.0.1",
+                "OBSIDIAN_PORT=27123",
+                "OBSIDIAN_URL=http://127.0.0.1:27123",
+              ].map((line) => (
+                <div key={line} className="flex items-center gap-2 bg-gray-900 text-green-400 font-mono text-xs px-3 py-1.5 rounded-lg">
+                  <span className="flex-1">{line}</span>
+                  <button
+                    onClick={() => copyCmd(line)}
+                    className="p-1 text-gray-500 hover:text-green-400 transition-colors flex-shrink-0"
+                  >
+                    {copiedCmd === line ? <Check size={12} /> : <Copy size={12} />}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Step 3 — MCP config */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-800 flex items-center gap-2">
+                <span className="w-5 h-5 bg-gray-900 text-white rounded-full flex items-center justify-center text-[10px]">3</span>
+                Claude Code MCP — avtomatik ulangan
+              </p>
+              <p className="text-xs text-gray-500">
+                <code className="bg-gray-100 px-1 rounded">.claude/settings.json</code> ga Obsidian MCP qo&apos;shilgan.
+                Claude Code boshlananda <strong>mcp-obsidian</strong> serveri avtomatik ishga tushadi.
+              </p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <pre className="text-xs text-gray-700">{`{
+  "obsidian": {
+    "command": "npx",
+    "args": ["-y", "mcp-obsidian"],
+    "env": {
+      "OBSIDIAN_API_KEY": "\${OBSIDIAN_API_KEY}",
+      "OBSIDIAN_HOST": "\${OBSIDIAN_HOST}",
+      "OBSIDIAN_PORT": "\${OBSIDIAN_PORT}"
+    }
+  }
+}`}</pre>
+              </div>
+            </div>
+
+            {/* Step 4 — Railway */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-800 flex items-center gap-2">
+                <span className="w-5 h-5 bg-gray-900 text-white rounded-full flex items-center justify-center text-[10px]">4</span>
+                Railway (cloud) uchun — GitHub vault
+              </p>
+              <p className="text-xs text-gray-600">
+                Railway'da local Obsidian bo&apos;lmaydi. Buning o&apos;rniga <strong>GitHub vault</strong> ishlatiladi —
+                <code className="bg-gray-100 px-1 rounded mx-1">GITHUB_TOKEN</code> Railway'da o&apos;rnatilgan bo&apos;lsa,
+                vault automatic ishlaydi. Obsidian Sync bilan sinxronlash uchun vault repo'ni Obsidian bilan ulang.
+              </p>
+            </div>
+
+            {/* Step 5 — Obsidian Sync */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-800 flex items-center gap-2">
+                <span className="w-5 h-5 bg-gray-900 text-white rounded-full flex items-center justify-center text-[10px]">5</span>
+                Obsidian + GitHub Vault sinxronlash (ixtiyoriy)
+              </p>
+              <p className="text-xs text-gray-600 ml-7">
+                Obsidian'da <strong>Obsidian Git</strong> plugin o&apos;rnating → vault repo&apos;ni Jarvis-ai
+                repo&apos;ning <code className="bg-gray-100 px-1 rounded">vault/</code> papkasiga ulang →
+                avtomatik commit + push sozlang. Shunda Pari AI va Obsidian bir xil vault'ni ko&apos;radi.
+              </p>
+              <div className="ml-7 bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs text-gray-600 space-y-1">
+                <p className="font-mono">vault/ papkasi = GitHub repo uchun</p>
+                <p className="font-mono">Obsidian vault path = xojasoipov-sketch/Jarvis-ai</p>
+                <p className="font-mono">Branch = main</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Test */}
+          <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-3">
+            <p className="text-xs font-semibold text-gray-800">Ulanishni tekshirish</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => loadVault("/")}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                <RefreshCw size={11} /> Vault test
+              </button>
+              <span className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${
+                configured.obsidian
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : "border-gray-200 bg-gray-50 text-gray-500"
+              }`}>
+                {configured.obsidian ? <CheckCircle2 size={11} /> : <AlertCircle size={11} />}
+                {configured.obsidian ? "Vault ulangan" : "Vault ulanmagan"}
+              </span>
+            </div>
+          </div>
+
+          {/* rileyjarvis arxitektura — ta'lim */}
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-5">
+            <p className="text-xs font-semibold text-amber-800 mb-2">rileyjarvis arxitekturasi (tahlil)</p>
+            <p className="text-xs text-amber-700">
+              rileyjarvis repo — Electron desktop AI: OpenAI Realtime API orqali speech-to-speech, tool-calling loop,
+              Artifact panel (markdown, mermaid, image, thumbnails). Local <code className="bg-amber-100 px-1 rounded">data/ricky-db.json</code>
+              xotira. Pari AI uchun foydali pattern: <strong>artifact panel + realtime voice</strong>.
+              Pari AI bu pattern'ni server-side qildi (Railway + Supabase + ElevenLabs).
+            </p>
+          </div>
         </div>
       )}
 

@@ -289,6 +289,117 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       return mergePullRequest(Number(args.pr_number));
     },
   },
+  // ── Obsidian / Vault tools ──────────────────────────────────────────────────
+  {
+    name: "obsidian_list",
+    description:
+      "Obsidian vault da notalar ro'yxati. Folder bo'yicha filter qilish mumkin.",
+    parameters: {
+      type: "object",
+      properties: {
+        folder: { type: "string", description: "Papka yo'li (ixtiyoriy)" },
+      },
+    },
+    run: async (args) => {
+      const folder = String(args.folder || "");
+      if (!vaultConfigured) throw new Error("Vault sozlanmagan");
+      const entries = await listVault(folder);
+      return entries.map((e) => ({ path: e.path, type: e.type }));
+    },
+  },
+  {
+    name: "obsidian_read",
+    description:
+      "Obsidian vault dan fayl mazmunini o'qish. Frontmatter ham qaytaradi.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Note yo'li (masalan: vault/notes/idea.md)" },
+      },
+      required: ["path"],
+    },
+    run: async (args) => {
+      if (!vaultConfigured) throw new Error("Vault sozlanmagan");
+      const content = await readVaultFile(String(args.path));
+      if (!content) throw new Error(`Topilmadi: ${args.path}`);
+      return { path: args.path, content: content.slice(0, 8000) };
+    },
+  },
+  {
+    name: "obsidian_write",
+    description:
+      "Obsidian vault ga yangi note yozish yoki mavjudini yangilash. Frontmatter avtomatik qo'shiladi.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Note yo'li (masalan: vault/ideas/ai.md)" },
+        title: { type: "string", description: "Note sarlavhasi" },
+        content: { type: "string", description: "Note mazmuni (markdown)" },
+        tags: { type: "array", items: { type: "string" }, description: "Teglar" },
+      },
+      required: ["path", "content"],
+    },
+    run: async (args) => {
+      if (!vaultConfigured) throw new Error("Vault sozlanmagan");
+      const title = String(args.title || String(args.path).split("/").pop()?.replace(".md", "") || "Note");
+      const tags = Array.isArray(args.tags) ? args.tags.map(String) : [];
+      const meta = [
+        "---",
+        `title: ${title}`,
+        `date: ${new Date().toISOString().split("T")[0]}`,
+        tags.length ? `tags: [${tags.map((t) => `"${t}"`).join(", ")}]` : "",
+        "---",
+        "",
+      ]
+        .filter((l) => l !== "")
+        .join("\n");
+      const full = `${meta}\n${String(args.content)}`;
+      const ok = await writeVaultFile(String(args.path), full, `note: ${title}`);
+      if (!ok) throw new Error("Note yozilmadi");
+      return { ok: true, path: args.path, title, chars: full.length };
+    },
+  },
+  {
+    name: "obsidian_search",
+    description:
+      "Obsidian vault ichida matn qidirish. Natijada fayl yo'li va kontekst qaytadi.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Qidiruv so'rovi" },
+      },
+      required: ["query"],
+    },
+    run: async (args) => {
+      if (!vaultConfigured) throw new Error("Vault sozlanmagan");
+      const results = await searchVault(String(args.query));
+      return results.slice(0, 8).map((r) => ({
+        path: r.path,
+        excerpt: r.excerpt,
+      }));
+    },
+  },
+  {
+    name: "obsidian_append",
+    description:
+      "Mavjud Obsidian notega matn qo'shish (append). Yangi blok note oxiriga qo'shiladi.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Note yo'li" },
+        text: { type: "string", description: "Qo'shiladigan matn" },
+      },
+      required: ["path", "text"],
+    },
+    run: async (args) => {
+      if (!vaultConfigured) throw new Error("Vault sozlanmagan");
+      const existing = await readVaultFile(String(args.path));
+      const appended = (existing || "") + "\n\n" + String(args.text);
+      const ok = await writeVaultFile(String(args.path), appended, `append: ${args.path}`);
+      return { ok, path: args.path };
+    },
+  },
+  // ── ElevenLabs TTS tools ────────────────────────────────────────────────────
   {
     name: "tts_generate",
     description:
