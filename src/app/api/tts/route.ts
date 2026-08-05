@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY || "";
-const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM"; // Rachel
+const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
+const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5";
 
-async function elevenLabsTTS(text: string): Promise<ArrayBuffer | null> {
+async function elevenLabsTTS(
+  text: string,
+  voiceId?: string,
+  modelId?: string,
+  stability?: number,
+  similarity?: number,
+  style?: number,
+): Promise<ArrayBuffer | null> {
   if (!ELEVENLABS_KEY) return null;
   try {
+    const vid = voiceId || DEFAULT_VOICE_ID;
     const res = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${vid}/stream`,
       {
         method: "POST",
         headers: {
@@ -16,11 +25,16 @@ async function elevenLabsTTS(text: string): Promise<ArrayBuffer | null> {
           Accept: "audio/mpeg",
         },
         body: JSON.stringify({
-          text: text.slice(0, 500),
-          model_id: "eleven_turbo_v2_5",
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+          text: text.slice(0, 5000),
+          model_id: modelId || DEFAULT_MODEL_ID,
+          voice_settings: {
+            stability: stability ?? 0.5,
+            similarity_boost: similarity ?? 0.75,
+            style: style ?? 0,
+            use_speaker_boost: true,
+          },
         }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(15000),
       }
     );
     if (!res.ok) {
@@ -37,7 +51,6 @@ async function elevenLabsTTS(text: string): Promise<ArrayBuffer | null> {
 // StreamElements TTS — free, no API key, uses AWS Polly under the hood
 async function streamElementsTTS(text: string, lang: string): Promise<ArrayBuffer | null> {
   try {
-    // Pick a voice by language
     const voice = lang === "ru" ? "Maxim" : "Brian";
     const url = `https://api.streamelements.com/kappa/v2/speech?voice=${voice}&text=${encodeURIComponent(text.slice(0, 200))}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -54,7 +67,7 @@ async function googleTTS(text: string, lang: string): Promise<ArrayBuffer | null
     const url = new URL("https://translate.google.com/translate_tts");
     url.searchParams.set("ie", "UTF-8");
     url.searchParams.set("q", text.slice(0, 200));
-    url.searchParams.set("tl", lang === "uz" ? "tr" : lang); // uz not supported, use Turkish (closest)
+    url.searchParams.set("tl", lang === "uz" ? "tr" : lang);
     url.searchParams.set("client", "tw-ob");
     const res = await fetch(url.toString(), {
       headers: {
@@ -70,6 +83,7 @@ async function googleTTS(text: string, lang: string): Promise<ArrayBuffer | null
   }
 }
 
+// GET — simple TTS (backwards-compatible)
 export async function GET(req: NextRequest) {
   const text = (req.nextUrl.searchParams.get("text") || "").trim();
   const lang = req.nextUrl.searchParams.get("lang") || "uz";
@@ -78,29 +92,64 @@ export async function GET(req: NextRequest) {
   if (!text) {
     return NextResponse.json({
       elevenlabs: ELEVENLABS_KEY ? "✅ key set" : "❌ ELEVENLABS_API_KEY not set",
-      voice_id: VOICE_ID,
+      voice_id: DEFAULT_VOICE_ID,
+      model_id: DEFAULT_MODEL_ID,
       fallbacks: ["streamelements", "google-tts"],
     });
   }
 
-  // 1. ElevenLabs (premium, best quality)
   let buf = await elevenLabsTTS(text);
-
-  // 2. StreamElements (free, no key)
   if (!buf) buf = await streamElementsTTS(text, lang);
-
-  // 3. Google TTS unofficial
   if (!buf) buf = await googleTTS(text, lang);
 
   if (!buf) {
-    console.error("TTS: all providers failed. lang:", lang, "text length:", text.length);
-    return NextResponse.json({ error: "tts_failed", hint: "Set ELEVENLABS_API_KEY in Vercel env vars" }, { status: 502 });
+    return NextResponse.json(
+      { error: "tts_failed", hint: "Set ELEVENLABS_API_KEY in env vars" },
+      { status: 502 }
+    );
   }
 
   return new Response(buf, {
-    headers: {
-      "Content-Type": "audio/mpeg",
-      "Cache-Control": "public, max-age=3600",
-    },
+    headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600" },
   });
+}
+
+// POST — advanced TTS with voice/model selection
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const text = (body.text || "").trim();
+    if (!text) {
+      return NextResponse.json({ error: "text kerak" }, { status: 400 });
+    }
+
+    const voiceId = body.voice_id || DEFAULT_VOICE_ID;
+    const modelId = body.model_id || DEFAULT_MODEL_ID;
+    const stability = body.stability;
+    const similarity = body.similarity;
+    const style = body.style;
+    const lang = body.lang || "uz";
+
+    // 1. ElevenLabs with custom settings
+    let buf = await elevenLabsTTS(text, voiceId, modelId, stability, similarity, style);
+
+    // 2. StreamElements fallback (ignores voice/model settings)
+    if (!buf) buf = await streamElementsTTS(text, lang);
+
+    // 3. Google TTS last resort
+    if (!buf) buf = await googleTTS(text, lang);
+
+    if (!buf) {
+      return NextResponse.json(
+        { error: "tts_failed", hint: "Barcha TTS provayderlar xato berdi" },
+        { status: 502 }
+      );
+    }
+
+    return new Response(buf, {
+      headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600" },
+    });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }
