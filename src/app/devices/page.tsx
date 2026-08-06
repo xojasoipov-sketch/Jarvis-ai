@@ -23,7 +23,25 @@ interface ComputerDevice {
   id: string; name: string; os: string; username: string;
   status: string; last_seen?: string; resolution?: string;
 }
-type DeviceTab = "computers" | "phones";
+interface PairedDevice {
+  id: string; name: string; platform: string; os_info: string; status: string;
+  battery: number | null; storage_free: number | null; cpu_load: number | null; ram_used: number | null;
+  location: string | null; last_seen: string | null; paired_at: string; revoked: boolean;
+}
+type DeviceTab = "computers" | "phones" | "paired";
+
+const PAIRED_COMMANDS = [
+  { id: "device_status", label: "Qurilma holati", icon: Cpu, fields: [] },
+  { id: "battery_status", label: "Batareya", icon: Battery, fields: [] },
+  { id: "get_location", label: "Joylashuv", icon: MapPin, fields: [] },
+  { id: "take_screenshot", label: "Screenshot", icon: Monitor, fields: [] },
+  { id: "send_notification", label: "Bildirishnoma", icon: Bell, fields: ["title", "message"] },
+  { id: "vibrate", label: "Vibratsiya", icon: Smartphone, fields: ["duration"] },
+  { id: "open_camera", label: "Kamera ochish", icon: Camera, fields: [] },
+  { id: "get_files", label: "Fayllar ro'yxati", icon: Download, fields: ["path"] },
+  { id: "download_file", label: "Fayl yuklab olish", icon: Download, fields: ["url", "path"] },
+  { id: "terminal_command", label: "Terminal buyruq", icon: Terminal, fields: ["command"] },
+];
 
 const PHONE_COMMANDS = [
   // Aloqa
@@ -109,21 +127,86 @@ export default function DevicesPage() {
   const [qrPhone, setQrPhone] = useState<string | null>(null);
   const [newDeviceId] = useState(() => crypto.randomUUID());
 
+  // Paired devices (QR pairing system)
+  const [paired, setPaired] = useState<PairedDevice[]>([]);
+  const [selectedPaired, setSelectedPaired] = useState<string | null>(null);
+  const [pairedCmdType, setPairedCmdType] = useState(PAIRED_COMMANDS[0]);
+  const [pairing, setPairing] = useState<{ device_id: string; qr_url: string; deep_link: string; expires_at: string } | null>(null);
+  const [pairingStatus, setPairingStatus] = useState<"idle" | "waiting" | "done">("idle");
+
   const addLog = useCallback((msg: string) => {
     const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     setLog(p => [`[${ts}] ${msg}`, ...p].slice(0, 80));
   }, []);
 
   const fetchAll = useCallback(async () => {
-    const [pr, cr] = await Promise.allSettled([
+    const [pr, cr, dr] = await Promise.allSettled([
       fetch("/api/phones").then(r => r.json()) as Promise<{ devices: PhoneDevice[] }>,
       fetch("/api/computer?action=devices").then(r => r.json()) as Promise<{ computers: ComputerDevice[] }>,
+      fetch("/api/devices").then(r => r.json()) as Promise<{ devices: PairedDevice[] }>,
     ]);
     if (pr.status === "fulfilled") setPhones(pr.value.devices || []);
     if (cr.status === "fulfilled") setComputers(cr.value.computers || []);
+    if (dr.status === "fulfilled") setPaired(dr.value.devices || []);
   }, []);
 
   useEffect(() => { void fetchAll(); const t = setInterval(() => void fetchAll(), 5000); return () => clearInterval(t); }, [fetchAll]);
+
+  // "Add Device" — QR pairing boshlash
+  const startPairing = async () => {
+    const res = await fetch("/api/devices/pair/init", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) { addLog(`❌ Pairing xato: ${data.error || "noma'lum"}`); return; }
+    setPairing(data);
+    setPairingStatus("waiting");
+  };
+
+  // Pairing kutish paytida qurilma ro'yxatida paydo bo'lishini tekshirish
+  useEffect(() => {
+    if (pairingStatus !== "waiting" || !pairing) return;
+    const t = setInterval(async () => {
+      if (new Date(pairing.expires_at).getTime() < Date.now()) {
+        setPairingStatus("idle"); setPairing(null); addLog("⏱ Pairing muddati tugadi");
+        clearInterval(t); return;
+      }
+      const r = await fetch("/api/devices").then(res => res.json()) as { devices: PairedDevice[] };
+      const found = (r.devices || []).find(d => d.id === pairing.device_id);
+      if (found) {
+        setPaired(r.devices || []);
+        setPairingStatus("done");
+        addLog(`✅ Qurilma ulandi: ${found.name}`);
+        clearInterval(t);
+      }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [pairingStatus, pairing, addLog]);
+
+  const sendPairedCmd = async () => {
+    if (!selectedPaired) return;
+    setSending(true); setResult(null);
+    try {
+      const res = await fetch("/api/devices/command", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: selectedPaired, action: pairedCmdType.id, payload: fields }),
+      });
+      const data = await res.json();
+      setResult(data.ok ? "✅ Navbatga qo'yildi — qurilma keyingi pollingda oladi" : `❌ ${data.error}`);
+      addLog(`${data.ok ? "✅" : "❌"} ${pairedCmdType.label} → ${paired.find(p => p.id === selectedPaired)?.name}`);
+    } catch (e) {
+      addLog(`❌ ${e instanceof Error ? e.message : String(e)}`);
+    } finally { setSending(false); }
+  };
+
+  const revokePaired = async (id: string) => {
+    await fetch("/api/devices/revoke", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device_id: id }) });
+    addLog("🔒 Qurilma sessiyasi bekor qilindi"); await fetchAll();
+  };
+
+  const removePaired = async (id: string) => {
+    await fetch(`/api/devices?id=${id}`, { method: "DELETE" });
+    addLog("🗑 Qurilma o'chirildi"); await fetchAll();
+    if (selectedPaired === id) setSelectedPaired(null);
+  };
 
   // Send computer command
   const sendComputerCmd = async () => {
@@ -204,8 +287,10 @@ export default function DevicesPage() {
 
   const selectedPCObj = computers.find(c => c.id === selectedPC);
   const selectedPhoneObj = phones.find(p => p.id === selectedPhone);
+  const selectedPairedObj = paired.find(p => p.id === selectedPaired);
   const activeComputer = tab === "computers" && selectedPC;
   const activePhone = tab === "phones" && selectedPhone;
+  const activePaired = tab === "paired" && selectedPaired;
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#0a0a0b", color: "#e4e4e7", fontFamily: "system-ui, sans-serif", overflow: "hidden" }}>
@@ -214,26 +299,27 @@ export default function DevicesPage() {
       <div style={{ width: 240, borderRight: "1px solid #1f1f23", display: "flex", flexDirection: "column", flexShrink: 0 }}>
         {/* Tab switcher */}
         <div style={{ display: "flex", borderBottom: "1px solid #1f1f23" }}>
-          {(["computers", "phones"] as const).map(t => (
+          {(["computers", "phones", "paired"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               flex: 1, padding: "12px 0", fontSize: 11, fontWeight: 600, cursor: "pointer",
               background: "none", border: "none", borderBottom: `2px solid ${tab === t ? "#ff6a1a" : "transparent"}`,
               color: tab === t ? "#ff6a1a" : "#52525b", letterSpacing: "0.03em",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
             }}>
-              {t === "computers" ? <Monitor size={12} /> : <Smartphone size={12} />}
-              {t === "computers" ? "PC / Mac" : "Telefon"}
+              {t === "computers" ? <Monitor size={12} /> : t === "phones" ? <Smartphone size={12} /> : <QrCode size={12} />}
+              {t === "computers" ? "PC / Mac" : t === "phones" ? "Telefon" : "QR Pairing"}
             </button>
           ))}
         </div>
 
         <div style={{ padding: "10px 12px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 10, color: "#52525b", fontWeight: 600, letterSpacing: "0.05em" }}>
-            {tab === "computers" ? computers.length : phones.length} ta qurilma
+            {tab === "computers" ? computers.length : tab === "phones" ? phones.length : paired.length} ta qurilma
           </span>
           <div style={{ display: "flex", gap: 4 }}>
             <Btn onClick={fetchAll}><RefreshCw size={11} /></Btn>
             {tab === "phones" && <Btn onClick={() => showAdd ? setShowAdd(false) : openAddForm()}><Plus size={11} /></Btn>}
+            {tab === "paired" && <Btn onClick={() => void startPairing()}><Plus size={11} /></Btn>}
           </div>
         </div>
 
@@ -284,7 +370,48 @@ export default function DevicesPage() {
               <div>bilan telefon ulang</div>
             </div>
           )}
+
+          {tab === "paired" && paired.map(dev => (
+            <DevRow
+              key={dev.id}
+              icon={dev.platform === "android" || dev.platform === "ios" ? <Smartphone size={16} /> : <Monitor size={16} />}
+              name={dev.name}
+              sub={`${dev.platform}${dev.battery != null ? ` · 🔋${dev.battery}%` : ""}`}
+              online={dev.status === "online"}
+              selected={selectedPaired === dev.id}
+              onClick={() => setSelectedPaired(dev.id)}
+              onRemove={() => void removePaired(dev.id)}
+            />
+          ))}
+          {tab === "paired" && paired.length === 0 && (
+            <div style={{ textAlign: "center", padding: 20, color: "#3f3f46", fontSize: 11 }}>
+              <QrCode size={24} style={{ margin: "0 auto 8px", color: "#27272a" }} />
+              <div>QR kod orqali yangi</div>
+              <div>qurilma ulang</div>
+              <button onClick={() => void startPairing()} style={{ ...linkBtn, marginTop: 8 }}>+ Add Device</button>
+            </div>
+          )}
         </div>
+
+        {/* Pairing QR panel */}
+        {tab === "paired" && pairing && (
+          <div style={{ borderTop: "1px solid #1f1f23", padding: 10, background: "#0d0d0f" }}>
+            <div style={{ fontSize: 10, color: "#ff6a1a", fontWeight: 700, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+              {pairingStatus === "done" ? "✅ Ulandi!" : "QR kodni skanerlang"}
+              <button onClick={() => { setPairing(null); setPairingStatus("idle"); }} style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer", fontSize: 12 }}>✕</button>
+            </div>
+            {pairingStatus !== "done" && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={pairing.qr_url} alt="Pairing QR" style={{ width: "100%", borderRadius: 4, display: "block" }} />
+                <div style={{ fontSize: 9, color: "#71717a", marginTop: 6, lineHeight: 1.5 }}>
+                  Jarvis Agent (Termux/Android) bilan skanerlang. Agent o&apos;rnatilmagan bo&apos;lsa,
+                  QR sizni o&apos;rnatish sahifasiga yo&apos;naltiradi. Token 10 daqiqada tugaydi.
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* QR Code overlay for phone setup */}
         {tab === "phones" && qrPhone && (() => {
@@ -368,7 +495,7 @@ export default function DevicesPage() {
           <HermesOrb showControls />
 
           {/* Selected device overlay */}
-          {(selectedPCObj || selectedPhoneObj) && (
+          {(selectedPCObj || selectedPhoneObj || selectedPairedObj) && (
             <div style={{ position: "absolute", top: 16, left: 16, background: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,106,26,0.25)", borderRadius: 6, padding: "8px 14px", fontFamily: "monospace", fontSize: 11, color: "rgba(255,180,80,0.9)", lineHeight: 1.8, pointerEvents: "none" }}>
               {selectedPCObj && (
                 <>
@@ -383,6 +510,15 @@ export default function DevicesPage() {
                   <div style={{ fontWeight: 700 }}>{selectedPhoneObj.name}</div>
                   <div>📱 {selectedPhoneObj.platform}</div>
                   {selectedPhoneObj.battery !== undefined && <div>🔋 {selectedPhoneObj.battery}%</div>}
+                </>
+              )}
+              {selectedPairedObj && (
+                <>
+                  <div style={{ fontWeight: 700 }}>{selectedPairedObj.name}</div>
+                  <div>📱 {selectedPairedObj.platform}{selectedPairedObj.os_info && ` · ${selectedPairedObj.os_info}`}</div>
+                  {selectedPairedObj.battery != null && <div>🔋 {selectedPairedObj.battery}%</div>}
+                  {selectedPairedObj.location && <div>📍 {selectedPairedObj.location}</div>}
+                  <div>{selectedPairedObj.revoked ? "🔒 Bekor qilingan" : selectedPairedObj.status === "online" ? "🟢 Online" : "⚪ Offline"}</div>
                 </>
               )}
             </div>
@@ -400,17 +536,23 @@ export default function DevicesPage() {
 
         {/* Command panel */}
         <div style={{ borderTop: "1px solid #1f1f23", padding: 16, background: "#0d0d0f" }}>
-          {!activeComputer && !activePhone ? (
+          {!activeComputer && !activePhone && !activePaired ? (
             <div style={{ textAlign: "center", color: "#52525b", fontSize: 13 }}>← Qurilma tanlang</div>
           ) : (
             <>
+              {activePaired && selectedPairedObj?.revoked && (
+                <div style={{ marginBottom: 10, padding: "6px 10px", borderRadius: 4, fontSize: 11, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171" }}>
+                  🔒 Bu qurilma sessiyasi bekor qilingan — buyruq yubora olmaysiz
+                </div>
+              )}
+
               {/* Command type pills */}
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
-                {(tab === "computers" ? COMPUTER_COMMANDS : PHONE_COMMANDS).map(ct => {
+                {(tab === "computers" ? COMPUTER_COMMANDS : tab === "phones" ? PHONE_COMMANDS : PAIRED_COMMANDS).map(ct => {
                   const Icon = ct.icon;
-                  const isActive = tab === "computers" ? cmdType.id === ct.id : phoneCmdType.id === ct.id;
+                  const isActive = tab === "computers" ? cmdType.id === ct.id : tab === "phones" ? phoneCmdType.id === ct.id : pairedCmdType.id === ct.id;
                   return (
-                    <button key={ct.id} onClick={() => { setFields({}); setResult(null); if (tab === "computers") setCmdType(ct); else setPhoneCmdType(ct); }} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 4, fontSize: 10, cursor: "pointer", fontWeight: 600, border: `1px solid ${isActive ? "rgba(255,106,26,0.5)" : "#27272a"}`, background: isActive ? "rgba(255,106,26,0.12)" : "rgba(255,255,255,0.03)", color: isActive ? "#ff8040" : "#52525b" }}>
+                    <button key={ct.id} onClick={() => { setFields({}); setResult(null); if (tab === "computers") setCmdType(ct); else if (tab === "phones") setPhoneCmdType(ct); else setPairedCmdType(ct); }} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 4, fontSize: 10, cursor: "pointer", fontWeight: 600, border: `1px solid ${isActive ? "rgba(255,106,26,0.5)" : "#27272a"}`, background: isActive ? "rgba(255,106,26,0.12)" : "rgba(255,255,255,0.03)", color: isActive ? "#ff8040" : "#52525b" }}>
                       <Icon size={10} />{ct.label}
                     </button>
                   );
@@ -420,23 +562,26 @@ export default function DevicesPage() {
               {/* Fields + send */}
               <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
                 <div style={{ flex: 1, display: "flex", gap: 6 }}>
-                  {(tab === "computers" ? cmdType.fields : phoneCmdType.fields).map(f => (
+                  {(tab === "computers" ? cmdType.fields : tab === "phones" ? phoneCmdType.fields : pairedCmdType.fields).map(f => (
                     <div key={f} style={{ flex: 1 }}>
                       <div style={{ fontSize: 10, color: "#52525b", marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>{f}</div>
                       <input style={inp} placeholder={f} value={fields[f] || ""} onChange={e => setFields(p => ({ ...p, [f]: e.target.value }))} />
                     </div>
                   ))}
-                  {(tab === "computers" ? cmdType.fields : phoneCmdType.fields).length === 0 && (
+                  {(tab === "computers" ? cmdType.fields : tab === "phones" ? phoneCmdType.fields : pairedCmdType.fields).length === 0 && (
                     <div style={{ color: "#3f3f46", fontSize: 12, display: "flex", alignItems: "center" }}>Parametr shart emas</div>
                   )}
                 </div>
                 <button
-                  onClick={() => void (tab === "computers" ? sendComputerCmd() : sendPhoneCmd())}
-                  disabled={sending}
-                  style={{ ...primBtn, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}
+                  onClick={() => void (tab === "computers" ? sendComputerCmd() : tab === "phones" ? sendPhoneCmd() : sendPairedCmd())}
+                  disabled={sending || Boolean(activePaired && selectedPairedObj?.revoked)}
+                  style={{ ...primBtn, display: "flex", alignItems: "center", gap: 6, flexShrink: 0, opacity: (activePaired && selectedPairedObj?.revoked) ? 0.4 : 1 }}
                 >
                   <Send size={12} />{sending ? "Yuborilmoqda…" : "Yuborish"}
                 </button>
+                {activePaired && (
+                  <button onClick={() => void revokePaired(selectedPaired!)} style={{ ...secBtn, flexShrink: 0 }}>Revoke</button>
+                )}
               </div>
 
               {/* Result */}
