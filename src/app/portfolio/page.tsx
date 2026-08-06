@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import {
   Globe, Smartphone, Brain, Zap, Database, Megaphone,
   ArrowRight, Menu, X, Mail, MapPin, Phone as PhoneIcon, Send,
@@ -103,12 +103,12 @@ const STEPS = [
    ANIMATION
    ═══════════════════════════════════════════════════════════════ */
 
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } },
 };
 
-const stagger = {
+const stagger: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.07 } },
 };
