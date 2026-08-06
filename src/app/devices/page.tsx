@@ -6,7 +6,7 @@ import {
   Smartphone, Monitor, Wifi, WifiOff, Battery,
   Send, Trash2, Plus, RefreshCw, Terminal, Copy, Check,
   Volume2, MonitorSmartphone, Bell, MessageSquare, Phone,
-  ChevronDown, ChevronUp, Download,
+  ChevronDown, ChevronUp, Download, Clapperboard,
 } from "lucide-react";
 
 const HermesOrb = dynamic(() => import("@/components/HermesOrb"), { ssr: false });
@@ -27,9 +27,13 @@ const PHONE_COMMANDS = [
   { id: "call",     label: "Qo'ng'iroq", icon: Phone,          fields: ["number"] },
   { id: "sms",      label: "SMS",        icon: MessageSquare,  fields: ["number", "message"] },
   { id: "notify",   label: "Bildirishnoma", icon: Bell,        fields: ["title", "message"] },
-  { id: "open_app", label: "Dastur",     icon: MonitorSmartphone, fields: ["package"] },
-  { id: "volume",   label: "Ovoz",       icon: Volume2,        fields: ["level"] },
-  { id: "custom",   label: "Boshqa",     icon: Terminal,       fields: ["data"] },
+  { id: "open_app",  label: "Dastur",      icon: MonitorSmartphone, fields: ["package"] },
+  { id: "volume",    label: "Ovoz",        icon: Volume2,        fields: ["level"] },
+  { id: "screen",    label: "Ekran yoq",   icon: Monitor,        fields: [] },
+  { id: "location",  label: "Joylashuv",   icon: Smartphone,     fields: [] },
+  { id: "camera",    label: "Kamera",      icon: Clapperboard,   fields: ["duration"] },
+  { id: "torch",     label: "Fonar",       icon: Volume2,        fields: ["on"] },
+  { id: "custom",    label: "Boshqa",      icon: Terminal,       fields: ["data"] },
 ];
 
 const COMPUTER_COMMANDS = [

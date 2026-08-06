@@ -1,9 +1,34 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useJarvisVoice } from "@/hooks/useJarvisVoice";
+import {
+  Menu, X, MessageSquare, CheckSquare, FolderKanban, Bot,
+  Smartphone, Zap, BookOpen, Settings, LayoutGrid,
+} from "lucide-react";
 
 const HermesOrb = dynamic(() => import("@/components/HermesOrb"), { ssr: false });
+
+// ── Hermes orange accent ─────────────────────────────────────────────────────
+const OG = "#ff6a1a";        // Hermes orange
+const OG_DIM = "rgba(255,106,26,0.18)";
+const OG_MID = "rgba(255,106,26,0.45)";
+const OG_EDGE = "rgba(255,106,26,0.14)";
+const OG_EDGE_HI = "rgba(255,106,26,0.50)";
+const OG_TEXT = "rgba(255,180,120,0.90)";
+
+// ── Quick nav links for overlay menu ─────────────────────────────────────────
+const NAV = [
+  { href: "/chat",       label: "Chat",       icon: MessageSquare },
+  { href: "/tasks",      label: "Vazifalar",  icon: CheckSquare },
+  { href: "/projects",   label: "Loyihalar",  icon: FolderKanban },
+  { href: "/agents",     label: "Agentlar",   icon: Bot },
+  { href: "/devices",    label: "Qurilmalar", icon: Smartphone },
+  { href: "/automation", label: "Automation", icon: Zap },
+  { href: "/knowledge",  label: "Bilimlar",   icon: BookOpen },
+  { href: "/settings",   label: "Sozlamalar", icon: Settings },
+];
 
 // ── Graph layout (butterfly, viewBox 1200×1080) ─────────────────────────────
 const HUBS = [
@@ -127,7 +152,7 @@ function ParticleCanvas() {
         if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(139,92,246,${p.a})`;
+        ctx.fillStyle = `rgba(255,106,26,${p.a * 0.6})`;
         ctx.fill();
       });
       raf = requestAnimationFrame(draw);
@@ -183,6 +208,7 @@ export default function PariPage() {
   const [answer, setAnswer]       = useState("");
   const [showInput, setShowInput] = useState(false);
   const [view, setView]           = useState<"graph" | "orb">("graph");
+  const [menuOpen, setMenuOpen]   = useState(false);
   const jarvis = useJarvisVoice();
 
   // Hover / active node
@@ -354,6 +380,79 @@ export default function PariPage() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
+      {/* ── Menu button (top-left) ── */}
+      <button
+        onClick={() => setMenuOpen(o => !o)}
+        aria-label="Menyu"
+        style={{
+          position: "fixed", top: 14, left: 14, zIndex: 200,
+          width: 36, height: 36, borderRadius: 8,
+          background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.08)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer", color: "rgba(255,255,255,0.65)",
+        }}
+      >
+        {menuOpen ? <X size={16} /> : <Menu size={16} />}
+      </button>
+
+      {/* ── Slide-in nav overlay ── */}
+      {menuOpen && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 190,
+            background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)",
+          }}
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+      <div style={{
+        position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 195,
+        width: 220, background: "#10111a",
+        borderRight: "1px solid rgba(255,106,26,0.12)",
+        transform: menuOpen ? "translateX(0)" : "translateX(-100%)",
+        transition: "transform 0.22s cubic-bezier(.4,0,.2,1)",
+        display: "flex", flexDirection: "column",
+      }}>
+        {/* Header */}
+        <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 7,
+              background: OG, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <LayoutGrid size={14} color="#fff" />
+            </div>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#fff", margin: 0 }}>Pari AI</p>
+              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", margin: 0 }}>Kapalak miya</p>
+            </div>
+          </div>
+        </div>
+        {/* Nav links */}
+        <nav style={{ flex: 1, overflowY: "auto", padding: "8px 8px" }}>
+          {NAV.map(({ href, label, icon: Icon }) => (
+            <Link key={href} href={href} onClick={() => setMenuOpen(false)} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "9px 10px", borderRadius: 7, marginBottom: 2,
+              fontSize: 13, color: "rgba(255,255,255,0.65)", textDecoration: "none",
+              transition: "background 0.15s, color 0.15s",
+            }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLAnchorElement).style.background = OG_DIM;
+                (e.currentTarget as HTMLAnchorElement).style.color = "#fff";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+                (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.65)";
+              }}
+            >
+              <Icon size={15} strokeWidth={1.75} />
+              {label}
+            </Link>
+          ))}
+        </nav>
+      </div>
+
       {/* View toggle */}
       <div style={{
         position: "fixed", top: 14, right: 16, zIndex: 100,
@@ -365,8 +464,8 @@ export default function PariPage() {
           <button key={v} onClick={() => setView(v)} style={{
             padding: "4px 12px", borderRadius: 4, fontSize: 11, fontWeight: 600,
             cursor: "pointer", border: "none",
-            background: view === v ? "rgba(139,92,246,0.25)" : "transparent",
-            color: view === v ? "#c4b5fd" : "rgba(255,255,255,0.3)",
+            background: view === v ? OG_DIM : "transparent",
+            color: view === v ? OG_TEXT : "rgba(255,255,255,0.3)",
             letterSpacing: "0.04em", textTransform: "uppercase",
           }}>
             {v === "graph" ? "🕸 Miya" : "🔮 Orb"}
@@ -458,10 +557,10 @@ export default function PariPage() {
                   ref={el => { edgeRefs.current[i] = el; }}
                   x1={from.x} y1={from.y} x2={to.x} y2={to.y}
                   stroke={
-                    isActive  ? "rgba(196,181,253,0.55)" :
-                    isHovered ? "rgba(167,139,250,0.40)" :
-                    isVoice   ? "rgba(139,92,246,0.22)" :
-                                "rgba(139,92,246,0.11)"
+                    isActive  ? OG_EDGE_HI :
+                    isHovered ? "rgba(255,106,26,0.30)" :
+                    isVoice   ? "rgba(255,106,26,0.20)" :
+                                "rgba(255,255,255,0.07)"
                   }
                   strokeWidth={isActive ? 1.2 : isHovered ? 0.9 : 0.65}
                   style={{ transition: "stroke 0.3s, stroke-width 0.3s" }}
@@ -470,7 +569,7 @@ export default function PariPage() {
                 {isVoice && (
                   <line
                     x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                    stroke="rgba(196,181,253,0.55)"
+                    stroke="rgba(255,106,26,0.55)"
                     strokeWidth="1"
                     strokeDasharray="8 16"
                     style={{
@@ -483,7 +582,7 @@ export default function PariPage() {
                 {isActive && (
                   <line
                     x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                    stroke="rgba(221,214,254,0.8)"
+                    stroke="rgba(255,150,80,0.8)"
                     strokeWidth="1.2"
                     strokeDasharray="6 12"
                     style={{ animation: "edge-flow 0.6s linear 1" }}
@@ -506,19 +605,19 @@ export default function PariPage() {
               onPointerLeave={() => setHoveredId(null)}
             >
               <circle cx={l.x} cy={l.y} r={hoveredId === l.id ? 7 : 4.5}
-                fill={hoveredId === l.id ? "#a78bfa" : "#7c3aed"}
+                fill={hoveredId === l.id ? OG : "rgba(255,106,26,0.45)"}
                 opacity={hoveredId === l.id ? 0.85 : 0.55}
                 style={{ transition: "r 0.2s, fill 0.2s, opacity 0.2s" }}
               />
               <circle cx={l.x} cy={l.y} r={hoveredId === l.id ? 3 : 2}
-                fill="#ddd6fe" opacity={0.95}
+                fill="rgba(255,220,180,0.95)" opacity={0.95}
                 style={{ transition: "r 0.2s" }}
               />
               <text
                 x={l.x + (l.x < 600 ? -9 : 9)}
                 y={l.y}
                 fontSize={hoveredId === l.id ? "12.5" : "11"}
-                fill={hoveredId === l.id ? "rgba(221,214,254,0.85)" : "rgba(196,181,253,0.48)"}
+                fill={hoveredId === l.id ? "rgba(255,200,150,0.9)" : "rgba(255,255,255,0.38)"}
                 textAnchor={l.x < 600 ? "end" : "start"}
                 dominantBaseline="middle"
                 style={{ fontFamily: "system-ui, sans-serif", transition: "font-size 0.2s, fill 0.2s", pointerEvents: "none" }}
@@ -539,18 +638,18 @@ export default function PariPage() {
               onPointerLeave={() => setHoveredId(null)}
             >
               <circle cx={h.x} cy={h.y} r={h.r + (hoveredId === h.id ? 9 : 6)}
-                fill="rgba(109,40,217,0.15)"
-                style={{ transition: "r 0.25s" }}
+                fill={hoveredId === h.id ? OG_DIM : "rgba(255,106,26,0.07)"}
+                style={{ transition: "r 0.25s, fill 0.2s" }}
               />
               <circle cx={h.x} cy={h.y} r={h.r}
-                fill={hoveredId === h.id ? "rgba(109,40,217,0.55)" : "rgba(91,33,182,0.3)"}
-                stroke={hoveredId === h.id ? "rgba(196,181,253,0.9)" : "rgba(167,139,250,0.65)"}
+                fill={hoveredId === h.id ? OG_MID : "rgba(255,106,26,0.18)"}
+                stroke={hoveredId === h.id ? OG : "rgba(255,106,26,0.50)"}
                 strokeWidth={hoveredId === h.id ? "1.5" : "1"}
                 style={{ transition: "fill 0.2s, stroke 0.2s, stroke-width 0.2s" }}
               />
-              <circle cx={h.x} cy={h.y} r={4.5} fill="#c4b5fd" />
+              <circle cx={h.x} cy={h.y} r={4.5} fill="rgba(255,220,180,0.9)" />
               <text x={h.x} y={h.y + h.r + 14} fontSize="13"
-                fill={hoveredId === h.id ? "rgba(237,233,254,1)" : "rgba(221,214,254,0.85)"}
+                fill={hoveredId === h.id ? "#fff" : "rgba(255,255,255,0.75)"}
                 textAnchor="middle"
                 style={{ fontFamily: "system-ui, sans-serif", fontWeight: 600, pointerEvents: "none", transition: "fill 0.2s" }}>
                 {h.label}
@@ -569,14 +668,14 @@ export default function PariPage() {
             {jarvis.state === "listening" && (
               <>
                 <circle cx={CENTER.x} cy={CENTER.y} r={CENTER.r + 18}
-                  fill="none" stroke="rgba(167,139,250,0.18)" strokeWidth="1">
+                  fill="none" stroke="rgba(255,106,26,0.18)" strokeWidth="1">
                   <animate attributeName="r"
                     values={`${CENTER.r + 14};${CENTER.r + 32};${CENTER.r + 14}`}
                     dur="2s" repeatCount="indefinite" />
                   <animate attributeName="opacity" values="0.4;0;0.4" dur="2s" repeatCount="indefinite" />
                 </circle>
                 <circle cx={CENTER.x} cy={CENTER.y} r={CENTER.r + 8}
-                  fill="none" stroke="rgba(167,139,250,0.25)" strokeWidth="0.8">
+                  fill="none" stroke="rgba(255,106,26,0.28)" strokeWidth="0.8">
                   <animate attributeName="r"
                     values={`${CENTER.r + 6};${CENTER.r + 20};${CENTER.r + 6}`}
                     dur="1.5s" repeatCount="indefinite" />
@@ -587,7 +686,7 @@ export default function PariPage() {
             {/* Speaking rings */}
             {jarvis.state === "speaking" && (
               <circle cx={CENTER.x} cy={CENTER.y} r={CENTER.r + 10}
-                fill="none" stroke="rgba(196,181,253,0.3)" strokeWidth="1.2">
+                fill="none" stroke="rgba(255,130,50,0.35)" strokeWidth="1.2">
                 <animate attributeName="r"
                   values={`${CENTER.r + 8};${CENTER.r + 26};${CENTER.r + 8}`}
                   dur="1s" repeatCount="indefinite" />
@@ -597,7 +696,7 @@ export default function PariPage() {
             {/* Thinking ring */}
             {jarvis.state === "thinking" && (
               <circle cx={CENTER.x} cy={CENTER.y} r={CENTER.r + 12}
-                fill="none" stroke="rgba(251,191,36,0.25)" strokeWidth="0.8"
+                fill="none" stroke="rgba(255,106,26,0.22)" strokeWidth="0.8"
                 strokeDasharray="6 8">
                 <animateTransform attributeName="transform" type="rotate"
                   from={`0 ${CENTER.x} ${CENTER.y}`} to={`360 ${CENTER.x} ${CENTER.y}`}
@@ -605,16 +704,16 @@ export default function PariPage() {
               </circle>
             )}
             <circle cx={CENTER.x} cy={CENTER.y} r={CENTER.r + 10}
-              fill="rgba(109,40,217,0.18)" />
+              fill={OG_DIM} />
             <circle cx={CENTER.x} cy={CENTER.y} r={CENTER.r}
-              fill="rgba(91,33,182,0.42)"
-              stroke={jarvis.active ? "rgba(196,181,253,0.95)" : "rgba(167,139,250,0.6)"}
-              strokeWidth={jarvis.active ? "1.8" : "1"}
+              fill="rgba(180,60,10,0.55)"
+              stroke={jarvis.active ? OG : "rgba(255,106,26,0.55)"}
+              strokeWidth={jarvis.active ? "2" : "1.2"}
               style={{ transition: "stroke 0.4s, stroke-width 0.4s" }}
             />
-            <circle cx={CENTER.x} cy={CENTER.y} r={6.5} fill="#ede9fe" />
+            <circle cx={CENTER.x} cy={CENTER.y} r={6.5} fill="rgba(255,220,180,0.95)" />
             <text x={CENTER.x} y={CENTER.y + CENTER.r + 17} fontSize="15"
-              fill="rgba(237,233,254,0.95)" textAnchor="middle"
+              fill="rgba(255,255,255,0.92)" textAnchor="middle"
               style={{ fontFamily: "system-ui, sans-serif", fontWeight: 700, pointerEvents: "none" }}>
               Pari
             </text>
@@ -623,9 +722,10 @@ export default function PariPage() {
       </div>
 
       {/* State label */}
-      <p className={`mt-0 text-xs tracking-widest uppercase transition-all duration-300 ${
-        jarvis.active ? "text-violet-300/60" : "text-white/20"
-      }`}>{STATE_LABEL[jarvis.state]}</p>
+      <p className={`mt-0 text-xs tracking-widest uppercase transition-all duration-300`}
+        style={{ color: jarvis.active ? "rgba(255,160,80,0.65)" : "rgba(255,255,255,0.20)" }}>
+        {STATE_LABEL[jarvis.state]}
+      </p>
 
       {jarvis.error && (
         <p className="mt-1 text-xs text-red-400/55 text-center max-w-xs px-4">{jarvis.error}</p>
@@ -633,7 +733,7 @@ export default function PariPage() {
 
       {answer && (
         <div className="mt-3 max-w-xs mx-auto px-4 py-3 rounded-xl text-sm text-white/70 leading-relaxed"
-          style={{ background: "rgba(109,40,217,0.07)", border: "1px solid rgba(139,92,246,0.13)" }}>
+          style={{ background: "rgba(255,106,26,0.05)", border: "1px solid rgba(255,106,26,0.12)" }}>
           {answer}
         </div>
       )}
@@ -652,11 +752,12 @@ export default function PariPage() {
               onKeyDown={e => e.key === "Enter" && sendTyped()}
               onBlur={() => !typed && setShowInput(false)}
               placeholder="Savol yozing..."
-              className="flex-1 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-violet-500/40 transition-colors"
-              style={{ background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.18)" }}
+              className="flex-1 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none transition-colors"
+              style={{ background: "rgba(255,106,26,0.06)", border: "1px solid rgba(255,106,26,0.18)" }}
             />
             <button onClick={sendTyped} disabled={!typed.trim() || busy}
-              className="w-9 h-9 rounded-lg bg-violet-700/55 hover:bg-violet-600/70 disabled:opacity-30 text-white flex items-center justify-center transition-colors">
+              className="w-9 h-9 rounded-lg disabled:opacity-30 text-white flex items-center justify-center transition-colors"
+              style={{ background: "rgba(255,106,26,0.55)" }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="22" y1="2" x2="11" y2="13"/>
                 <polygon points="22 2 15 22 11 13 2 9 22 2"/>
