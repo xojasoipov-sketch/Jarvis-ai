@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProviders } from "@/lib/providers";
 import { ownerSystemBlock, OWNER } from "@/lib/owner";
+import { parseDeviceIntent } from "@/lib/device-commands";
 
 // Lazy getters — always read env vars at call time (no stale module-level cache)
 const getElevenLabsKey = () => process.env.ELEVENLABS_API_KEY || "";
@@ -172,10 +173,50 @@ export async function POST(req: NextRequest) {
       transcript = await transcribeElevenLabs(buf, mimeType);
     }
 
-    // 3. If we have a transcript, get AI reply
+    // 3. If we have a transcript, check for device commands first
     if (transcript && transcript.trim().length > 1) {
-      const reply = await askPariText(transcript.trim());
-      return NextResponse.json({ transcript: transcript.trim(), reply });
+      const clean = transcript.trim();
+      const intent = parseDeviceIntent(clean);
+
+      if (intent) {
+        // Forward to device API and get acknowledgement
+        try {
+          const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+          if (intent.type === "phone") {
+            // Find first online phone device
+            const devRes = await fetch(`${base}/api/phones`);
+            const devData = await devRes.json() as { devices?: { id: string; status: string }[] };
+            const phone = devData.devices?.find(d => d.status === "online");
+            if (phone) {
+              await fetch(`${base}/api/phones?action=cmd`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ device_id: phone.id, action: intent.action, payload: intent.payload }),
+              });
+              const reply = `Telefonga ${intent.action} buyrug'i yuborildi.`;
+              return NextResponse.json({ transcript: clean, reply, device_action: intent });
+            }
+          } else if (intent.type === "computer") {
+            const devRes = await fetch(`${base}/api/computer?action=devices`);
+            const devData = await devRes.json() as { computers?: { id: string; status: string }[] };
+            const pc = devData.computers?.find(d => d.status === "online");
+            if (pc) {
+              await fetch(`${base}/api/computer`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ device_id: pc.id, action: intent.action, payload: intent.payload }),
+              });
+              const reply = `Kompyuterga ${intent.action} buyrug'i yuborildi.`;
+              return NextResponse.json({ transcript: clean, reply, device_action: intent });
+            }
+          }
+        } catch {
+          // Device routing failed — fall through to AI reply
+        }
+      }
+
+      const reply = await askPariText(clean);
+      return NextResponse.json({ transcript: clean, reply });
     }
 
     // 4. Gemini last resort (audio understanding)
