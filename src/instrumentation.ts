@@ -52,17 +52,6 @@ export async function register() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         commands: [
-          { command: "start",    description: "Botni ishga tushirish" },
-          { command: "chat",     description: "Chat rejimi" },
-          { command: "agents",   description: "Agent tanlash" },
-          { command: "smm",      description: "SMM boshqaruvi" },
-          { command: "xizmatlar",description: "Xizmatlar katalogi" },
-          { command: "portfolio",description: "Portfolio ko'rish" },
-          { command: "zakaz",    description: "Yangi zakaz berish" },
-          { command: "qr",       description: "Telefon ulash QR kodi" },
-          { command: "status",   description: "Tizim holati" },
-          { command: "help",     description: "Yordam va buyruqlar" },
-=======
           { command: "start", description: "Botni ishga tushirish" },
           { command: "chat", description: "Chat rejimi" },
           { command: "agents", description: "Agent tanlash" },
