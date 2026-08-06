@@ -145,6 +145,39 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
     return;
   }
 
+  if (cmd === "/qr" || cmd === "/ulan" || cmd === "/telefon") {
+    const deviceId = crypto.randomUUID();
+    const setupUrl = `${APP_URL}/api/phones/webhook?device_id=${deviceId}`;
+    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(setupUrl)}`;
+    const termuxCmd = `curl -sL "${APP_URL}/pari-agent.sh" | bash -s "${APP_URL}" "${deviceId}"`;
+
+    try {
+      const { sendPhoto } = await import("@/lib/telegram");
+      await sendPhoto(chatId, qrImageUrl,
+        `📱 *Telefonni ulash*\n\n` +
+        `1️⃣ Termux o'rnating (F-Droid)\n` +
+        `2️⃣ Termux-API o'rnating\n` +
+        `3️⃣ QR kodni skanerlang YOKI quyidagi buyruqni Termux da yuring:\n\n` +
+        `\`${termuxCmd}\`\n\n` +
+        `Device ID: \`${deviceId.slice(0, 8)}...\``,
+        {
+          inline_keyboard: [
+            [{ text: "📱 Qurilmalar paneli", web_app: { url: `${APP_URL}/devices` } }],
+            [{ text: "📥 Termux (F-Droid)", url: "https://f-droid.org/packages/com.termux/" }],
+          ],
+        }
+      );
+    } catch {
+      await sendMessage(chatId,
+        `📱 *Telefonni ulash*\n\n` +
+        `Termux orqali:\n\`\`\`\n${termuxCmd}\n\`\`\`\n\n` +
+        `Webhook URL:\n\`${setupUrl}\``,
+        { inline_keyboard: [[{ text: "📱 Qurilmalar paneli", web_app: { url: `${APP_URL}/devices` } }]] }
+      );
+    }
+    return;
+  }
+
   if (cmd === "/help" || cmd === "/yordam") {
     await sendMessage(chatId,
       `*Pari AI buyruqlari:*\n\n` +
@@ -157,6 +190,7 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
       `/post [matn] — Kanalga post yuborish\n` +
       `/xizmatlar — Sotiladigan xizmatlar katalogi\n` +
       `/zakaz — Zakaz berish (portfolio orqali)\n` +
+      `/qr — Telefon ulash QR kodi\n` +
       `/clear — Suhbatni tozalash\n` +
       `/status — Tizim holati\n` +
       `/app — Ilovani ochish\n\n` +

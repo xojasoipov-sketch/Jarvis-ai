@@ -53,6 +53,7 @@ export async function register() {
           { command: "xizmatlar", description: "Xizmatlar katalogi" },
           { command: "portfolio", description: "Portfolio ko'rish" },
           { command: "zakaz", description: "Yangi zakaz berish" },
+          { command: "qr", description: "Telefon ulash QR kodi" },
           { command: "status", description: "Tizim holati" },
           { command: "help", description: "Yordam va buyruqlar" },
         ],
