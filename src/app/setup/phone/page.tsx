@@ -2,276 +2,199 @@
 import { useEffect, useState } from "react";
 
 const SERVER = "https://jarvis-ai-production-41a9.up.railway.app";
+const INSTALL_CMD = `curl -sS ${SERVER}/pari-agent.sh | bash`;
 
-function genId() {
-  const stored = typeof localStorage !== "undefined" && localStorage.getItem("pari_device_id");
-  if (stored) return stored;
-  const id = "ph_" + Math.random().toString(36).slice(2, 10);
-  if (typeof localStorage !== "undefined") localStorage.setItem("pari_device_id", id);
-  return id;
-}
+// Termux intent — opens Termux app on Android
+const TERMUX_INTENT = "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.termux;end";
+// Termux F-Droid link
+const TERMUX_FDROID = "https://f-droid.org/en/packages/com.termux/";
+
+type Step = "start" | "copied" | "done";
 
 export default function PhoneSetupPage() {
-  const [deviceId, setDeviceId] = useState("");
-  const [name, setName] = useState("");
-  const [step, setStep] = useState<"idle" | "registering" | "done" | "error">("idle");
-  const [error, setError] = useState("");
+  const [step, setStep] = useState<Step>("start");
+  const [deviceName, setDeviceName] = useState("Android");
 
   useEffect(() => {
-    const id = genId();
-    setDeviceId(id);
-    // Auto-detect device name
     const ua = navigator.userAgent;
-    const detected = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android Tel" : "Qurilma";
-    setName(detected);
+    if (/iPhone/.test(ua)) setDeviceName("iPhone");
+    else if (/iPad/.test(ua)) setDeviceName("iPad");
+    else if (/Android/.test(ua)) {
+      const m = ua.match(/;\s*([^;)]+)\s+Build/);
+      setDeviceName(m?.[1] ?? "Android");
+    }
   }, []);
 
-  async function register() {
-    if (!deviceId || !name) return;
-    setStep("registering");
+  async function handleMain() {
+    // 1. Copy command to clipboard
     try {
-      const res = await fetch(`${SERVER}/api/phones`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: deviceId,
-          name,
-          platform: /iPhone|iPad/.test(navigator.userAgent) ? "ios" : "android",
-          webhook_url: "",
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setStep("done");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setStep("error");
+      await navigator.clipboard.writeText(INSTALL_CMD);
+    } catch {
+      // fallback: select text
     }
+    setStep("copied");
+
+    // 2. Small delay then open Termux
+    setTimeout(() => {
+      window.location.href = TERMUX_INTENT;
+    }, 600);
   }
 
-  const pollUrl = `${SERVER}/api/phones?action=poll&device_id=${deviceId}`;
+  function handleDone() {
+    setStep("done");
+  }
 
   return (
     <div style={{
-      minHeight: "100dvh", background: "#0b0d14", color: "#fff",
-      fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "column",
-      alignItems: "center", padding: "40px 20px", boxSizing: "border-box",
+      minHeight: "100dvh",
+      background: "#0b0d14",
+      color: "#fff",
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "32px 20px",
+      boxSizing: "border-box",
+      gap: 0,
     }}>
+
       {/* Logo */}
-      <div style={{ marginBottom: 32, textAlign: "center" }}>
-        <div style={{
-          width: 52, height: 52, borderRadius: 14, background: "#ff6a1a",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          margin: "0 auto 12px", fontSize: 22,
-        }}>⚡</div>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Pari AI</h1>
-        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", margin: "4px 0 0" }}>Telefonni ulash</p>
-      </div>
+      <div style={{
+        width: 60, height: 60, borderRadius: 16,
+        background: "#ff6a1a",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 26, marginBottom: 20,
+      }}>⚡</div>
 
-      {step !== "done" ? (
-        <div style={{ width: "100%", maxWidth: 340 }}>
-          {/* Device name */}
-          <label style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-            Qurilma nomi
-          </label>
-          <input
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Mening telefon"
-            style={{
-              display: "block", width: "100%", marginTop: 6, marginBottom: 20,
-              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,106,26,0.25)",
-              borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#fff",
-              boxSizing: "border-box", outline: "none",
-            }}
-          />
+      <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px", textAlign: "center" }}>
+        Pari AI
+      </h1>
+      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", margin: "0 0 36px", textAlign: "center" }}>
+        {deviceName} — avtomatik ulash
+      </p>
 
-          <button
-            onClick={register}
-            disabled={step === "registering" || !name}
-            style={{
-              width: "100%", padding: "14px", borderRadius: 12, border: "none",
-              background: step === "registering" ? "rgba(255,106,26,0.4)" : "#ff6a1a",
-              color: "#fff", fontSize: 16, fontWeight: 600, cursor: "pointer",
-              transition: "background 0.2s",
-            }}
-          >
-            {step === "registering" ? "Ulanmoqda..." : "✓ Pari ga ulash"}
+      {/* ── STEP: start ── */}
+      {step === "start" && (
+        <div style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", gap: 12 }}>
+
+          {/* Main CTA */}
+          <button onClick={handleMain} style={{
+            width: "100%", padding: "18px 20px",
+            background: "#ff6a1a", border: "none", borderRadius: 14,
+            color: "#fff", fontSize: 17, fontWeight: 700,
+            cursor: "pointer", letterSpacing: "-0.2px",
+          }}>
+            Termux ochish →
           </button>
 
-          {step === "error" && (
-            <p style={{ color: "#f87171", fontSize: 13, marginTop: 12, textAlign: "center" }}>
-              Xato: {error}. Internet aloqasini tekshiring.
-            </p>
-          )}
-
-          <div style={{
-            marginTop: 28, padding: 14, borderRadius: 10,
-            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+          <p style={{
+            fontSize: 12, color: "rgba(255,255,255,0.35)",
+            textAlign: "center", lineHeight: 1.6, margin: 0,
           }}>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Qurilma ID
-            </p>
-            <code style={{ fontSize: 12, color: "#ff6a1a", wordBreak: "break-all" }}>{deviceId}</code>
-          </div>
-        </div>
-      ) : (
-        /* Success state */
-        <div style={{ width: "100%", maxWidth: 340, textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Ulandi!</h2>
-          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", marginBottom: 28 }}>
-            {name} muvaffaqiyatli ro&apos;yxatdan o&apos;tdi
+            Termux o&apos;rnatilmagan bo&apos;lsa avval yuklab oling
           </p>
 
-          {/* Tasker poll URL */}
-          <div style={{
-            textAlign: "left", padding: 14, borderRadius: 10,
-            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,106,26,0.2)",
-            marginBottom: 16,
+          {/* Termux install link */}
+          <a href={TERMUX_FDROID} style={{
+            display: "block", width: "100%", padding: "13px",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 12, color: "rgba(255,255,255,0.55)",
+            fontSize: 13, textAlign: "center", textDecoration: "none",
+            boxSizing: "border-box",
           }}>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Tasker polling URL
+            ↓ Termux F-Droid dan yuklash
+          </a>
+        </div>
+      )}
+
+      {/* ── STEP: copied — paste instruction ── */}
+      {step === "copied" && (
+        <div style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
+
+          <div style={{
+            width: 64, height: 64, borderRadius: 18,
+            background: "rgba(255,106,26,0.15)",
+            border: "2px solid #ff6a1a",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 28,
+          }}>📋</div>
+
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, textAlign: "center" }}>
+            Termux ochildi
+          </h2>
+
+          <div style={{
+            background: "rgba(255,106,26,0.08)",
+            border: "1px solid rgba(255,106,26,0.25)",
+            borderRadius: 12, padding: "16px",
+            width: "100%", boxSizing: "border-box",
+          }}>
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", margin: "0 0 10px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Termux da qiling:
             </p>
-            <code style={{ fontSize: 11, color: "#ff6a1a", wordBreak: "break-all", lineHeight: 1.6 }}>
-              {pollUrl}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {["Termux ekraniga uzoq bosing (long press)", "\"Paste\" ni tanlang", "Enter tugmasini bosing"].map((s, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <span style={{
+                    minWidth: 22, height: 22, borderRadius: 7,
+                    background: "#ff6a1a", color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1,
+                  }}>{i + 1}</span>
+                  <span style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.5 }}>{s}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Command preview */}
+          <div style={{
+            background: "#0f1018", border: "1px solid rgba(255,255,255,0.07)",
+            borderRadius: 10, padding: "10px 14px",
+            width: "100%", boxSizing: "border-box",
+          }}>
+            <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Clipboard da saqlanган buyruq:
+            </p>
+            <code style={{ fontSize: 11, color: "#ff8c48", wordBreak: "break-all", lineHeight: 1.6 }}>
+              {INSTALL_CMD}
             </code>
           </div>
 
-          <a
-            href={`data:application/xml;charset=utf-8,${encodeURIComponent(generateTaskerXML(deviceId, name, SERVER))}`}
-            download="pari-tasker.xml"
-            style={{
-              display: "block", padding: "13px", borderRadius: 12,
-              background: "#ff6a1a", color: "#fff", textDecoration: "none",
-              fontSize: 15, fontWeight: 600, marginBottom: 12,
-            }}
-          >
-            ↓ Tasker XML yuklab olish
-          </a>
+          <button onClick={handleDone} style={{
+            width: "100%", padding: "14px",
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 12, color: "rgba(255,255,255,0.6)",
+            fontSize: 14, cursor: "pointer",
+          }}>
+            ✓ Ishga tushdi
+          </button>
+        </div>
+      )}
 
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>
-            Yuklab olingan faylni Tasker → ☰ → Import → Local Backup orqali import qiling
+      {/* ── STEP: done ── */}
+      {step === "done" && (
+        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 52 }}>✅</div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Ulandi!</h2>
+          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", maxWidth: 260, lineHeight: 1.6, margin: 0 }}>
+            Telefon background da ishlayapti. Pari orqali SMS, qo&apos;ng&apos;iroq va boshqa buyruqlar berishingiz mumkin.
           </p>
+          <div style={{
+            marginTop: 8,
+            padding: "12px 20px",
+            background: "rgba(255,106,26,0.08)",
+            border: "1px solid rgba(255,106,26,0.2)",
+            borderRadius: 10, fontSize: 13, color: "rgba(255,255,255,0.5)",
+            lineHeight: 1.6,
+          }}>
+            🎤 Sinab ko&apos;ring: <em style={{ color: "#ff8c48" }}>&ldquo;Telefonga sms yuvor salom deb&rdquo;</em>
+          </div>
         </div>
       )}
     </div>
   );
-}
-
-function generateTaskerXML(deviceId: string, deviceName: string, server: string): string {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<TaskerData sr="" dvi="1" tv="6.3.13">
-
-<Profile sr="prof0" ve="2">
-  <cdate>1720000000000</cdate>
-  <edate>1720000000000</edate>
-  <id>1</id>
-  <mid0>1</mid0>
-  <nme>Pari - Poll</nme>
-  <Time sr="con0">
-    <rep>1</rep>
-    <repval>10</repval>
-  </Time>
-</Profile>
-
-<Task sr="task1">
-  <cdate>1720000000000</cdate>
-  <edate>1720000000000</edate>
-  <id>1</id>
-  <nme>Pari Poll Commands</nme>
-
-  <Action sr="act0" ve="7">
-    <code>339</code>
-    <Str sr="arg0" ve="3">GET</Str>
-    <Str sr="arg1" ve="3">${server}/api/phones?action=poll&amp;device_id=${deviceId}</Str>
-    <Str sr="arg2" ve="3"></Str>
-    <Str sr="arg3" ve="3">%pari_resp</Str>
-    <Int sr="arg4" val="0"/>
-    <Int sr="arg5" val="30"/>
-  </Action>
-
-  <Action sr="act1" ve="7">
-    <code>547</code>
-    <Str sr="arg0" ve="3">%pari_resp</Str>
-    <Str sr="arg1" ve="3">commands</Str>
-    <Str sr="arg2" ve="3">%cmds</Str>
-  </Action>
-
-  <Action sr="act2" ve="7">
-    <code>547</code>
-    <Str sr="arg0" ve="3">%cmds(1)</Str>
-    <Str sr="arg1" ve="3">action</Str>
-    <Str sr="arg2" ve="3">%cmd_action</Str>
-  </Action>
-
-  <Action sr="act3" ve="7">
-    <code>547</code>
-    <Str sr="arg0" ve="3">%cmds(1)</Str>
-    <Str sr="arg1" ve="3">payload/number</Str>
-    <Str sr="arg2" ve="3">%cmd_number</Str>
-  </Action>
-
-  <Action sr="act4" ve="7">
-    <code>547</code>
-    <Str sr="arg0" ve="3">%cmds(1)</Str>
-    <Str sr="arg1" ve="3">payload/message</Str>
-    <Str sr="arg2" ve="3">%cmd_message</Str>
-  </Action>
-
-  <Action sr="act5" ve="7">
-    <code>547</code>
-    <Str sr="arg0" ve="3">%cmds(1)</Str>
-    <Str sr="arg1" ve="3">payload/title</Str>
-    <Str sr="arg2" ve="3">%cmd_title</Str>
-  </Action>
-
-  <!-- SMS -->
-  <Action sr="act6" ve="7">
-    <code>130</code>
-    <Str sr="arg0" ve="3">%cmd_number</Str>
-    <Str sr="arg1" ve="3">%cmd_message</Str>
-    <Int sr="arg2" val="0"/>
-    <cond>
-      <code>6</code>
-      <Str sr="arg0" ve="3">%cmd_action</Str>
-      <Str sr="arg1" ve="3">sms</Str>
-    </cond>
-  </Action>
-
-  <!-- Call -->
-  <Action sr="act7" ve="7">
-    <code>126</code>
-    <Str sr="arg0" ve="3">%cmd_number</Str>
-    <cond>
-      <code>6</code>
-      <Str sr="arg0" ve="3">%cmd_action</Str>
-      <Str sr="arg1" ve="3">call</Str>
-    </cond>
-  </Action>
-
-  <!-- Notification -->
-  <Action sr="act8" ve="7">
-    <code>853</code>
-    <Str sr="arg0" ve="3">%cmd_title</Str>
-    <Str sr="arg1" ve="3">%cmd_message</Str>
-    <cond>
-      <code>6</code>
-      <Str sr="arg0" ve="3">%cmd_action</Str>
-      <Str sr="arg1" ve="3">notify</Str>
-    </cond>
-  </Action>
-
-</Task>
-
-<Project sr="proj0" ve="2">
-  <name>Pari AI - ${deviceName}</name>
-  <ProfileIds sr="ProfileIds">
-    <ProfileId sr="prof0_0">1</ProfileId>
-  </ProfileIds>
-  <TaskIds sr="TaskIds">
-    <TaskId sr="task1_0">1</TaskId>
-  </TaskIds>
-</Project>
-
-</TaskerData>`;
 }
