@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getProviders } from "@/lib/providers";
 import { ownerSystemBlock, OWNER } from "@/lib/owner";
 
-const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY || "";
-const GROQ_KEY = process.env.GROQ_API_KEY || "";
-const GEMINI_KEYS = [
-  process.env.GEMINI_API_KEY,
-  process.env.GEMINI_API_KEY2,
-  process.env.GEMINI_API_KEY3,
-].filter(Boolean) as string[];
+// Lazy getters — always read env vars at call time (no stale module-level cache)
+const getElevenLabsKey = () => process.env.ELEVENLABS_API_KEY || "";
+const getGroqKey = () => process.env.GROQ_API_KEY || "";
+const getGeminiKeys = () =>
+  [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY2, process.env.GEMINI_API_KEY3]
+    .filter(Boolean) as string[];
 
 const PARI_SYSTEM = `Sen Pari — ${OWNER.shortName}ning shaxsiy ovozli AI yordamchisissan.
 
@@ -41,7 +40,8 @@ function mimeToFilename(mime: string): string {
 
 // 1. ElevenLabs STT (primary)
 async function transcribeElevenLabs(audioBuffer: Buffer, mimeType: string): Promise<string | null> {
-  if (!ELEVENLABS_KEY) return null;
+  const key = getElevenLabsKey();
+  if (!key) return null;
   try {
     const fd = new FormData();
     fd.append(
@@ -52,7 +52,7 @@ async function transcribeElevenLabs(audioBuffer: Buffer, mimeType: string): Prom
     fd.append("model_id", "scribe_v1");
     const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
       method: "POST",
-      headers: { "xi-api-key": ELEVENLABS_KEY },
+      headers: { "xi-api-key": key },
       body: fd,
       signal: AbortSignal.timeout(15000),
     });
@@ -70,7 +70,8 @@ async function transcribeElevenLabs(audioBuffer: Buffer, mimeType: string): Prom
 
 // 2. Groq Whisper STT (fallback)
 async function transcribeGroq(audioBuffer: Buffer, mimeType: string): Promise<string | null> {
-  if (!GROQ_KEY) return null;
+  const groqKey = getGroqKey();
+  if (!groqKey) return null;
   try {
     const fd = new FormData();
     fd.append("file", new Blob([new Uint8Array(audioBuffer)], { type: mimeType }), mimeToFilename(mimeType));
@@ -78,7 +79,7 @@ async function transcribeGroq(audioBuffer: Buffer, mimeType: string): Promise<st
     fd.append("response_format", "json");
     const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${GROQ_KEY}` },
+      headers: { Authorization: `Bearer ${groqKey}` },
       body: fd,
       signal: AbortSignal.timeout(15000),
     });
@@ -108,7 +109,7 @@ async function tryGemini(audioBuffer: Buffer, mimeType: string): Promise<{ trans
     }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 300, responseMimeType: "application/json" },
   };
-  for (const key of GEMINI_KEYS) {
+  for (const key of getGeminiKeys()) {
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
@@ -194,9 +195,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
+  const geminiKeys = getGeminiKeys();
   return NextResponse.json({
-    elevenlabs_stt: ELEVENLABS_KEY ? "✅ key set" : "❌ not set",
-    groq_stt: GROQ_KEY ? "✅ key set (fallback)" : "❌ not set",
-    gemini_stt: GEMINI_KEYS.length ? `✅ ${GEMINI_KEYS.length} key(s) (last resort)` : "❌ not set",
+    elevenlabs_stt: getElevenLabsKey() ? "✅ key set" : "❌ not set — add ELEVENLABS_API_KEY to Railway",
+    groq_stt: getGroqKey() ? "✅ key set (fallback)" : "❌ not set",
+    gemini_stt: geminiKeys.length ? `✅ ${geminiKeys.length} key(s) (last resort)` : "❌ not set",
   });
 }

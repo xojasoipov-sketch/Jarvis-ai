@@ -41,7 +41,7 @@ function uid() {
 export async function listChannels(): Promise<SmmChannel[]> {
   if (dbConfigured && supabase) {
     const { data } = await supabase
-      .from("smm_channels")
+      .from("pari_smm_channels")
       .select("*")
       .order("created_at", { ascending: false });
     return data || [];
@@ -52,7 +52,7 @@ export async function listChannels(): Promise<SmmChannel[]> {
 export async function addChannel(ch: Omit<SmmChannel, "id" | "created_at">): Promise<SmmChannel> {
   const row: SmmChannel = { ...ch, id: uid(), created_at: new Date().toISOString() };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("smm_channels").insert(row).select().single();
+    const { data } = await supabase.from("pari_smm_channels").insert(row).select().single();
     return data || row;
   }
   memChannels.unshift(row);
@@ -61,7 +61,7 @@ export async function addChannel(ch: Omit<SmmChannel, "id" | "created_at">): Pro
 
 export async function getChannel(id: string): Promise<SmmChannel | null> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("smm_channels").select("*").eq("id", id).single();
+    const { data } = await supabase.from("pari_smm_channels").select("*").eq("id", id).single();
     return data || null;
   }
   return memChannels.find((c) => c.id === id) || null;
@@ -69,7 +69,7 @@ export async function getChannel(id: string): Promise<SmmChannel | null> {
 
 export async function deleteChannel(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("smm_channels").delete().eq("id", id);
+    await supabase.from("pari_smm_channels").delete().eq("id", id);
     return;
   }
   const i = memChannels.findIndex((c) => c.id === id);
@@ -81,7 +81,7 @@ export async function deleteChannel(id: string): Promise<void> {
 // ──────────────────────────────────────────────
 export async function listPosts(channelId?: string): Promise<SmmPost[]> {
   if (dbConfigured && supabase) {
-    let q = supabase.from("smm_posts").select("*").order("created_at", { ascending: false });
+    let q = supabase.from("pari_smm_posts").select("*").order("created_at", { ascending: false });
     if (channelId) q = q.eq("channel_id", channelId);
     const { data } = await q;
     return data || [];
@@ -93,7 +93,7 @@ export async function listPosts(channelId?: string): Promise<SmmPost[]> {
 export async function createPost(p: Omit<SmmPost, "id" | "created_at">): Promise<SmmPost> {
   const row: SmmPost = { ...p, id: uid(), created_at: new Date().toISOString() };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("smm_posts").insert(row).select().single();
+    const { data } = await supabase.from("pari_smm_posts").insert(row).select().single();
     return data || row;
   }
   memPosts.unshift(row);
@@ -102,7 +102,7 @@ export async function createPost(p: Omit<SmmPost, "id" | "created_at">): Promise
 
 export async function updatePost(id: string, patch: Partial<SmmPost>): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("smm_posts").update(patch).eq("id", id);
+    await supabase.from("pari_smm_posts").update(patch).eq("id", id);
     return;
   }
   const i = memPosts.findIndex((p) => p.id === id);
@@ -111,7 +111,7 @@ export async function updatePost(id: string, patch: Partial<SmmPost>): Promise<v
 
 export async function deletePost(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("smm_posts").delete().eq("id", id);
+    await supabase.from("pari_smm_posts").delete().eq("id", id);
     return;
   }
   const i = memPosts.findIndex((p) => p.id === id);
@@ -123,7 +123,7 @@ export async function getDuePosts(): Promise<SmmPost[]> {
   const now = new Date().toISOString();
   if (dbConfigured && supabase) {
     const { data } = await supabase
-      .from("smm_posts")
+      .from("pari_smm_posts")
       .select("*")
       .eq("status", "scheduled")
       .lte("scheduled_at", now);

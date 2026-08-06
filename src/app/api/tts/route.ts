@@ -7,9 +7,11 @@ import {
   splitSentences,
 } from "@/lib/elevenlabs";
 
-const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY || "";
-const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
-const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5";
+// Lazy getters — read env vars at call time, not module load time.
+// This prevents stale values if Railway env vars are updated without restart.
+const getKey = () => process.env.ELEVENLABS_API_KEY || "";
+const getVoiceId = () => process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM"; // Rachel
+const getModelId = () => process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5";
 
 async function elevenLabsTTS(
   text: string,
@@ -19,21 +21,22 @@ async function elevenLabsTTS(
   similarity?: number,
   style?: number,
 ): Promise<ArrayBuffer | null> {
-  if (!ELEVENLABS_KEY) return null;
+  const key = getKey();
+  if (!key) return null;
   try {
-    const vid = voiceId || DEFAULT_VOICE_ID;
+    const vid = voiceId || getVoiceId();
     const res = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${vid}/stream`,
       {
         method: "POST",
         headers: {
-          "xi-api-key": ELEVENLABS_KEY,
+          "xi-api-key": key,
           "Content-Type": "application/json",
           Accept: "audio/mpeg",
         },
         body: JSON.stringify({
           text: text.slice(0, 5000),
-          model_id: modelId || DEFAULT_MODEL_ID,
+          model_id: modelId || getModelId(),
           voice_settings: {
             stability: stability ?? 0.5,
             similarity_boost: similarity ?? 0.75,
@@ -97,11 +100,13 @@ export async function GET(req: NextRequest) {
 
   // Status check (no text)
   if (!text) {
+    const key = getKey();
     return NextResponse.json({
-      elevenlabs: ELEVENLABS_KEY ? "✅ key set" : "❌ ELEVENLABS_API_KEY not set",
-      voice_id: DEFAULT_VOICE_ID,
-      model_id: DEFAULT_MODEL_ID,
+      elevenlabs: key ? "✅ key set" : "❌ ELEVENLABS_API_KEY not set — fallback to StreamElements/Google TTS",
+      voice_id: getVoiceId(),
+      model_id: getModelId(),
       fallbacks: ["streamelements", "google-tts"],
+      hint: !key ? "Railway → Variables → ELEVENLABS_API_KEY=sk_... qo'shing va redeploy qiling" : null,
     });
   }
 
@@ -111,7 +116,7 @@ export async function GET(req: NextRequest) {
 
   if (!buf) {
     return NextResponse.json(
-      { error: "tts_failed", hint: "Set ELEVENLABS_API_KEY in env vars" },
+      { error: "tts_failed", hint: "Set ELEVENLABS_API_KEY in Railway env vars" },
       { status: 502 }
     );
   }
@@ -130,8 +135,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "text kerak" }, { status: 400 });
     }
 
-    const voiceId = body.voice_id || DEFAULT_VOICE_ID;
-    const modelId = body.model_id || DEFAULT_MODEL_ID;
+    const voiceId = body.voice_id || getVoiceId();
+    const modelId = body.model_id || getModelId();
     const stability = body.stability;
     const similarity = body.similarity;
     const style = body.style;
@@ -160,3 +165,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
+
+// Re-export the advanced helpers from the lib for external consumers
+export { synthesizeElevenLabs, elevenLabsMeta, elevenLabsConfigured, defaultWelcomeText, splitSentences };
