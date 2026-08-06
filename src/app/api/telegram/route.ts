@@ -24,6 +24,7 @@ QOIDALAR (buzsiz):
 
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL
+  || (process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : null)
   || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://pari-ai-ten.vercel.app");
 
 const PORTFOLIO_URL = process.env.PORTFOLIO_URL || `${APP_URL}/portfolio`;
@@ -780,7 +781,6 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    owner: OWNER.username,
     portfolio: PORTFOLIO_URL,
     brand: SADIPRIME.brand,
   });
