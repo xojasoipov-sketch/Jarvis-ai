@@ -20,8 +20,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const darkImmersive = false;
   const isPari = path === "/pari" || path.startsWith("/pari/");
 
-  // Kapalak miya — to'liq ekran, dark, shell yo'q
-  if (path === "/pari" || path === "/login") {
+  // Standalone sahifalar — shell yo'q
+  if (path === "/pari" || path === "/login" || path.startsWith("/portfolio")) {
     return <>{children}</>;
   }
 
