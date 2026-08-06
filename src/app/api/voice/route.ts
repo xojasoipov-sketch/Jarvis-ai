@@ -38,7 +38,35 @@ function mimeToFilename(mime: string): string {
   return "audio.webm";
 }
 
-// 1. ElevenLabs STT (primary)
+// 1. Groq Whisper STT — PRIMARY (tez + o'zbek tilini biladi)
+async function transcribeGroq(audioBuffer: Buffer, mimeType: string): Promise<string | null> {
+  const groqKey = getGroqKey();
+  if (!groqKey) return null;
+  try {
+    const fd = new FormData();
+    fd.append("file", new Blob([new Uint8Array(audioBuffer)], { type: mimeType }), mimeToFilename(mimeType));
+    fd.append("model", "whisper-large-v3");
+    fd.append("response_format", "json");
+    fd.append("language", "uz"); // O'zbek tili — aniqroq va tezroq
+    const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${groqKey}` },
+      body: fd,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.error("Groq Whisper error:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data = await res.json();
+    return (data?.text as string) || null;
+  } catch (e) {
+    console.error("Groq Whisper exception:", e);
+    return null;
+  }
+}
+
+// 2. ElevenLabs STT — fallback (ingliz tili uchun, o'zbek uchun yomon)
 async function transcribeElevenLabs(audioBuffer: Buffer, mimeType: string): Promise<string | null> {
   const key = getElevenLabsKey();
   if (!key) return null;
@@ -54,7 +82,7 @@ async function transcribeElevenLabs(audioBuffer: Buffer, mimeType: string): Prom
       method: "POST",
       headers: { "xi-api-key": key },
       body: fd,
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(12000),
     });
     if (!res.ok) {
       console.error("ElevenLabs STT error:", res.status, await res.text().catch(() => ""));
@@ -64,33 +92,6 @@ async function transcribeElevenLabs(audioBuffer: Buffer, mimeType: string): Prom
     return (data?.text as string) || null;
   } catch (e) {
     console.error("ElevenLabs STT exception:", e);
-    return null;
-  }
-}
-
-// 2. Groq Whisper STT (fallback)
-async function transcribeGroq(audioBuffer: Buffer, mimeType: string): Promise<string | null> {
-  const groqKey = getGroqKey();
-  if (!groqKey) return null;
-  try {
-    const fd = new FormData();
-    fd.append("file", new Blob([new Uint8Array(audioBuffer)], { type: mimeType }), mimeToFilename(mimeType));
-    fd.append("model", "whisper-large-v3-turbo");
-    fd.append("response_format", "json");
-    const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${groqKey}` },
-      body: fd,
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) {
-      console.error("Groq Whisper error:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = await res.json();
-    return (data?.text as string) || null;
-  } catch (e) {
-    console.error("Groq Whisper exception:", e);
     return null;
   }
 }
@@ -163,12 +164,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "audio juda qisqa" }, { status: 400 });
     }
 
-    // 1. ElevenLabs STT (primary)
-    let transcript = await transcribeElevenLabs(buf, mimeType);
+    // 1. Groq Whisper — PRIMARY (o'zbek tili, tez)
+    let transcript = await transcribeGroq(buf, mimeType);
 
-    // 2. Groq Whisper fallback
+    // 2. ElevenLabs STT — fallback
     if (!transcript || transcript.trim().length < 2) {
-      transcript = await transcribeGroq(buf, mimeType);
+      transcript = await transcribeElevenLabs(buf, mimeType);
     }
 
     // 3. If we have a transcript, get AI reply
@@ -197,8 +198,8 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   const geminiKeys = getGeminiKeys();
   return NextResponse.json({
-    elevenlabs_stt: getElevenLabsKey() ? "✅ key set" : "❌ not set — add ELEVENLABS_API_KEY to Railway",
-    groq_stt: getGroqKey() ? "✅ key set (fallback)" : "❌ not set",
+    groq_stt: getGroqKey() ? "✅ key set (PRIMARY — uz language)" : "❌ not set",
+    elevenlabs_stt: getElevenLabsKey() ? "✅ key set (fallback)" : "❌ not set",
     gemini_stt: geminiKeys.length ? `✅ ${geminiKeys.length} key(s) (last resort)` : "❌ not set",
   });
 }
