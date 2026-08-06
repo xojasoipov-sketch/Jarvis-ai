@@ -6,12 +6,13 @@ export async function register() {
   // Faqat Node.js runtime da (Edge da emas)
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const appUrl =
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const appUrl = (
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.RAILWAY_STATIC_URL
       ? `https://${process.env.RAILWAY_STATIC_URL}`
-      : null);
+      : null)
+  )?.trim();
 
   if (!token || !appUrl) {
     console.log("[instrumentation] TG webhook o'rnatilmadi: token yoki URL yo'q");
@@ -19,49 +20,56 @@ export async function register() {
   }
 
   const webhookUrl = `${appUrl}/api/telegram`;
+  const api = `https://api.telegram.org/bot${token}`;
+
+  console.log("[instrumentation] Webhook URL:", webhookUrl);
 
   try {
-    const res = await fetch(
-      `https://api.telegram.org/bot${token}/setWebhook`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: webhookUrl,
-          allowed_updates: ["message", "callback_query"],
-          drop_pending_updates: false,
-        }),
-      }
-    );
-    const data = (await res.json()) as { ok: boolean; description?: string };
-    if (data.ok) {
+    // 1. Webhook o'rnatish
+    const whRes = await fetch(`${api}/setWebhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: webhookUrl,
+        allowed_updates: ["message", "callback_query"],
+        drop_pending_updates: false,
+      }),
+    });
+    const whData = (await whRes.json()) as { ok: boolean; description?: string };
+    if (whData.ok) {
       console.log(`[instrumentation] ✅ TG webhook o'rnatildi: ${webhookUrl}`);
     } else {
-      console.warn("[instrumentation] TG webhook xato:", data.description);
+      console.warn("[instrumentation] TG webhook xato:", whData.description, "| status:", whRes.status);
+      // Mavjud webhook ni tekshir
+      const infoRes = await fetch(`${api}/getWebhookInfo`);
+      const info = await infoRes.json() as { result?: { url?: string } };
+      console.log("[instrumentation] Hozirgi webhook:", info?.result?.url || "yo'q");
     }
 
-    // Bot commandlarini ham o'rnatish
-    await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+    // 2. Bot commandlarini o'rnatish
+    const cmdRes = await fetch(`${api}/setMyCommands`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         commands: [
-          { command: "start", description: "Botni ishga tushirish" },
-          { command: "chat", description: "Chat rejimi" },
-          { command: "agents", description: "Agent tanlash" },
-          { command: "smm", description: "SMM boshqaruvi" },
-          { command: "xizmatlar", description: "Xizmatlar katalogi" },
-          { command: "portfolio", description: "Portfolio ko'rish" },
-          { command: "zakaz", description: "Yangi zakaz berish" },
-          { command: "qr", description: "Telefon ulash QR kodi" },
-          { command: "status", description: "Tizim holati" },
-          { command: "help", description: "Yordam va buyruqlar" },
+          { command: "start",    description: "Botni ishga tushirish" },
+          { command: "chat",     description: "Chat rejimi" },
+          { command: "agents",   description: "Agent tanlash" },
+          { command: "smm",      description: "SMM boshqaruvi" },
+          { command: "xizmatlar",description: "Xizmatlar katalogi" },
+          { command: "portfolio",description: "Portfolio ko'rish" },
+          { command: "zakaz",    description: "Yangi zakaz berish" },
+          { command: "qr",       description: "Telefon ulash QR kodi" },
+          { command: "status",   description: "Tizim holati" },
+          { command: "help",     description: "Yordam va buyruqlar" },
         ],
       }),
     });
+    const cmdData = await cmdRes.json() as { ok: boolean };
+    console.log("[instrumentation] setMyCommands:", cmdData.ok ? "✅" : "❌");
 
-    // Mini App menyu tugmasini o'rnatish
-    await fetch(`https://api.telegram.org/bot${token}/setChatMenuButton`, {
+    // 3. Mini App menyu tugmasi
+    const menuRes = await fetch(`${api}/setChatMenuButton`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -72,8 +80,9 @@ export async function register() {
         },
       }),
     });
+    const menuData = await menuRes.json() as { ok: boolean };
+    console.log("[instrumentation] setChatMenuButton:", menuData.ok ? "✅" : "❌");
 
-    console.log("[instrumentation] ✅ TG buyruqlar va menyu o'rnatildi");
   } catch (e) {
     console.error("[instrumentation] TG setup xato:", e);
   }
