@@ -898,6 +898,67 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     parameters: { type: "object", properties: { goal: { type: "string" } }, required: ["goal"] },
     run: async (args) => runOrchestrator(String(args.goal)),
   },
+
+  // ─── Automation Flows ──────────────────────────────────────────────────────
+  {
+    name: "flow_list",
+    description: "Barcha automation flowlarni ro'yxatini olish",
+    parameters: { type: "object", properties: {}, required: [] },
+    run: async () => {
+      const { listFlows } = await import("./automation-store");
+      const flows = await listFlows();
+      return flows.map((f) => ({ id: f.id, name: f.name, active: f.active, trigger: f.trigger_type, runs: f.runs }));
+    },
+  },
+  {
+    name: "flow_run",
+    description: "Automation flowni qo'lda ishga tushirish",
+    parameters: {
+      type: "object",
+      properties: {
+        flow_id: { type: "string", description: "Flow ID" },
+        input: { type: "string", description: "Kirish matni (ixtiyoriy)" },
+      },
+      required: ["flow_id"],
+    },
+    run: async (args) => {
+      const { getFlow } = await import("./automation-store");
+      const { runFlow } = await import("./flow-runner");
+      const flow = await getFlow(String(args.flow_id));
+      if (!flow) throw new Error("Flow topilmadi");
+      return runFlow(flow, "manual", String(args.input || ""));
+    },
+  },
+  {
+    name: "flow_create",
+    description: "Yangi oddiy automation flow yaratish (trigger → agent → telegram)",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        trigger_type: { type: "string", enum: ["manual", "schedule", "webhook"] },
+        cron: { type: "string", description: "Jadval uchun cron ifodasi, masalan '0 9 * * *'" },
+      },
+      required: ["name"],
+    },
+    run: async (args) => {
+      const { createFlow } = await import("./automation-store");
+      const triggerType = (args.trigger_type as string) || "manual";
+      const flow = await createFlow({
+        name: String(args.name),
+        trigger_type: triggerType as "manual" | "schedule" | "webhook",
+        trigger_config: args.cron ? { cron: String(args.cron) } : {},
+        active: true,
+        nodes: [
+          { id: "n1", kind: "trigger", type: triggerType, label: triggerType, config: args.cron ? { cron: String(args.cron) } : {} },
+          { id: "n2", kind: "action", type: "agent", label: "Assistant", config: { agentId: "assistant" } },
+          { id: "n3", kind: "action", type: "telegram", label: "Telegram", config: {} },
+          { id: "n4", kind: "output", type: "end", label: "Tugash", config: {} },
+        ],
+      });
+      return { id: flow.id, name: flow.name, created: true };
+    },
+  },
 ];
 
 export function toolsAsOpenAIFunctions() {
