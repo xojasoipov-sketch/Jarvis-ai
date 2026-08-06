@@ -45,12 +45,22 @@ function PhoneSetupInner() {
 
     const server = window.location.origin;
     const id = searchParams.get("device_id") || crypto.randomUUID();
-    const cmd = `curl -sL "${server}/pari-agent.sh" | bash -s "${server}" "${id}"`;
+    const pairingToken = searchParams.get("token");
 
     setDeviceId(id);
-    setInstallCmd(cmd);
 
-    // Auto-register device
+    // Yangi QR pairing tizimi (Device Manager "Add Device") — pairing tokeni bor bo'lsa
+    // xavfsiz device_token oluvchi Python agentga yo'naltiramiz.
+    if (pairingToken) {
+      const cmd = `pkg install -y python termux-api && pip install requests && curl -sL "${server}/pari_device_agent.py" -o pari_device_agent.py && python pari_device_agent.py --server "${server}" --device-id "${id}" --token "${pairingToken}"`;
+      setInstallCmd(cmd);
+      setStep("ready");
+      return;
+    }
+
+    // Eski /qr (Telegram bot) oqimi — orqaga moslik uchun saqlanadi
+    const cmd = `curl -sL "${server}/pari-agent.sh" | bash -s "${server}" "${id}"`;
+    setInstallCmd(cmd);
     register(server, id).then(() => setStep("ready")).catch(() => {
       setErrorMsg("Server bilan bog'lanishda muammo");
       setStep("error");
