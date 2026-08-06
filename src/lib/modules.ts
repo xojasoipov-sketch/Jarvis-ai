@@ -39,6 +39,7 @@ import {
   Wrench,
   Database,
   FolderOpen,
+  Flame,
 } from "lucide-react";
 
 export type ModuleId =
@@ -57,6 +58,7 @@ export type ModuleId =
   | "analytics"
   | "finance"
   | "calendar"
+  | "personal"
   | "notifications"
   | "team"
   | "settings"
@@ -297,6 +299,18 @@ export const MODULES: ModuleDef[] = [
     aiConnected: true,
     inspiredBy: ["Cal.com"],
     phase: "C",
+  },
+  {
+    id: "personal",
+    name: "Personal Assistant",
+    nameUz: "Shaxsiy yordamchi",
+    description: "Long-term memory, habits, and reminders",
+    href: "/personal",
+    icon: Flame,
+    group: "core",
+    permission: "personal:manage",
+    aiConnected: true,
+    phase: "A",
   },
   {
     id: "notifications",
