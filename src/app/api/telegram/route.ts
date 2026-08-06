@@ -23,8 +23,11 @@ QOIDALAR (buzsiz):
 - Jarvis uslubi: ishonchli, tez, konkret. "Bajarildi." "Tayyor." "Topildi:"`;
 
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL
-  || (process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : null)
+// RAILWAY_STATIC_URL always reflects the real deployed domain — prioritize it
+// over NEXT_PUBLIC_APP_URL which may be stale after redeployments
+const APP_URL =
+  (process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : null)
+  || process.env.NEXT_PUBLIC_APP_URL
   || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://pari-ai-ten.vercel.app");
 
 const PORTFOLIO_URL = process.env.PORTFOLIO_URL || `${APP_URL}/portfolio`;
