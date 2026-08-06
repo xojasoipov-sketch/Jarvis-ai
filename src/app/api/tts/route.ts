@@ -7,57 +7,6 @@ import {
   splitSentences,
 } from "@/lib/elevenlabs";
 
-// Lazy getters — read env vars at call time, not module load time.
-// This prevents stale values if Railway env vars are updated without restart.
-const getKey = () => process.env.ELEVENLABS_API_KEY || "";
-const getVoiceId = () => process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM"; // Rachel
-const getModelId = () => process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5";
-
-async function elevenLabsTTS(
-  text: string,
-  voiceId?: string,
-  modelId?: string,
-  stability?: number,
-  similarity?: number,
-  style?: number,
-): Promise<ArrayBuffer | null> {
-  const key = getKey();
-  if (!key) return null;
-  try {
-    const vid = voiceId || getVoiceId();
-    const res = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${vid}/stream`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": key,
-          "Content-Type": "application/json",
-          Accept: "audio/mpeg",
-        },
-        body: JSON.stringify({
-          text: text.slice(0, 5000),
-          model_id: modelId || getModelId(),
-          voice_settings: {
-            stability: stability ?? 0.5,
-            similarity_boost: similarity ?? 0.75,
-            style: style ?? 0,
-            use_speaker_boost: true,
-          },
-        }),
-        signal: AbortSignal.timeout(15000),
-      }
-    );
-    if (!res.ok) {
-      console.error("ElevenLabs TTS error:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    return res.arrayBuffer();
-  } catch (e) {
-    console.error("ElevenLabs TTS exception:", e);
-    return null;
-  }
-}
-
 // StreamElements TTS — free, no API key, uses AWS Polly under the hood
 async function streamElementsTTS(text: string, lang: string): Promise<ArrayBuffer | null> {
   try {
@@ -100,30 +49,41 @@ export async function GET(req: NextRequest) {
 
   // Status check (no text)
   if (!text) {
-    const key = getKey();
-    return NextResponse.json({
-      elevenlabs: key ? "✅ key set" : "❌ ELEVENLABS_API_KEY not set — fallback to StreamElements/Google TTS",
-      voice_id: getVoiceId(),
-      model_id: getModelId(),
-      fallbacks: ["streamelements", "google-tts"],
-      hint: !key ? "Railway → Variables → ELEVENLABS_API_KEY=sk_... qo'shing va redeploy qiling" : null,
+    return NextResponse.json(elevenLabsMeta());
+  }
+
+  // Try ElevenLabs first (via lib — has cache, retry, diagnostics)
+  const elResult = await synthesizeElevenLabs(text, lang);
+  if (elResult.ok && "buffer" in elResult) {
+    return new Response(elResult.buffer, {
+      headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600", "X-TTS-Provider": "elevenlabs" },
     });
   }
 
-  let buf = await elevenLabsTTS(text);
-  if (!buf) buf = await streamElementsTTS(text, lang);
-  if (!buf) buf = await googleTTS(text, lang);
-
-  if (!buf) {
-    return NextResponse.json(
-      { error: "tts_failed", hint: "Set ELEVENLABS_API_KEY in Railway env vars" },
-      { status: 502 }
-    );
+  // Log why ElevenLabs failed
+  if (!elResult.ok) {
+    console.error("ElevenLabs TTS failed:", elResult.error, "status:", elResult.status);
   }
 
-  return new Response(buf, {
-    headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600" },
-  });
+  // Fallbacks
+  let buf = await streamElementsTTS(text, lang);
+  if (buf) {
+    return new Response(buf, {
+      headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600", "X-TTS-Provider": "streamelements" },
+    });
+  }
+
+  buf = await googleTTS(text, lang);
+  if (buf) {
+    return new Response(buf, {
+      headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600", "X-TTS-Provider": "google" },
+    });
+  }
+
+  return NextResponse.json(
+    { error: "tts_failed", elevenlabs_error: !elResult.ok ? elResult.error : undefined },
+    { status: 502 }
+  );
 }
 
 // POST — advanced TTS with voice/model selection
@@ -135,32 +95,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "text kerak" }, { status: 400 });
     }
 
-    const voiceId = body.voice_id || getVoiceId();
-    const modelId = body.model_id || getModelId();
-    const stability = body.stability;
-    const similarity = body.similarity;
-    const style = body.style;
     const lang = body.lang || "uz";
 
-    // 1. ElevenLabs with custom settings
-    let buf = await elevenLabsTTS(text, voiceId, modelId, stability, similarity, style);
-
-    // 2. StreamElements fallback (ignores voice/model settings)
-    if (!buf) buf = await streamElementsTTS(text, lang);
-
-    // 3. Google TTS last resort
-    if (!buf) buf = await googleTTS(text, lang);
-
-    if (!buf) {
-      return NextResponse.json(
-        { error: "tts_failed", hint: "Barcha TTS provayderlar xato berdi" },
-        { status: 502 }
-      );
+    // 1. ElevenLabs via lib (has cache, retry, diagnostics)
+    const elResult = await synthesizeElevenLabs(text, lang);
+    if (elResult.ok && "buffer" in elResult) {
+      return new Response(elResult.buffer, {
+        headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600", "X-TTS-Provider": "elevenlabs" },
+      });
     }
 
-    return new Response(buf, {
-      headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600" },
-    });
+    if (!elResult.ok) {
+      console.error("ElevenLabs TTS (POST) failed:", elResult.error);
+    }
+
+    // 2. StreamElements fallback
+    let buf = await streamElementsTTS(text, lang);
+    if (buf) {
+      return new Response(buf, {
+        headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600", "X-TTS-Provider": "streamelements" },
+      });
+    }
+
+    // 3. Google TTS last resort
+    buf = await googleTTS(text, lang);
+    if (buf) {
+      return new Response(buf, {
+        headers: { "Content-Type": "audio/mpeg", "Cache-Control": "public, max-age=3600", "X-TTS-Provider": "google" },
+      });
+    }
+
+    return NextResponse.json(
+      { error: "tts_failed", elevenlabs_error: !elResult.ok ? elResult.error : undefined },
+      { status: 502 }
+    );
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
