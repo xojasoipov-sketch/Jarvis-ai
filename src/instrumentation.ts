@@ -40,7 +40,6 @@ export async function register() {
       console.log(`[instrumentation] ✅ TG webhook o'rnatildi: ${webhookUrl}`);
     } else {
       console.warn("[instrumentation] TG webhook xato:", whData.description, "| status:", whRes.status);
-      // Mavjud webhook ni tekshir
       const infoRes = await fetch(`${api}/getWebhookInfo`);
       const info = await infoRes.json() as { result?: { url?: string } };
       console.log("[instrumentation] Hozirgi webhook:", info?.result?.url || "yo'q");
@@ -52,17 +51,6 @@ export async function register() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         commands: [
-          { command: "start",    description: "Botni ishga tushirish" },
-          { command: "chat",     description: "Chat rejimi" },
-          { command: "agents",   description: "Agent tanlash" },
-          { command: "smm",      description: "SMM boshqaruvi" },
-          { command: "xizmatlar",description: "Xizmatlar katalogi" },
-          { command: "portfolio",description: "Portfolio ko'rish" },
-          { command: "zakaz",    description: "Yangi zakaz berish" },
-          { command: "qr",       description: "Telefon ulash QR kodi" },
-          { command: "status",   description: "Tizim holati" },
-          { command: "help",     description: "Yordam va buyruqlar" },
-=======
           { command: "start", description: "Botni ishga tushirish" },
           { command: "chat", description: "Chat rejimi" },
           { command: "agents", description: "Agent tanlash" },
