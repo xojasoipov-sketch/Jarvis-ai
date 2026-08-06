@@ -46,7 +46,7 @@ async function execNode(
       ]);
 
       const dueReminders = reminders
-        .filter((r) => !r.completed_at)
+        .filter((r) => !r.done)
         .slice(0, 5)
         .map((r) => `• ${r.title}`)
         .join("\n");
@@ -54,7 +54,7 @@ async function execNode(
       const prompt = `Sen Jarvis — qisqa kunlik brifing yoz (o'zbek tilida, 5-10 satr):
 Bugun: ${new Date().toLocaleDateString("uz-UZ", { weekday: "long", day: "numeric", month: "long" })}
 ${memory ? `Xotira: ${memory}` : ""}
-${finance ? `Moliya: balans ${finance.balance.toLocaleString()} so'm, bu oy xarajat ${finance.thisMonthExpense.toLocaleString()} so'm` : ""}
+${finance ? `Moliya: daromad ${finance.income.toLocaleString()} so'm, xarajat ${finance.expense.toLocaleString()} so'm, balans ${finance.net.toLocaleString()} so'm` : ""}
 ${dueReminders ? `Eslatmalar:\n${dueReminders}` : ""}
 Motivatsion, konkret, qisqa yoz.`;
 
@@ -65,7 +65,7 @@ Motivatsion, konkret, qisqa yoz.`;
 
     // ── Telegram: send message to owner
     case "telegram": {
-      const ownerId = OWNER?.telegram_id;
+      const ownerId = OWNER?.telegramId;
       if (!ownerId) return { ok: false, output: "OWNER_TELEGRAM_ID sozlanmagan" };
       const text = interpolate(cfg.message || ctx.vars["digest"] || ctx.vars["agent_output"] || ctx.input || "");
       if (!text) return { ok: false, output: "Yuborish uchun matn yo'q" };
@@ -101,12 +101,12 @@ Motivatsion, konkret, qisqa yoz.`;
       const summary = await financeSummary().catch(() => null);
       if (!summary) return { ok: false, output: "Moliyaviy ma'lumot yo'q" };
       const report = JSON.stringify({
-        balance: summary.balance,
-        income: summary.totalIncome,
-        expense: summary.totalExpense,
-        this_month_expense: summary.thisMonthExpense,
-        goals: summary.goals,
-        subscriptions: summary.subscriptions,
+        net: summary.net,
+        income: summary.income,
+        expense: summary.expense,
+        monthly_subs_cost: summary.monthlySubsCost,
+        owed_by_me: summary.owedByMe,
+        owed_to_me: summary.owedToMe,
       }, null, 2);
       ctx.vars["finance_report"] = report;
       return { ok: true, output: `Hisobot tayyor (${Object.keys(summary).length} maydon)` };

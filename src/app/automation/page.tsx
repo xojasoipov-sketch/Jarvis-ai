@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { AutoFlow, FlowRun, FlowRunStep } from "@/lib/automation-store";
 import type { FlowNode } from "@/lib/flows";
+import { nextRunAt, describeCron } from "@/lib/cron";
 
 const NODE_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   manual:         { label: "Qo'lda",        icon: Play,            color: "#6366f1" },
@@ -183,7 +184,17 @@ export default function AutomationPage() {
                     <div style={{ width: 7, height: 7, borderRadius: "50%", background: f.active ? "#22c55e" : "rgba(255,255,255,0.2)", flexShrink: 0 }} />
                     <span style={{ fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{TRIGGER_LABELS[f.trigger_type] || f.trigger_type} · {f.runs} marta</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
+                    {TRIGGER_LABELS[f.trigger_type] || f.trigger_type} · {f.runs} marta
+                    {f.trigger_type === "schedule" && f.trigger_config.cron && (() => {
+                      const next = nextRunAt(f.trigger_config.cron);
+                      if (!next) return null;
+                      const diff = new Date(next).getTime() - Date.now();
+                      const mins = Math.round(diff / 60000);
+                      const label = mins < 60 ? `${mins}d` : mins < 1440 ? `${Math.round(mins/60)}s` : `${Math.round(mins/1440)}k`;
+                      return <span style={{ color: "#f59e0b" }}> · {label} keyin</span>;
+                    })()}
+                  </div>
                 </button>
               ))
             }
@@ -233,8 +244,24 @@ export default function AutomationPage() {
                     {active.description && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{active.description}</div>}
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>
                       {TRIGGER_LABELS[active.trigger_type]} · {active.nodes.length} node · {active.runs} ijro
-                      {active.last_run_at && ` · ${new Date(active.last_run_at).toLocaleString("uz-UZ")}`}
+                      {active.last_run_at && ` · oxirgi: ${new Date(active.last_run_at).toLocaleString("uz-UZ")}`}
                     </div>
+                    {active.trigger_type === "schedule" && active.trigger_config.cron && (() => {
+                      const cron = active.trigger_config.cron;
+                      const next = nextRunAt(cron);
+                      return (
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, fontSize: 11 }}>
+                          <span style={{ padding: "3px 8px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 6, color: "#f59e0b" }}>
+                            {describeCron(cron)}
+                          </span>
+                          {next && (
+                            <span style={{ color: "rgba(255,255,255,0.3)" }}>
+                              keyingi: {new Date(next).toLocaleString("uz-UZ")}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={() => setTab(tab === "history" ? "flow" : "history")}
@@ -321,7 +348,7 @@ export default function AutomationPage() {
                               <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{node.label}</div>
                               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
                                 {m.label}
-                                {node.config.cron && <span> · {node.config.cron}</span>}
+                                {node.config.cron && <span> · {describeCron(node.config.cron)}</span>}
                                 {node.config.agentId && <span> · {node.config.agentId}</span>}
                               </div>
                               {step && (
