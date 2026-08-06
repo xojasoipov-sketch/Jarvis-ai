@@ -5,7 +5,7 @@ import { History } from "lucide-react";
 import {
   Briefcase, Microscope, Code2, BarChart3, PenLine, Megaphone,
   Settings2, Target, Bot, Play, Zap, Building2, Bug, Shield, Database,
-  Palette, Scale, FlaskConical, DollarSign, Handshake, Users, type LucideIcon,
+  Palette, Scale, FlaskConical, DollarSign, Handshake, Users, Route, CheckCircle2, type LucideIcon,
 } from "lucide-react";
 
 const AGENTS: { id: string; name: string; icon: LucideIcon; desc: string; color: string; tags: string[] }[] = [
@@ -31,7 +31,9 @@ const AGENTS: { id: string; name: string; icon: LucideIcon; desc: string; color:
 
 type Result = { agent: string; icon: string; result: string };
 type RunHistory = { id: number; agent_name: string; task: string; result: string; created_at: string };
-type Mode = "manual" | "parallel" | "hermes";
+type Mode = "manual" | "parallel" | "hermes" | "orchestrator";
+type OrchStep = { agent_id: string; agent_name: string; icon: string; task: string; result: string };
+type OrchRun = { steps: OrchStep[]; final: string | null; status: "running" | "done" | "error" };
 
 function AgentsInner() {
   const searchParams = useSearchParams();
@@ -43,6 +45,7 @@ function AgentsInner() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [history, setHistory] = useState<RunHistory[]>([]);
   const [routingReason, setRoutingReason] = useState("");
+  const [orchResult, setOrchResult] = useState<OrchRun | null>(null);
   const multiMode = mode === "parallel";
 
   const loadHistory = useCallback(async () => {
@@ -90,13 +93,25 @@ function AgentsInner() {
     }));
   }
 
+  async function runOrchestrator(goal: string): Promise<OrchRun> {
+    const res = await fetch("/api/orchestrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ goal }),
+    });
+    return res.json();
+  }
+
   async function handleRun() {
     if (!task.trim()) return;
     setLoading(true);
     setResults([]);
     setRoutingReason("");
+    setOrchResult(null);
 
-    if (mode === "hermes") {
+    if (mode === "orchestrator") {
+      setOrchResult(await runOrchestrator(task));
+    } else if (mode === "hermes") {
       setResults(await runHermes(task));
     } else if (mode === "parallel" && selectedIds.length > 0) {
       const promises = selectedIds.map(id => runAgent(id, task));
@@ -136,6 +151,7 @@ function AgentsInner() {
             { id: "manual", label: "Qo'lda" },
             { id: "parallel", label: "Parallel" },
             { id: "hermes", label: "Hermes" },
+            { id: "orchestrator", label: "Jarvis" },
           ] as { id: Mode; label: string }[]).map((m) => (
             <button
               key={m.id}
@@ -145,6 +161,7 @@ function AgentsInner() {
               }`}
             >
               {m.id === "hermes" && <Zap size={12} strokeWidth={2} />}
+              {m.id === "orchestrator" && <Route size={12} strokeWidth={2} />}
               {m.label}
             </button>
           ))}
@@ -156,9 +173,16 @@ function AgentsInner() {
           Hermes rejimi — vazifangizni yozing, u qaysi agent(lar) mos kelishini avtomatik aniqlab, ularni ishga tushiradi.
         </div>
       )}
+      {mode === "orchestrator" && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-xs text-indigo-700 flex items-start gap-2">
+          <Route size={14} strokeWidth={2} className="flex-shrink-0 mt-0.5" />
+          <span><strong>Jarvis rejimi</strong> — faqat maqsadingizni ayting. Jarvis uni bosqichlarga bo&apos;lib,
+          tegishli agentlarga ketma-ket topshiradi va oxirida yagona, tayyor javob beradi.</span>
+        </div>
+      )}
 
       {/* Agent cards — hidden in Hermes mode since selection is automatic */}
-      {mode !== "hermes" && (
+      {mode !== "hermes" && mode !== "orchestrator" && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {AGENTS.map(a => {
           const isActive = multiMode ? selectedIds.includes(a.id) : selected?.id === a.id;
@@ -194,7 +218,11 @@ function AgentsInner() {
       {/* Task input */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-3">
-          {mode === "hermes" ? (
+          {mode === "orchestrator" ? (
+            <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Route size={15} strokeWidth={1.75} className="text-indigo-600" /> Maqsadingizni ayting — Jarvis rejalab bajaradi
+            </p>
+          ) : mode === "hermes" ? (
             <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
               <Zap size={15} strokeWidth={1.75} className="text-indigo-600" /> Hermes vazifani tahlil qiladi
             </p>
@@ -223,7 +251,7 @@ function AgentsInner() {
         <div className="flex justify-end mt-3">
           <button
             onClick={handleRun}
-            disabled={loading || !task.trim() || (mode !== "hermes" && !selected && selectedIds.length === 0)}
+            disabled={loading || !task.trim() || (mode !== "hermes" && mode !== "orchestrator" && !selected && selectedIds.length === 0)}
             className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-all"
           >
             {loading ? (
@@ -234,6 +262,52 @@ function AgentsInner() {
           </button>
         </div>
       </div>
+
+      {/* Orchestrator plan + final answer */}
+      {orchResult && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Route size={15} strokeWidth={1.75} className="text-indigo-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Bajarish rejasi</h2>
+            </div>
+            <div className="space-y-3">
+              {orchResult.steps.map((s, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-indigo-50 flex items-center justify-center text-xs font-bold text-indigo-600">{i + 1}</div>
+                    {i < orchResult.steps.length - 1 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
+                  </div>
+                  <div className="flex-1 pb-3">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-semibold text-gray-900">{s.agent_name}</p>
+                      <CheckCircle2 size={12} strokeWidth={2} className="text-green-500" />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{s.task}</p>
+                    <div
+                      className="text-sm text-gray-700 leading-relaxed mt-2 bg-gray-50 rounded-lg p-3"
+                      dangerouslySetInnerHTML={{ __html: formatResult(s.result) }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {orchResult.final && (
+            <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl p-5 text-white">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle2 size={15} strokeWidth={2} />
+                <p className="text-sm font-semibold">Yakuniy javob</p>
+              </div>
+              <div
+                className="text-sm leading-relaxed text-indigo-50"
+                dangerouslySetInnerHTML={{ __html: formatResult(orchResult.final) }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Results */}
       {results.length > 0 && (
