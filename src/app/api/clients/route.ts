@@ -22,3 +22,13 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ client: data });
 }
+
+// PATCH /api/clients — pipeline bosqichini yangilash (lead -> negotiation -> won/lost)
+export async function PATCH(req: NextRequest) {
+  const { id, pipeline_stage } = await req.json();
+  if (!id || !pipeline_stage) return NextResponse.json({ error: "id va pipeline_stage kerak" }, { status: 400 });
+  if (!dbConfigured || !supabase) return NextResponse.json({ error: "DB sozlanmagan" }, { status: 500 });
+  const { data, error } = await supabase.from("pari_clients").update({ pipeline_stage }).eq("id", id).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ client: data });
+}

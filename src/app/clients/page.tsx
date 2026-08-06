@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { Users, Plus, Search, MessageSquare, FileText, DollarSign, CheckSquare, Phone, Mail, Globe, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+type PipelineStage = "lead" | "negotiation" | "won" | "lost";
+
 type Client = {
   id: number;
   name: string;
@@ -14,6 +16,15 @@ type Client = {
   created_at: string;
   total_orders?: number;
   total_paid?: number;
+  pipeline_stage?: PipelineStage;
+};
+
+const STAGE_LABELS: Record<PipelineStage, string> = { lead: "Lead", negotiation: "Muzokara", won: "Yutildi", lost: "Yo'qotildi" };
+const STAGE_COLORS: Record<PipelineStage, string> = {
+  lead: "bg-gray-100 text-gray-600",
+  negotiation: "bg-yellow-100 text-yellow-700",
+  won: "bg-green-100 text-green-700",
+  lost: "bg-red-100 text-red-700",
 };
 
 export default function ClientsPage() {
@@ -40,6 +51,11 @@ export default function ClientsPage() {
       const d = await res.json();
       if (d.client) { setClients(prev => [d.client, ...prev]); setForm({ name: "", email: "", phone: "", company: "", website: "", notes: "" }); setShowAdd(false); }
     } finally { setSaving(false); }
+  }
+
+  async function updateStage(id: number, pipeline_stage: PipelineStage) {
+    setClients(prev => prev.map(c => c.id === id ? { ...c, pipeline_stage } : c));
+    await fetch("/api/clients", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, pipeline_stage }) });
   }
 
   const filtered = clients.filter(c =>
@@ -174,6 +190,13 @@ export default function ClientsPage() {
                     {c.total_orders ? <p className="text-xs text-gray-500">{c.total_orders} buyurtma</p> : null}
                     {c.total_paid ? <p className="text-xs font-medium text-gray-900">${c.total_paid.toLocaleString()}</p> : null}
                   </div>
+                  <select
+                    value={c.pipeline_stage || "lead"}
+                    onChange={e => updateStage(c.id, e.target.value as PipelineStage)}
+                    className={`text-xs font-medium rounded-lg px-2 py-1.5 border-0 focus:outline-none focus:ring-1 focus:ring-gray-300 ${STAGE_COLORS[c.pipeline_stage || "lead"]}`}
+                  >
+                    {Object.entries(STAGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
                 </div>
               </div>
             </div>
