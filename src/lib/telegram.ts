@@ -130,8 +130,8 @@ export async function sendDocument(chatId: number, fileUrl: string, filename: st
 }
 
 export async function sendPhoto(chatId: number, photoUrl: string, caption?: string, keyboard?: InlineKeyboard) {
-  const body: Record<string, unknown> = { chat_id: chatId, photo: photoUrl };
-  if (caption) body.caption = caption;
+  const body: Record<string, unknown> = { chat_id: chatId, photo: photoUrl, parse_mode: "Markdown" };
+  if (caption) body.caption = caption.slice(0, 1024); // TG caption limit
   if (keyboard) body.reply_markup = keyboard;
   await fetch(`${getApi()}/sendPhoto`, {
     method: "POST",
