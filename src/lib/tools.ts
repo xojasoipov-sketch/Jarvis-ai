@@ -4,6 +4,16 @@ import { supabase, dbConfigured } from "@/lib/supabase";
 import { connectionsSummaryJson } from "@/lib/connections";
 import { internetSearch, fetchUrl, extractFromPage } from "@/lib/web";
 import { ENV } from "@/lib/env";
+import { rememberFact, listMemory } from "@/lib/memory-store";
+import { createHabit, checkinHabit, listHabits } from "@/lib/habits-store";
+import { createReminder, listReminders } from "@/lib/reminders-store";
+import {
+  addTransaction, setBudget, budgetStatus, createGoal, contributeToGoal,
+  addSubscription, addDebt, financeSummary,
+} from "@/lib/finance-store";
+import { queueCommand, listDevices } from "@/lib/device-store";
+import { AGENTS, callAI, type AgentId } from "@/lib/agents";
+import { runOrchestrator } from "@/lib/orchestrator";
 
 export type ToolDef = {
   name: string;
@@ -676,6 +686,217 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     description: "Sana/vaqt",
     parameters: { type: "object", properties: {} },
     run: async () => ({ iso: new Date().toISOString(), readable: new Date().toString() }),
+  },
+
+  // ─── Personal Life ────────────────────────────────────────────────────────
+  {
+    name: "long_memory_store",
+    description: "Foydalanuvchi haqida uzoq muddatli fakt/afzallik/maqsadni eslab qolish (keyingi suhbatlarda ishlatiladi)",
+    parameters: {
+      type: "object",
+      properties: {
+        category: { type: "string", enum: ["fact", "preference", "goal", "date"] },
+        key: { type: "string", description: "Masalan: sevimli rang" },
+        value: { type: "string", description: "Masalan: ko'k" },
+        importance: { type: "number", description: "1-5, muhimlik darajasi" },
+      },
+      required: ["key", "value"],
+    },
+    run: async (args) => rememberFact({
+      category: (args.category as "fact" | "preference" | "goal" | "date") || "fact",
+      key: String(args.key), value: String(args.value), importance: Number(args.importance) || undefined,
+    }),
+  },
+  {
+    name: "long_memory_retrieve",
+    description: "Foydalanuvchi haqida saqlangan xotiradan kontekst olish",
+    parameters: { type: "object", properties: { category: { type: "string" } } },
+    run: async (args) => ({ items: await listMemory(args.category as "fact" | "preference" | "goal" | "date" | undefined) }),
+  },
+  {
+    name: "reminder_set",
+    description: "Eslatma o'rnatish (bir martalik yoki takroriy — tug'ilgan kun, dori, uchrashuv va h.k.)",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        due_at: { type: "string", description: "ISO sana-vaqt" },
+        category: { type: "string", enum: ["general", "birthday", "health", "finance", "travel"] },
+        repeat: { type: "string", enum: ["none", "daily", "weekly", "monthly", "yearly"] },
+        note: { type: "string" },
+      },
+      required: ["title", "due_at"],
+    },
+    run: async (args) => createReminder({
+      title: String(args.title), due_at: String(args.due_at),
+      category: args.category as "general" | "birthday" | "health" | "finance" | "travel" | undefined,
+      repeat: args.repeat as "none" | "daily" | "weekly" | "monthly" | "yearly" | undefined,
+      note: args.note ? String(args.note) : undefined,
+    }),
+  },
+  {
+    name: "reminder_list",
+    description: "Faol eslatmalar ro'yxati",
+    parameters: { type: "object", properties: {} },
+    run: async () => ({ items: await listReminders() }),
+  },
+  {
+    name: "habit_tracker",
+    description: "Yangi kunlik odat yaratish (suv ichish, sport, o'qish va h.k.)",
+    parameters: {
+      type: "object",
+      properties: { title: { type: "string" }, emoji: { type: "string" } },
+      required: ["title"],
+    },
+    run: async (args) => createHabit({ title: String(args.title), emoji: args.emoji ? String(args.emoji) : undefined }),
+  },
+  {
+    name: "habit_checkin",
+    description: "Bugungi odatni bajarilgan deb belgilash",
+    parameters: { type: "object", properties: { habit_id: { type: "string" } }, required: ["habit_id"] },
+    run: async (args) => checkinHabit(String(args.habit_id)),
+  },
+  {
+    name: "habit_list",
+    description: "Faol odatlar ro'yxati",
+    parameters: { type: "object", properties: {} },
+    run: async () => ({ items: await listHabits() }),
+  },
+
+  // ─── Finance ────────────────────────────────────────────────────────────
+  {
+    name: "expense_track",
+    description: "Xarajat yoki kirim qo'shish",
+    parameters: {
+      type: "object",
+      properties: {
+        type: { type: "string", enum: ["income", "expense"] },
+        amount: { type: "number" },
+        category: { type: "string" },
+        note: { type: "string" },
+      },
+      required: ["type", "amount"],
+    },
+    run: async (args) => addTransaction({
+      type: args.type as "income" | "expense", amount: Number(args.amount),
+      category: args.category ? String(args.category) : undefined, note: args.note ? String(args.note) : undefined,
+    }),
+  },
+  {
+    name: "budget_create",
+    description: "Kategoriya uchun oylik budjet limiti belgilash",
+    parameters: {
+      type: "object",
+      properties: { category: { type: "string" }, monthly_limit: { type: "number" } },
+      required: ["category", "monthly_limit"],
+    },
+    run: async (args) => setBudget(String(args.category), Number(args.monthly_limit)),
+  },
+  {
+    name: "financial_report",
+    description: "Joriy oy moliyaviy hisoboti — kirim, chiqim, budjet holati, obunalar, qarzlar",
+    parameters: { type: "object", properties: {} },
+    run: async () => ({ summary: await financeSummary(), budgets: await budgetStatus() }),
+  },
+  {
+    name: "savings_goal",
+    description: "Moliyaviy maqsad yaratish (jamg'arma)",
+    parameters: {
+      type: "object",
+      properties: { title: { type: "string" }, target_amount: { type: "number" }, deadline: { type: "string" } },
+      required: ["title", "target_amount"],
+    },
+    run: async (args) => createGoal({ title: String(args.title), target_amount: Number(args.target_amount), deadline: args.deadline ? String(args.deadline) : undefined }),
+  },
+  {
+    name: "savings_goal_contribute",
+    description: "Moliyaviy maqsadga pul qo'shish",
+    parameters: { type: "object", properties: { id: { type: "string" }, amount: { type: "number" } }, required: ["id", "amount"] },
+    run: async (args) => contributeToGoal(String(args.id), Number(args.amount)),
+  },
+  {
+    name: "subscription_manager",
+    description: "Takrorlanuvchi to'lov (obuna) qo'shish — Netflix, Spotify va h.k.",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string" }, amount: { type: "number" }, cycle: { type: "string", enum: ["monthly", "yearly"] }, next_charge: { type: "string" } },
+      required: ["name", "amount", "next_charge"],
+    },
+    run: async (args) => addSubscription({ name: String(args.name), amount: Number(args.amount), cycle: (args.cycle as "monthly" | "yearly") || "monthly", next_charge: String(args.next_charge) }),
+  },
+  {
+    name: "debt_tracker",
+    description: "Qarz qo'shish (men qarzdorman yoki menga qarzdor)",
+    parameters: {
+      type: "object",
+      properties: { title: { type: "string" }, amount: { type: "number" }, direction: { type: "string", enum: ["owe", "owed"] }, due_date: { type: "string" } },
+      required: ["title", "amount", "direction"],
+    },
+    run: async (args) => addDebt({ title: String(args.title), amount: Number(args.amount), direction: args.direction as "owe" | "owed", due_date: args.due_date ? String(args.due_date) : undefined }),
+  },
+
+  // ─── CRM ────────────────────────────────────────────────────────────────
+  {
+    name: "crm_contact_add",
+    description: "Yangi mijoz qo'shish (CRM)",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string" }, email: { type: "string" }, phone: { type: "string" }, company: { type: "string" }, notes: { type: "string" } },
+      required: ["name"],
+    },
+    run: async (args) => {
+      if (!dbConfigured) throw new Error("Supabase sozlanmagan");
+      const { data, error } = await supabase!.from("pari_clients").insert({
+        name: String(args.name), email: args.email, phone: args.phone, company: args.company, notes: args.notes,
+      }).select().single();
+      if (error) throw new Error(error.message);
+      return { ok: true, client: data };
+    },
+  },
+
+  // ─── Devices (QR-paired qurilmalar) ───────────────────────────────────────
+  {
+    name: "device_list",
+    description: "QR orqali ulangan qurilmalar ro'yxati (Device Manager)",
+    parameters: { type: "object", properties: {} },
+    run: async () => ({ devices: await listDevices() }),
+  },
+  {
+    name: "device_command",
+    description: "Ulangan qurilmaga buyruq yuborish (battery_status, get_location, take_screenshot, send_notification, vibrate, open_camera, get_files, download_file, terminal_command)",
+    parameters: {
+      type: "object",
+      properties: {
+        device_id: { type: "string" },
+        action: { type: "string", enum: ["device_status", "battery_status", "get_location", "take_screenshot", "send_notification", "vibrate", "open_camera", "get_files", "upload_file", "download_file", "terminal_command"] },
+        payload: { type: "object" },
+      },
+      required: ["device_id", "action"],
+    },
+    run: async (args) => queueCommand(String(args.device_id), String(args.action), (args.payload as Record<string, unknown>) || {}),
+  },
+
+  // ─── AI Agents / Orchestration ─────────────────────────────────────────────
+  {
+    name: "agent_run",
+    description: "Ma'lum bir ixtisoslashgan agentga (ceo, researcher, coder, analyst, writer, marketing, devops, assistant, architect, debug, security, database, designer, legal, testing, finance, sales, hr) vazifa berish",
+    parameters: {
+      type: "object",
+      properties: { agent_id: { type: "string" }, task: { type: "string" } },
+      required: ["agent_id", "task"],
+    },
+    run: async (args) => {
+      const agent = AGENTS[args.agent_id as AgentId];
+      if (!agent) throw new Error(`Noma'lum agent: ${args.agent_id}`);
+      const result = await callAI(agent.prompt, String(args.task));
+      return { agent: agent.name, result };
+    },
+  },
+  {
+    name: "orchestrate_goal",
+    description: "Murakkab maqsadni bosqichlarga bo'lib, tegishli agentlar bilan oxirigacha bajarish (Jarvis rejimi)",
+    parameters: { type: "object", properties: { goal: { type: "string" } }, required: ["goal"] },
+    run: async (args) => runOrchestrator(String(args.goal)),
   },
 ];
 
