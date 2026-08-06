@@ -45,10 +45,21 @@ const MAIN_KEYBOARD = {
 
 const GUEST_KEYBOARD = {
   inline_keyboard: [
-    [{ text: "🏢 Portfolio ko'rish", web_app: { url: PORTFOLIO_URL } }],
-    [{ text: "📧 Bog'lanish", callback_data: "guest:contact" }],
+    [{ text: "🚀 Portfolio va Zakaz — SADI PRIME", web_app: { url: PORTFOLIO_URL } }],
+    [{ text: "📞 Bog'lanish", url: `https://t.me/${SADIPRIME.telegram}` }],
   ],
 };
+
+async function handleGuestMessage(chatId: number, firstName: string) {
+  await sendMessage(
+    chatId,
+    `Salom, *${firstName}*! 👋\n\n` +
+    `*SADI PRIME* — Professional IT xizmatlari\n\n` +
+    `🌐 Web saytlar\n📱 Mobil ilovalar\n🤖 AI yechimlar\n📊 SMM va Marketing\n\n` +
+    `Portfolio ko'rish va zakaz berish uchun tugmani bosing 👇`,
+    GUEST_KEYBOARD
+  );
+}
 
 // All 18 agents
 const AGENT_NAMES: Record<string, string> = {
@@ -533,7 +544,7 @@ async function handleCallback(
   }
 
   if (!isOwner) {
-    await sendMessage(chatId, guestStartText(firstName), GUEST_KEYBOARD);
+    await handleGuestMessage(chatId, firstName);
     return;
   }
 
@@ -683,15 +694,8 @@ export async function POST(req: NextRequest) {
       const owner = isOwnerTelegram(from);
       log("info", "telegram", `from ${from?.username || from?.id} owner=${owner}`);
       if (!owner) {
-        const lim = checkGuestTelegramLimit(from.id);
-        if (!lim.allowed) {
-          await sendMessage(
-            chat.id,
-            `⛔ Limit (${lim.limit}/24s).\n*${SADIPRIME.brand}* — @${SADIPRIME.telegram}\nPortfolio: ${PORTFOLIO_URL}`
-          );
-          return NextResponse.json({ ok: true });
-        }
-        consumeGuestTelegram(from.id);
+        await handleGuestMessage(chat.id, from.first_name);
+        return NextResponse.json({ ok: true });
       }
       await handleMessage(chat.id, text, from.first_name);
     }
@@ -700,13 +704,7 @@ export async function POST(req: NextRequest) {
       const { chat, from } = update.message;
       const owner = isOwnerTelegram(from);
       if (!owner) {
-        const lim = checkGuestTelegramLimit(from.id);
-        if (!lim.allowed) {
-          await sendMessage(chat.id, `⛔ Limit. @${SADIPRIME.telegram}`);
-          return NextResponse.json({ ok: true });
-        }
-        consumeGuestTelegram(from.id);
-        await sendMessage(chat.id, guestStartText(from.first_name), GUEST_KEYBOARD);
+        await handleGuestMessage(chat.id, from.first_name);
         return NextResponse.json({ ok: true });
       }
       const fileId = (update.message.voice || update.message.audio)!.file_id;
