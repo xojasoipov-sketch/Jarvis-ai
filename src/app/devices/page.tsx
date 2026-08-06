@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import {
-  Smartphone, Monitor, Wifi, WifiOff, Battery,
+  Smartphone, Monitor, Wifi, WifiOff,
   Send, Trash2, Plus, RefreshCw, Terminal, Copy, Check,
   Volume2, MonitorSmartphone, Bell, MessageSquare, Phone,
-  ChevronDown, ChevronUp, Download, Clapperboard,
+  ChevronDown, ChevronUp, Download, QrCode,
+  Camera, Mic, MapPin, Battery, Clipboard, Globe, Share2,
+  RotateCcw, Cpu, Zap,
 } from "lucide-react";
 
 const HermesOrb = dynamic(() => import("@/components/HermesOrb"), { ssr: false });
@@ -24,16 +26,53 @@ interface ComputerDevice {
 type DeviceTab = "computers" | "phones";
 
 const PHONE_COMMANDS = [
-  { id: "call",     label: "Qo'ng'iroq", icon: Phone,          fields: ["number"] },
-  { id: "sms",      label: "SMS",        icon: MessageSquare,  fields: ["number", "message"] },
-  { id: "notify",   label: "Bildirishnoma", icon: Bell,        fields: ["title", "message"] },
-  { id: "open_app",  label: "Dastur",      icon: MonitorSmartphone, fields: ["package"] },
-  { id: "volume",    label: "Ovoz",        icon: Volume2,        fields: ["level"] },
-  { id: "screen",    label: "Ekran yoq",   icon: Monitor,        fields: [] },
-  { id: "location",  label: "Joylashuv",   icon: Smartphone,     fields: [] },
-  { id: "camera",    label: "Kamera",      icon: Clapperboard,   fields: ["duration"] },
-  { id: "torch",     label: "Fonar",       icon: Volume2,        fields: ["on"] },
-  { id: "custom",    label: "Boshqa",      icon: Terminal,       fields: ["data"] },
+  // Aloqa
+  { id: "call",          label: "Qo'ng'iroq",   icon: Phone,            fields: ["number"] },
+  { id: "sms",           label: "SMS yuborish",  icon: MessageSquare,    fields: ["number", "message"] },
+  { id: "sms_list",      label: "SMS listi",     icon: MessageSquare,    fields: [] },
+  { id: "call_log",      label: "Qo'ng'iroq log",icon: Phone,            fields: [] },
+  { id: "contacts",      label: "Kontaktlar",    icon: Smartphone,       fields: [] },
+  // Bildirishnomalar
+  { id: "notify",        label: "Bildirishnoma", icon: Bell,             fields: ["title", "message"] },
+  { id: "notify_list",   label: "Bildiri listi", icon: Bell,             fields: [] },
+  // Media
+  { id: "photo",         label: "Foto olish",    icon: Camera,           fields: [] },
+  { id: "screenshot",    label: "Screenshot",    icon: Monitor,          fields: [] },
+  { id: "record_audio",  label: "Ovoz yozish",   icon: Mic,              fields: ["duration"] },
+  { id: "play_sound",    label: "Musiqa ijro",   icon: Volume2,          fields: ["url"] },
+  { id: "stop_sound",    label: "Musiqani to'x", icon: Volume2,          fields: [] },
+  { id: "tts",           label: "TTS (ovoz)",    icon: Mic,              fields: ["text"] },
+  // Joylashuv
+  { id: "location",      label: "Joylashuv",     icon: MapPin,           fields: [] },
+  // Qurilma
+  { id: "battery",       label: "Batareya",      icon: Battery,          fields: [] },
+  { id: "sensor",        label: "Sensorlar",     icon: Cpu,              fields: ["sensor"] },
+  { id: "sysinfo",       label: "Tizim info",    icon: Cpu,              fields: [] },
+  { id: "wifi",          label: "WiFi info",     icon: Wifi,             fields: [] },
+  { id: "wifi_scan",     label: "WiFi tarmoqlar",icon: Wifi,             fields: [] },
+  // Ovoz va ekran
+  { id: "volume",        label: "Ovoz darajasi", icon: Volume2,          fields: ["level"] },
+  { id: "torch",         label: "Fonar",         icon: Zap,              fields: ["on"] },
+  { id: "vibrate",       label: "Vibratsiya",    icon: Smartphone,       fields: ["duration"] },
+  { id: "screen_off",    label: "Ekran o'ch",    icon: Monitor,          fields: [] },
+  { id: "screen_on",     label: "Ekran yoq",     icon: Monitor,          fields: [] },
+  // Bufer
+  { id: "clipboard_get", label: "Bufer olish",   icon: Clipboard,        fields: [] },
+  { id: "clipboard_set", label: "Buferga yoz",   icon: Clipboard,        fields: ["text"] },
+  // Dasturlar va brauzer
+  { id: "open_url",      label: "URL ochish",    icon: Globe,            fields: ["url"] },
+  { id: "open_app",      label: "Dastur ochish", icon: MonitorSmartphone,fields: ["package"] },
+  { id: "share",         label: "Ulashish",      icon: Share2,           fields: ["text"] },
+  // UI
+  { id: "toast",         label: "Toast xabar",   icon: Bell,             fields: ["message"] },
+  { id: "dialog",        label: "Dialog",        icon: Bell,             fields: ["title", "message"] },
+  // Fayl
+  { id: "download",      label: "Yuklab olish",  icon: Download,         fields: ["url"] },
+  // Tizim
+  { id: "shell",         label: "Shell buyruq",  icon: Terminal,         fields: ["command"] },
+  { id: "reboot",        label: "Qayta ishga",   icon: RotateCcw,        fields: [] },
+  // Boshqa
+  { id: "custom",        label: "Boshqa (JSON)", icon: Terminal,         fields: ["data"] },
 ];
 
 const COMPUTER_COMMANDS = [
@@ -67,6 +106,8 @@ export default function DevicesPage() {
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [showSetup, setShowSetup] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [qrPhone, setQrPhone] = useState<string | null>(null);
+  const [newDeviceId] = useState(() => crypto.randomUUID());
 
   const addLog = useCallback((msg: string) => {
     const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -139,9 +180,20 @@ export default function DevicesPage() {
 
   const addPhone = async () => {
     if (!newPhone.name) return;
-    await fetch("/api/phones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newPhone) });
+    const payload = { ...newPhone, id: newDeviceId };
+    await fetch("/api/phones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     setShowAdd(false); setNewPhone({ name: "", platform: "android", webhook_url: "" });
     addLog(`✅ ${newPhone.name} qo'shildi`); await fetchAll();
+  };
+
+  // Auto-fill webhook URL when form opens
+  const openAddForm = () => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    setNewPhone(p => ({
+      ...p,
+      webhook_url: p.webhook_url || `${origin}/api/phones/webhook?device_id=${newDeviceId}`,
+    }));
+    setShowAdd(true);
   };
 
   const copyInstall = () => {
@@ -181,7 +233,7 @@ export default function DevicesPage() {
           </span>
           <div style={{ display: "flex", gap: 4 }}>
             <Btn onClick={fetchAll}><RefreshCw size={11} /></Btn>
-            {tab === "phones" && <Btn onClick={() => setShowAdd(!showAdd)}><Plus size={11} /></Btn>}
+            {tab === "phones" && <Btn onClick={() => showAdd ? setShowAdd(false) : openAddForm()}><Plus size={11} /></Btn>}
           </div>
         </div>
 
@@ -217,6 +269,7 @@ export default function DevicesPage() {
               online={dev.status === "online"}
               selected={selectedPhone === dev.id}
               onClick={() => setSelectedPhone(dev.id)}
+              onQr={() => setQrPhone(qrPhone === dev.id ? null : dev.id)}
               onRemove={async () => {
                 await fetch(`/api/phones?id=${dev.id}`, { method: "DELETE" });
                 addLog(`🗑 ${dev.name} o'chirildi`); await fetchAll();
@@ -232,6 +285,31 @@ export default function DevicesPage() {
             </div>
           )}
         </div>
+
+        {/* QR Code overlay for phone setup */}
+        {tab === "phones" && qrPhone && (() => {
+          const dev = phones.find(p => p.id === qrPhone);
+          if (!dev) return null;
+          const origin = typeof window !== "undefined" ? window.location.origin : "";
+          const setupUrl = `${origin}/api/phones/webhook?device_id=${dev.id}`;
+          const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(setupUrl)}`;
+          return (
+            <div style={{ borderTop: "1px solid #1f1f23", padding: 10, background: "#0d0d0f" }}>
+              <div style={{ fontSize: 10, color: "#ff6a1a", fontWeight: 700, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                QR — {dev.name}
+                <button onClick={() => setQrPhone(null)} style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer", fontSize: 12 }}>✕</button>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qrUrl} alt="QR code" style={{ width: "100%", borderRadius: 4, display: "block" }} />
+              <div style={{ fontSize: 9, color: "#52525b", marginTop: 5, wordBreak: "break-all", fontFamily: "monospace" }}>
+                {setupUrl}
+              </div>
+              <div style={{ fontSize: 9, color: "#71717a", marginTop: 4, lineHeight: 1.5 }}>
+                Skanerlash → Termux ni o'rnating → webhook URL si avtomatik kiritiladi
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Add phone form */}
         {tab === "phones" && showAdd && (
@@ -398,10 +476,10 @@ export default function DevicesPage() {
 }
 
 // ── Small components ──────────────────────────────────────────────────────────
-function DevRow({ icon, name, sub, online, selected, onClick, onRemove }: {
+function DevRow({ icon, name, sub, online, selected, onClick, onQr, onRemove }: {
   icon: React.ReactNode; name: string; sub: string;
   online: boolean; selected: boolean;
-  onClick: () => void; onRemove?: () => void;
+  onClick: () => void; onQr?: () => void; onRemove?: () => void;
 }) {
   return (
     <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 8px", borderRadius: 5, cursor: "pointer", marginBottom: 2, background: selected ? "rgba(255,106,26,0.08)" : "transparent", border: `1px solid ${selected ? "rgba(255,106,26,0.25)" : "transparent"}`, transition: "all 0.12s" }}>
@@ -416,6 +494,11 @@ function DevRow({ icon, name, sub, online, selected, onClick, onRemove }: {
           <span style={{ fontSize: 10, color: "#52525b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</span>
         </div>
       </div>
+      {onQr && (
+        <button onClick={e => { e.stopPropagation(); onQr(); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#3f3f46", padding: 3 }}>
+          <QrCode size={10} />
+        </button>
+      )}
       {onRemove && (
         <button onClick={e => { e.stopPropagation(); onRemove(); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#3f3f46", padding: 3 }}>
           <Trash2 size={10} />
