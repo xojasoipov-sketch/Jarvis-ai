@@ -1,11 +1,14 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Pari AI Agent — to'liq Android nazorat
 # Installs itself, registers device, polls for commands forever
-# Usage: curl -sS https://jarvis-ai-production-41a9.up.railway.app/pari-agent.sh | bash
+# Usage: curl -sS <server>/pari-agent.sh | bash -s <server> <device_id>
 
 set -e
 
-SERVER="https://jarvis-ai-production-41a9.up.railway.app"
+# Accept server URL and device ID from args (passed by setup page)
+SERVER="${1:-https://jarvis-ai-production-41a9.up.railway.app}"
+DEVICE_ID_ARG="${2:-}"
+
 DEVICE_ID_FILE="$HOME/.pari_device_id"
 AGENT_FILE="$HOME/.pari_agent.sh"
 BOOT_DIR="$HOME/.termux/boot"
@@ -32,7 +35,11 @@ pkg install -y -q termux-api curl jq python ffmpeg 2>/dev/null || {
 }
 
 # ── Step 2: Device ID ─────────────────────────────────────────────────────────
-if [ -f "$DEVICE_ID_FILE" ]; then
+if [ -n "$DEVICE_ID_ARG" ]; then
+  DEVICE_ID="$DEVICE_ID_ARG"
+  echo "$DEVICE_ID" > "$DEVICE_ID_FILE"
+  info "Setup dan kelgan device ID: $DEVICE_ID"
+elif [ -f "$DEVICE_ID_FILE" ]; then
   DEVICE_ID=$(cat "$DEVICE_ID_FILE")
   info "Mavjud device ID: $DEVICE_ID"
 else
@@ -45,7 +52,7 @@ DEVICE_NAME="$(getprop ro.product.model 2>/dev/null || echo 'Android')"
 ANDROID_VER="$(getprop ro.build.version.release 2>/dev/null || echo '?')"
 
 # ── Step 3: Register with Pari ────────────────────────────────────────────────
-info "Pari serveriga ulanmoqda..."
+info "Pari serveriga ulanmoqda ($SERVER)..."
 REG_RESULT=$(curl -s -X POST "$SERVER/api/phones" \
   -H "Content-Type: application/json" \
   -d "{\"id\":\"$DEVICE_ID\",\"name\":\"$DEVICE_NAME\",\"platform\":\"android\",\"android_ver\":\"$ANDROID_VER\"}" \
@@ -435,6 +442,7 @@ echo ""
 echo -e "  ${O}Qurilma:${N} $DEVICE_NAME"
 echo -e "  ${O}Android:${N} $ANDROID_VER"
 echo -e "  ${O}ID:${N}      $DEVICE_ID"
+echo -e "  ${O}Server:${N}  $SERVER"
 echo -e "  ${O}Polling:${N} har ${POLL_INTERVAL}s"
 echo -e "  ${O}Log:${N}     $LOG"
 echo ""
