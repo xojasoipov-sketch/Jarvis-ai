@@ -28,6 +28,7 @@ export type InlineButton = {
   text: string;
   callback_data?: string;
   web_app?: { url: string };
+  url?: string;
 };
 
 export type InlineKeyboard = {

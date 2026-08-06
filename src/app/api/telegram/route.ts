@@ -156,6 +156,7 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
       `/generate [mavzu] — AI post yaratish\n` +
       `/post [matn] — Kanalga post yuborish\n` +
       `/xizmatlar — Sotiladigan xizmatlar katalogi\n` +
+      `/zakaz — Zakaz berish (portfolio orqali)\n` +
       `/clear — Suhbatni tozalash\n` +
       `/status — Tizim holati\n` +
       `/app — Ilovani ochish\n\n` +
@@ -200,6 +201,25 @@ async function handleMessage(chatId: number, text: string, firstName: string) {
 
   if (cmd === "/xizmatlar") {
     await sendServiceCatalog(chatId);
+    return;
+  }
+
+  if (cmd === "/zakaz" || cmd === "/order") {
+    const portfolioUrl = `${APP_URL}/portfolio`;
+    await sendMessage(chatId,
+      `📦 *Zakaz berish*\n\n` +
+      `Portfoliomizni ko'rib, kerakli xizmatni tanlang va forma orqali zakaz bering.\n\n` +
+      `Yoki to'g'ridan-to'g'ri yozing:\n` +
+      `• Qanday xizmat kerak\n` +
+      `• Qisqacha loyiha haqida\n\n` +
+      `📱 @xojasoipov`,
+      {
+        inline_keyboard: [
+          [{ text: "🏢 Portfolio va Zakaz", web_app: { url: portfolioUrl } }],
+          [{ text: "💬 Telegram orqali yozish", url: "https://t.me/xojasoipov" }],
+        ],
+      }
+    );
     return;
   }
 
