@@ -40,6 +40,7 @@ import {
   Database,
   FolderOpen,
   Flame,
+  CreditCard as CreditCardIcon,
 } from "lucide-react";
 
 export type ModuleId =
@@ -278,14 +279,18 @@ export const MODULES: ModuleDef[] = [
     id: "finance",
     name: "Finance",
     nameUz: "Moliya",
-    description: "Billing, invoices, revenue",
-    href: "/billing",
+    description: "Budget, expenses, income, goals, subscriptions, debts",
+    href: "/finance",
     icon: Wallet,
     group: "business",
     permission: "finance:manage",
     aiConnected: true,
     inspiredBy: ["Invoice Ninja", "Lago"],
-    phase: "C",
+    phase: "B",
+    routes: [
+      { label: "Moliya", href: "/finance", icon: Wallet },
+      { label: "AI Billing", href: "/billing", icon: CreditCardIcon },
+    ],
   },
   {
     id: "calendar",
