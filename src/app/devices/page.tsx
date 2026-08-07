@@ -270,11 +270,17 @@ export default function DevicesPage() {
           bo'lmaydi. */}
       <style jsx>{`
         @media (max-width: 860px) {
+          /* Inline style="height:100vh; overflow:hidden" on the root wins over a
+             plain class rule (same origin, inline always wins without !important) —
+             without !important here the root stayed pinned at 100vh with clipped
+             overflow, squeezing everything below the fold and letting the orb's
+             absolutely-positioned HUD (RESET/GESTURE OFF/H.E.R.M.E.S. labels)
+             bleed over the collapsed device panel. */
           .jarvis-devices-root {
-            flex-direction: column;
-            height: auto;
+            flex-direction: column !important;
+            height: auto !important;
             min-height: 100vh;
-            overflow: visible;
+            overflow: visible !important;
           }
           .jarvis-sidebar {
             width: 100% !important;
@@ -285,6 +291,16 @@ export default function DevicesPage() {
           .jarvis-main {
             min-width: 0 !important;
             width: 100%;
+            flex: none !important;
+          }
+          /* Orb's wrapper used flex:1/minHeight:0 to fill a definite-height parent —
+             in the mobile column (now height:auto) that has nothing to grow into
+             and collapses to 0, so its absolutely-positioned children (bottom/top
+             offset, no fixed height) rendered anchored to the collapsed edge and
+             overlapped the command panel underneath. Give it a real height instead. */
+          .jarvis-orb-wrap {
+            flex: none !important;
+            min-height: 360px;
           }
           .jarvis-activity-panel {
             display: none;
@@ -443,7 +459,7 @@ export default function DevicesPage() {
       {/* ─── Center: Orb + command ─── */}
       <div className="jarvis-main" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Orb */}
-        <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+        <div className="jarvis-orb-wrap" style={{ flex: 1, position: "relative", minHeight: 0 }}>
           <HermesOrb showControls />
 
           {/* Selected device overlay */}
