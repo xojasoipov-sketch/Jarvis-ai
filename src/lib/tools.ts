@@ -879,7 +879,10 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       "terminal_command(payload.cmd): tayyor action mos kelmasa, ilova ega bo'lgan ruxsatlar doirasida " +
       "erkin shell buyruq yozib bajarish uchun — faqat qaytarib bo'lmas/xavfli ish bo'lmasa ishlat. " +
       "hide_app: ilova ikonkasini ilovalar ro'yxatidan yashiradi (fon xizmati ishlashda davom etadi, " +
-      "buyruqlarni hamon qabul qiladi — faqat ekranda ko'rinmaydi). show_app: ikonkani qaytadan ko'rsatadi.",
+      "buyruqlarni hamon qabul qiladi — faqat ekranda ko'rinmaydi). show_app: ikonkani qaytadan ko'rsatadi. " +
+      "open_autostart_settings: Infinix/Xiaomi/Samsung/Huawei kabi OEM qurilmalarda 'Autostart' yoki " +
+      "'Fon ilovalari' sahifasini ochadi — foydalanuvchi Jarvis Agent uchun avtomatik ishga tushishni " +
+      "yoqishi kerak bo'lganda ishlat.",
     parameters: {
       type: "object",
       properties: {
@@ -894,7 +897,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
             "create_folder", "rename_file", "copy_file", "download_file", "get_clipboard",
             "set_clipboard", "open_app", "open_url", "share_text", "open_settings", "set_alarm",
             "list_installed_apps", "open_camera", "take_screenshot", "terminal_command",
-            "hide_app", "show_app",
+            "hide_app", "show_app", "open_autostart_settings",
           ],
         },
         payload: { type: "object", description: "action'ga mos parametrlar, masalan {\"number\":\"+998...\"}" },

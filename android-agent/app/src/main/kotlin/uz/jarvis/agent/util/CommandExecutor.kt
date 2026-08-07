@@ -71,6 +71,8 @@ class CommandExecutor @Inject constructor(
         "clipboard_sync", "voice_record",
         // Ilova ikonkasini yashirish/ko'rsatish (fon xizmati ishlashda davom etadi)
         "hide_app", "show_app",
+        // OEM batareya/autostart sozlamalarini ochish
+        "open_autostart_settings",
     )
 
     suspend fun execute(cmd: PendingCommand): CommandResult {
@@ -118,6 +120,7 @@ class CommandExecutor @Inject constructor(
                     "voice_record" -> CommandResult.Err("voice_record hali qo'llab-quvvatlanmaydi")
                     "hide_app" -> hideApp()
                     "show_app" -> showApp()
+                    "open_autostart_settings" -> openAutostartSettings()
                     else -> CommandResult.Ok("Buyruq qabul qilindi: ${cmd.command}")
                 }
             }.getOrElse { e -> CommandResult.Err("Xato: ${e.message}") }
@@ -538,6 +541,95 @@ class CommandExecutor @Inject constructor(
             alias, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP
         )
         return CommandResult.Ok("Ilova ikonkasi qaytadan ko'rsatildi.")
+    }
+
+    /**
+     * OEM'ga xos "Autostart" / "Fon ilovalari" sahifasini ochadi.
+     * Infinix XOS, Tecno, itel (Transsion guruh), Xiaomi MIUI, Samsung, Huawei,
+     * OPPO/Realme/OnePlus va boshqalarni qo'llab-quvvatlaydi.
+     * Hech bir OEM intenti ishlamasa standart batareya optimizatsiya sahifasiga o'tadi.
+     */
+    private fun openAutostartSettings(): CommandResult {
+        val pkg = context.packageName
+
+        // OEM'ga xos intent'lar — ustuvorlik tartibida sinab ko'riladi
+        val candidates = listOf(
+            // Infinix XOS / Tecno / itel (Transsion)
+            Intent().setComponent(ComponentName(
+                "com.transsion.powersaving",
+                "com.transsion.powersaving.view.ui.AutoStartActivity"
+            )),
+            Intent("com.transsion.powersaving.autostart").apply {
+                putExtra("packageName", pkg)
+            },
+            // Xiaomi MIUI
+            Intent().setComponent(ComponentName(
+                "com.miui.securitycenter",
+                "com.miui.permcenter.autostart.AutoStartManagementActivity"
+            )),
+            // Huawei EMUI
+            Intent().setComponent(ComponentName(
+                "com.huawei.systemmanager",
+                "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
+            )),
+            Intent().setComponent(ComponentName(
+                "com.huawei.systemmanager",
+                "com.huawei.systemmanager.optimize.bootstart.BootStartActivity"
+            )),
+            // Samsung One UI
+            Intent().setComponent(ComponentName(
+                "com.samsung.android.lool",
+                "com.samsung.android.sm.battery.ui.BatteryActivity"
+            )),
+            // OPPO / Realme / OnePlus (ColorOS)
+            Intent().setComponent(ComponentName(
+                "com.coloros.safecenter",
+                "com.coloros.privacypermissionsentry.PermissionTopActivity"
+            )),
+            Intent().setComponent(ComponentName(
+                "com.oppo.safe",
+                "com.oppo.safe.permission.startup.StartupAppListActivity"
+            )),
+            // Vivo FuntouchOS
+            Intent().setComponent(ComponentName(
+                "com.vivo.permissionmanager",
+                "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"
+            )),
+            // Asus ROG / ZenUI
+            Intent().setComponent(ComponentName(
+                "com.asus.mobilemanager",
+                "com.asus.mobilemanager.powersaver.PowerSaverSettings"
+            )),
+            // Nokia / HMD
+            Intent().setComponent(ComponentName(
+                "com.evenwell.powersaving.g3",
+                "com.evenwell.powersaving.g3.exception.PowerSaverExceptionActivity"
+            )),
+            // Standart Android — ilovaga xos batareya optimizatsiya sahifasi
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$pkg")
+            },
+            // Oxirgi fallback — umumiy batareya sozlamalari
+            Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS),
+        )
+
+        for (intent in candidates) {
+            try {
+                val resolved = context.packageManager.resolveActivity(intent, 0)
+                if (resolved != null) {
+                    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    return CommandResult.Ok(
+                        "Autostart/Batareya sozlamalari sahifasi ochildi. " +
+                        "Jarvis Agent yonidagi \"Autostart\" tugmasini yoqing."
+                    )
+                }
+            } catch (_: Exception) { continue }
+        }
+
+        return CommandResult.Err(
+            "Qurilmangizda autostart sozlamalari topilmadi. " +
+            "Qo'lda: Sozlamalar → Ilovalar → Jarvis Agent → Batareya → Autostart → Yoqish."
+        )
     }
 
     // ── Terminal (cheklangan) ────────────────────────────────────────────────
