@@ -57,8 +57,10 @@ object NetworkModule {
         // We use a placeholder URL here; actual requests are routed via DynamicUrlInterceptor.
         val dynamicClient = okHttpClient.newBuilder()
             .addInterceptor { chain ->
+                // Pairlangandan keyin saqlangan server manzili ustuvor; pairlanmagan bo'lsa
+                // (auto-connect birinchi so'rovi) build vaqtida yozilgan SERVER_URL ishlatiladi.
                 val serverUrl = runBlocking { store.serverUrl.first() }
-                    ?: "https://example.com" // fallback if not paired yet
+                    ?: BuildConfig.SERVER_URL.ifBlank { "https://example.com" }
                 val baseUrl = if (serverUrl.endsWith("/")) serverUrl else "$serverUrl/"
                 val original = chain.request()
                 val newUrl = original.url.toString()

@@ -39,6 +39,9 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
+        env:
+          JARVIS_SERVER_URL: ${{ secrets.JARVIS_SERVER_URL }}
+          JARVIS_AUTO_PAIR_KEY: ${{ secrets.JARVIS_AUTO_PAIR_KEY }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload Debug APK

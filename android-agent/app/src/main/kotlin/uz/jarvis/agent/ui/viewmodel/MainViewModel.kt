@@ -13,7 +13,8 @@ import javax.inject.Inject
 
 sealed class UiState {
     data object Loading : UiState()
-    data object Unpaired : UiState()
+    // Pairlanmagan — ruxsatlar so'ralib, avtomatik ulanish davom etmoqda (QR/token kerak emas).
+    data object Connecting : UiState()
     data class Pairing(val link: PairingDeepLink) : UiState()
     data object PairingInProgress : UiState()
     data class PairingError(val message: String) : UiState()
@@ -39,6 +40,8 @@ class MainViewModel @Inject constructor(
     private val _agentRunning = MutableStateFlow(false)
     val agentRunning: StateFlow<Boolean> = _agentRunning.asStateFlow()
 
+    private var autoConnectStarted = false
+
     init {
         checkPairingStatus()
     }
@@ -47,7 +50,7 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             val session = repo.getSession()
             if (session == null) {
-                _uiState.value = UiState.Unpaired
+                _uiState.value = UiState.Connecting
             } else {
                 _uiState.value = UiState.Paired(
                     deviceName = session.deviceName,
@@ -69,6 +72,29 @@ class MainViewModel @Inject constructor(
 
         val link = PairingDeepLink(deviceId = deviceId, token = token, server = server)
         _uiState.value = UiState.Pairing(link)
+    }
+
+    /** Ruxsatlar so'ralib bo'lgach (Compose tomonidan) chaqiriladi — QR/token kerak emas, darhol ulanadi. */
+    fun autoConnect() {
+        if (autoConnectStarted) return
+        autoConnectStarted = true
+        viewModelScope.launch {
+            when (val result = repo.autoPair()) {
+                is PairingResult.Success -> {
+                    autoConnectStarted = false
+                    checkPairingStatus()
+                }
+                is PairingResult.Failure -> {
+                    autoConnectStarted = false
+                    _uiState.value = UiState.PairingError(result.message)
+                }
+            }
+        }
+    }
+
+    /** PairingError ekranidagi "Qayta urinish" — avtomatik ulanishga qaytadi. */
+    fun retryConnect() {
+        _uiState.value = UiState.Connecting
     }
 
     fun confirmPairing(link: PairingDeepLink) {
@@ -103,11 +129,11 @@ class MainViewModel @Inject constructor(
     fun revokeDevice() {
         viewModelScope.launch {
             repo.revokeDevice()
-            _uiState.value = UiState.Unpaired
+            _uiState.value = UiState.Connecting
         }
     }
 
     fun cancelPairing() {
-        _uiState.value = UiState.Unpaired
+        _uiState.value = UiState.Connecting
     }
 }

@@ -12,6 +12,13 @@ interface JarvisApiService {
         @Body request: PairConfirmRequest
     ): Response<PairConfirmResponse>
 
+    // Auto-pair on first launch — no QR/token exchange, just the built-in secret key
+    @POST("api/devices/pair/auto")
+    suspend fun autoPair(
+        @Header("Authorization") bearerToken: String,
+        @Body request: AutoPairRequest
+    ): Response<PairConfirmResponse>
+
     // Heartbeat — keep device "online"
     @POST("api/devices/heartbeat")
     suspend fun heartbeat(

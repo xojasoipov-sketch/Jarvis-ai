@@ -1,5 +1,6 @@
 package uz.jarvis.agent.data.repository
 
+import uz.jarvis.agent.BuildConfig
 import uz.jarvis.agent.data.api.JarvisApiService
 import uz.jarvis.agent.data.model.*
 import uz.jarvis.agent.data.storage.SecureTokenStore
@@ -14,6 +15,38 @@ class AgentRepositoryImpl @Inject constructor(
     private val store: SecureTokenStore,
     private val deviceInfo: DeviceInfo,
 ) {
+    /** Ilova birinchi ochilganda — QR/token kiritmasdan, build vaqtida yozilgan kalit bilan darhol ulanadi. */
+    suspend fun autoPair(): PairingResult {
+        if (BuildConfig.SERVER_URL.isBlank() || BuildConfig.AUTO_PAIR_KEY.isBlank()) {
+            return PairingResult.Failure("Ilova server bilan oldindan sozlanmagan (SERVER_URL/AUTO_PAIR_KEY yo'q)")
+        }
+        return try {
+            val resp = api.autoPair(
+                bearerToken = "Bearer ${BuildConfig.AUTO_PAIR_KEY}",
+                request = AutoPairRequest(
+                    name = deviceInfo.deviceName(),
+                    model = deviceInfo.model(),
+                    osVersion = deviceInfo.osVersion(),
+                    appVersion = deviceInfo.appVersion(),
+                )
+            )
+            if (resp.isSuccessful) {
+                val body = resp.body()!!
+                store.saveSession(
+                    deviceId = body.deviceId,
+                    deviceToken = body.deviceToken,
+                    serverUrl = BuildConfig.SERVER_URL,
+                    deviceName = body.name ?: deviceInfo.deviceName(),
+                )
+                PairingResult.Success(body.deviceId, body.deviceToken, BuildConfig.SERVER_URL)
+            } else {
+                PairingResult.Failure("Server xatosi: ${resp.code()} ${resp.message()}")
+            }
+        } catch (e: Exception) {
+            PairingResult.Failure("Ulanish xatosi: ${e.message}")
+        }
+    }
+
     suspend fun confirmPairing(link: PairingDeepLink): PairingResult {
         return try {
             val resp = api.confirmPairing(

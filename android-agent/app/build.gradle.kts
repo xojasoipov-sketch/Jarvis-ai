@@ -22,6 +22,14 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Auto-connect: server manzili va maxfiy kalit build vaqtida ilova ichiga yoziladi
+        // (CI'da GitHub Actions secrets orqali, lokal buildda env var orqali).
+        // Bo'sh bo'lsa, ilova pairlanmaydi va Sozlamalar orqali qo'lda QR bilan ulash kerak bo'ladi.
+        val serverUrl = (System.getenv("JARVIS_SERVER_URL") ?: project.findProperty("jarvisServerUrl") as String? ?: "").trim()
+        val autoPairKey = (System.getenv("JARVIS_AUTO_PAIR_KEY") ?: project.findProperty("jarvisAutoPairKey") as String? ?: "").trim()
+        buildConfigField("String", "SERVER_URL", "\"$serverUrl\"")
+        buildConfigField("String", "AUTO_PAIR_KEY", "\"$autoPairKey\"")
     }
 
     buildTypes {

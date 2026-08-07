@@ -11,6 +11,19 @@
 const SECRET = process.env.DEVICE_PAIRING_SECRET || process.env.APP_PASSWORD || "";
 export const deviceAuthConfigured = Boolean(SECRET);
 
+// Auto-pair: alohida, tor doiradagi maxfiy kalit — faqat APK ichiga qattiq yozilgan va
+// birinchi ochilishda hech qanday QR/token almashinuvisiz darhol pairlash uchun ishlatiladi.
+// APP_PASSWORD'dan ATAYLAB alohida: shu tufayli APK ichida veb-ilova login paroli emas,
+// faqat shu bitta maqsad uchun yaroqli kalit yotadi.
+const AUTO_PAIR_SECRET = process.env.DEVICE_AUTO_PAIR_KEY || "";
+export const autoPairConfigured = Boolean(AUTO_PAIR_SECRET);
+
+export function verifyAutoPairKey(token: string): boolean {
+  if (!AUTO_PAIR_SECRET || !token) return false;
+  if (token.length !== AUTO_PAIR_SECRET.length) return false;
+  return timingSafeEqualHex(token, AUTO_PAIR_SECRET);
+}
+
 const PAIRING_TTL_MS = 10 * 60 * 1000; // 10 daqiqa
 
 async function hmac(payload: string): Promise<string> {

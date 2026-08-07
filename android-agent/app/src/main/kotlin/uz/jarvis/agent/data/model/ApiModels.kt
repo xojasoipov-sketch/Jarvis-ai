@@ -5,6 +5,17 @@ import kotlinx.serialization.Serializable
 
 // ─── Pairing ──────────────────────────────────────────────────────────────────
 
+// Auto-pair: birinchi ochilishda, QR/deep-link almashinuvisiz — Authorization headerida
+// APK ichiga qattiq yozilgan AUTO_PAIR_KEY yuboriladi, javob PairConfirmResponse bilan bir xil.
+@Serializable
+data class AutoPairRequest(
+    @SerialName("name") val name: String,
+    @SerialName("platform") val platform: String = "android",
+    @SerialName("model") val model: String,
+    @SerialName("os_version") val osVersion: String,
+    @SerialName("app_version") val appVersion: String,
+)
+
 @Serializable
 data class PairConfirmRequest(
     @SerialName("device_id") val deviceId: String,

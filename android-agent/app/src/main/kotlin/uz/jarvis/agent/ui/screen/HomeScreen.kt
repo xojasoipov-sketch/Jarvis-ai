@@ -1,5 +1,7 @@
 package uz.jarvis.agent.ui.screen
 
+import android.Manifest
+import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -21,6 +23,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import uz.jarvis.agent.domain.model.PairingDeepLink
 import uz.jarvis.agent.service.AgentForegroundService
 import uz.jarvis.agent.ui.theme.*
@@ -29,6 +33,20 @@ import uz.jarvis.agent.ui.viewmodel.UiState
 import java.text.SimpleDateFormat
 import java.util.*
 
+/** Agentga kerakli barcha runtime ruxsatlar — auto-connect boshida birma-bir so'raladi. */
+private fun requiredPermissions(): List<String> = buildList {
+    add(Manifest.permission.CAMERA)
+    add(Manifest.permission.ACCESS_FINE_LOCATION)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        add(Manifest.permission.POST_NOTIFICATIONS)
+        add(Manifest.permission.READ_MEDIA_IMAGES)
+    } else {
+        add(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+    add(Manifest.permission.RECORD_AUDIO)
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel = hiltViewModel(),
@@ -92,8 +110,21 @@ fun HomeScreen(
                     CircularProgressIndicator(color = AccentOrange)
                 }
 
-                is UiState.Unpaired -> {
-                    UnpairedContent(onScan = onOpenScanner)
+                is UiState.Connecting -> {
+                    // Ruxsatlarni birma-bir so'raydi, natijadan qat'i nazar (bekor qilinsa ham) davom etib,
+                    // avtomatik ulanishni (auto-pair) boshlaydi — QR yoki qo'lda kod kiritish shart emas.
+                    val permState = rememberMultiplePermissionsState(
+                        permissions = requiredPermissions(),
+                        onPermissionsResult = { viewModel.autoConnect() },
+                    )
+                    LaunchedEffect(Unit) {
+                        if (permState.allPermissionsGranted) {
+                            viewModel.autoConnect()
+                        } else {
+                            permState.launchMultiplePermissionRequest()
+                        }
+                    }
+                    ConnectingContent()
                 }
 
                 is UiState.Pairing -> {
@@ -126,7 +157,7 @@ fun HomeScreen(
                         Icon(Icons.Default.ErrorOutline, null, tint = ErrorRed, modifier = Modifier.size(48.dp))
                         Text(state.message, color = ErrorRed, textAlign = TextAlign.Center)
                         Button(
-                            onClick = { viewModel.cancelPairing() },
+                            onClick = { viewModel.retryConnect() },
                             colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
                         ) {
                             Text("Qayta urinish")
@@ -135,6 +166,13 @@ fun HomeScreen(
                 }
 
                 is UiState.Paired -> {
+                    // Ulangandan so'ng agent qo'lda tugma bosmasdan, avtomatik fon rejimida ishga tushadi.
+                    LaunchedEffect(state.deviceId) {
+                        if (!state.isRunning) {
+                            AgentForegroundService.start(context)
+                            viewModel.setAgentRunning(true)
+                        }
+                    }
                     PairedContent(
                         state = state,
                         onStartAgent = {
@@ -153,12 +191,11 @@ fun HomeScreen(
 }
 
 @Composable
-private fun UnpairedContent(onScan: () -> Unit) {
+private fun ConnectingContent() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        // Hero icon
         Box(
             modifier = Modifier
                 .size(96.dp)
@@ -171,71 +208,23 @@ private fun UnpairedContent(onScan: () -> Unit) {
                 .border(1.dp, AccentOrange.copy(alpha = 0.3f), RoundedCornerShape(28.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                Icons.Default.QrCodeScanner,
-                null,
-                tint = AccentOrange,
-                modifier = Modifier.size(44.dp),
-            )
+            CircularProgressIndicator(color = AccentOrange, modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "Hali ulanmagan",
+                "Ulanmoqda...",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
             )
             Text(
-                "Pari AI dashboardidagi QR kodni\nKamera orqali skanerlang",
+                "Ruxsatlar so'ralmoqda va server bilan\navtomatik bog'lanmoqda",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
                 textAlign = TextAlign.Center,
                 lineHeight = 22.sp,
             )
-        }
-
-        // Steps
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            listOf(
-                "Pari AI → Qurilmalar bo'limini oching",
-                "\"QR Pairing\" tugmasini bosing",
-                "Quyidagi tugma bilan QR ni skanerlang",
-            ).forEachIndexed { i, step ->
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(AccentOrange),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("${i + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                    Text(step, style = MaterialTheme.typography.bodySmall, color = TextSecondary, lineHeight = 18.sp)
-                }
-            }
-        }
-
-        Button(
-            onClick = onScan,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
-        ) {
-            Icon(Icons.Default.QrCodeScanner, null)
-            Spacer(Modifier.width(8.dp))
-            Text("QR Skanerlash", fontWeight = FontWeight.SemiBold)
         }
     }
 }
