@@ -28,6 +28,9 @@
          agressiv batareya boshqaruvchi tizimlarda bu shart bo'lmasa xizmat
          daqiqalar ichida o'ldiriladi. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Android 12+ da aniq alarm rejalashtirish uchun (onTaskRemoved va onDestroy'da ishlatiladi) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 

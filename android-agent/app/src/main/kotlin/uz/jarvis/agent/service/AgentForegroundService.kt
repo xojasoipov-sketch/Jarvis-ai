@@ -13,6 +13,7 @@ import uz.jarvis.agent.data.repository.AgentRepositoryImpl
 import uz.jarvis.agent.receiver.BootReceiver
 import uz.jarvis.agent.ui.MainActivity
 import uz.jarvis.agent.util.CommandExecutor
+import uz.jarvis.agent.worker.KeepAliveWorker
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -50,6 +51,9 @@ class AgentForegroundService : Service() {
         startForeground(NOTIF_ID, buildNotification("Ulanmoqda..."))
 
         scope.launch { agentLoop() }
+
+        // WorkManager orqali 15 daqiqada bir xizmat mavjudligini tekshirish
+        KeepAliveWorker.enqueue(this)
 
         return START_STICKY
     }
@@ -145,31 +149,40 @@ class AgentForegroundService : Service() {
      * orqali xizmatni bir necha soniyadan keyin majburan qayta ishga tushiramiz.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // getService() emas, getBroadcast() — jarayon butunlay o'ldirilgandan keyin ham
-        // ishonchli ishlaydigan yagona usul (BootReceiver o'zi startForegroundService
-        // chaqiradi, bu BroadcastReceiver kontekstida cheklovsiz ruxsat etilgan).
-        val restartIntent = Intent(applicationContext, BootReceiver::class.java)
-            .setAction(BootReceiver.ACTION_RESTART_AGENT)
-        val pendingIntent = PendingIntent.getBroadcast(
-            applicationContext, 2, restartIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val am = applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val triggerAt = SystemClock.elapsedRealtime() + 1_000
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (am.canScheduleExactAlarms()) {
-                am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
-            } else {
-                am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
-            }
-        } else {
-            am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
-        }
+        scheduleRestart()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
         scope.cancel()
+        // onDestroy ham AlarmManager orqali qayta ishga tushirishni rejalashtiramiz
+        // (onTaskRemoved ba'zi qurilmalarda chaqirilmasligi mumkin)
+        scheduleRestart()
+        // WorkManager tezkor bir martalik ishni ham navbatga qo'yamiz
+        KeepAliveWorker.enqueueOneShot(applicationContext)
         super.onDestroy()
+    }
+
+    /** onTaskRemoved VA onDestroy ikkisida ham ishlatish uchun umumlashtirilgan restart mantig'i. */
+    private fun scheduleRestart() {
+        val restartIntent = Intent(applicationContext, BootReceiver::class.java)
+            .setAction(BootReceiver.ACTION_RESTART_AGENT)
+        val pendingIntent = PendingIntent.getBroadcast(
+            applicationContext, 3, restartIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val am = applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val triggerAt = SystemClock.elapsedRealtime() + 2_000
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (am.canScheduleExactAlarms()) {
+                    am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+                } else {
+                    am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+                }
+            } else {
+                am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+            }
+        } catch (_: Exception) { /* Agar ruxsat yo'q bo'lsa, WorkManager qo'lga oladi */ }
     }
 }

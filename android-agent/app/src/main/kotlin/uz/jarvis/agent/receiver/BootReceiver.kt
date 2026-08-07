@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import uz.jarvis.agent.data.storage.SecureTokenStore
 import uz.jarvis.agent.service.AgentForegroundService
+import uz.jarvis.agent.worker.KeepAliveWorker
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -35,6 +36,7 @@ class BootReceiver : BroadcastReceiver() {
                 CoroutineScope(Dispatchers.IO).launch {
                     if (store.isPaired()) {
                         AgentForegroundService.start(context)
+                        KeepAliveWorker.enqueue(context)
                     }
                 }
             }
