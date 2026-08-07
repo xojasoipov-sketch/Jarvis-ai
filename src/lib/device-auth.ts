@@ -15,10 +15,14 @@ export const deviceAuthConfigured = Boolean(SECRET);
 // birinchi ochilishda hech qanday QR/token almashinuvisiz darhol pairlash uchun ishlatiladi.
 // APP_PASSWORD'dan ATAYLAB alohida: shu tufayli APK ichida veb-ilova login paroli emas,
 // faqat shu bitta maqsad uchun yaroqli kalit yotadi.
-const AUTO_PAIR_SECRET = process.env.DEVICE_AUTO_PAIR_KEY || "";
+// .trim() — Railway/GitHub secret input maydonlariga nusxalashda oxirida/boshida
+// bo'sh joy yoki qator (\n) qolib ketishi odatiy xato; shu tufayli uzunlik va qiymat
+// mos kelmay, haqiqiy kalit to'g'ri bo'lsa ham 401 qaytishi mumkin edi.
+const AUTO_PAIR_SECRET = (process.env.DEVICE_AUTO_PAIR_KEY || "").trim();
 export const autoPairConfigured = Boolean(AUTO_PAIR_SECRET);
 
-export function verifyAutoPairKey(token: string): boolean {
+export function verifyAutoPairKey(rawToken: string): boolean {
+  const token = rawToken.trim();
   if (!AUTO_PAIR_SECRET || !token) return false;
   if (token.length !== AUTO_PAIR_SECRET.length) return false;
   return timingSafeEqualHex(token, AUTO_PAIR_SECRET);

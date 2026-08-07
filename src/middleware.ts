@@ -80,7 +80,11 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
+  // api/devices/* — o'z Bearer-token autentifikatsiyasini o'zi qiladi (device_token yoki
+  // auto-pair kaliti), veb-ilova sessiya cookie'siga bog'liq emas — shuning uchun global
+  // parol-gate'dan chetlashtirilgan (aks holda telefon/kompyuter ilovasi hech qachon
+  // ulana olmaydi, chunki unda brauzer sessiyasi yo'q).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon|login|api/auth/login|api/telegram|monitoring|setup|portfolio).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon|login|api/auth/login|api/telegram|api/devices|monitoring|setup|portfolio).*)",
   ],
 };
