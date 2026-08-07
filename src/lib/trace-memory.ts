@@ -1,6 +1,7 @@
 // Experience / Trace Memory — OpenJarvis Local Trace Learning ilhomida (sodda versiya).
 // Muvaffaqiyatli agent/tool zanjirlarini saqlaydi va o'xshash so'rovlarda qayta ishlatadi.
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 
 export type TraceStep = {
   type: "thought" | "action" | "observation" | "final" | "agent";
@@ -67,7 +68,7 @@ export async function saveTrace(input: {
 
   if (dbConfigured && supabase) {
     try {
-      await supabase.from("pari_traces").insert({
+      const { error } = await supabase.from("pari_traces").insert({
         id: row.id,
         task: row.task,
         task_norm: row.task_norm,
@@ -77,7 +78,9 @@ export async function saveTrace(input: {
         source: row.source,
         created_at: row.created_at,
       });
-    } catch {
+      if (error) log("error", "trace", `saveTrace: ${error.message}`);
+    } catch (e) {
+      log("error", "trace", `saveTrace (throw, table missing?): ${e instanceof Error ? e.message : String(e)}`);
       /* jadval yo'q bo'lsa memoryga yozamiz */
     }
   }
@@ -97,19 +100,20 @@ export async function findSimilarTraces(
 
   if (dbConfigured && supabase) {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("pari_traces")
         .select("*")
         .eq("success", true)
         .order("created_at", { ascending: false })
         .limit(50);
+      if (error) log("error", "trace", `findSimilarTraces: ${error.message}`);
       if (data?.length) {
         for (const r of data as ExperienceTrace[]) {
           if (!candidates.find((c) => c.id === r.id)) candidates.push(r);
         }
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      log("error", "trace", `findSimilarTraces (throw, table missing?): ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

@@ -1,5 +1,6 @@
 // Shaxsiy kotib — eslatmalar: tug'ilgan kunlar, muhim sanalar, dorilar, suv ichish va h.k.
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 
 export type ReminderCategory = "general" | "birthday" | "health" | "finance" | "travel";
 export type ReminderRepeat = "none" | "daily" | "weekly" | "monthly" | "yearly";
@@ -26,7 +27,8 @@ export async function listReminders(opts?: { includeDone?: boolean }): Promise<R
   if (dbConfigured && supabase) {
     let q = supabase.from("pari_reminders").select("*").order("due_at", { ascending: true });
     if (!opts?.includeDone) q = q.eq("done", false);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) log("error", "reminders", `listReminders: ${error.message}`);
     return data || [];
   }
   const rows = opts?.includeDone ? [...mem] : mem.filter((r) => !r.done);
@@ -52,7 +54,8 @@ export async function createReminder(input: {
     created_at: new Date().toISOString(),
   };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_reminders").insert(row).select().single();
+    const { data, error } = await supabase.from("pari_reminders").insert(row).select().single();
+    if (error) log("error", "reminders", `createReminder: ${error.message}`);
     return data || row;
   }
   mem.push(row);
@@ -61,15 +64,18 @@ export async function createReminder(input: {
 
 export async function completeReminder(id: string): Promise<Reminder | null> {
   if (dbConfigured && supabase) {
-    const { data: current } = await supabase.from("pari_reminders").select("*").eq("id", id).single();
+    const { data: current, error: getErr } = await supabase.from("pari_reminders").select("*").eq("id", id).single();
+    if (getErr) log("error", "reminders", `completeReminder (read): ${getErr.message}`);
     if (!current) return null;
     if (current.repeat === "none") {
-      const { data } = await supabase.from("pari_reminders").update({ done: true }).eq("id", id).select().single();
+      const { data, error } = await supabase.from("pari_reminders").update({ done: true }).eq("id", id).select().single();
+      if (error) log("error", "reminders", `completeReminder (write): ${error.message}`);
       return data;
     }
     // takrorlanuvchi eslatma — keyingi sanaga suriladi
     const next = nextDueDate(current.due_at, current.repeat);
-    const { data } = await supabase.from("pari_reminders").update({ due_at: next, notified: false }).eq("id", id).select().single();
+    const { data, error } = await supabase.from("pari_reminders").update({ due_at: next, notified: false }).eq("id", id).select().single();
+    if (error) log("error", "reminders", `completeReminder (reschedule): ${error.message}`);
     return data;
   }
   const r = mem.find((x) => x.id === id);
@@ -85,7 +91,8 @@ export async function completeReminder(id: string): Promise<Reminder | null> {
 
 export async function deleteReminder(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_reminders").delete().eq("id", id);
+    const { error } = await supabase.from("pari_reminders").delete().eq("id", id);
+    if (error) log("error", "reminders", `deleteReminder: ${error.message}`);
     return;
   }
   const idx = mem.findIndex((r) => r.id === id);
@@ -101,7 +108,8 @@ export async function dueUnnotified(withinMs = 5 * 60 * 1000): Promise<Reminder[
 
 export async function markNotified(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_reminders").update({ notified: true }).eq("id", id);
+    const { error } = await supabase.from("pari_reminders").update({ notified: true }).eq("id", id);
+    if (error) log("error", "reminders", `markNotified: ${error.message}`);
     return;
   }
   const r = mem.find((x) => x.id === id);

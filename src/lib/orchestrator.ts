@@ -8,6 +8,7 @@
 // bitta jamlangan javob beradi — "Foydalanuvchi maqsadini aytadi, qolganini
 // Jarvis bajaradi" talabiga mos.
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 import { AGENTS, callAI, type AgentId } from "./agents";
 
 const AGENT_IDS = Object.keys(AGENTS) as AgentId[];
@@ -70,7 +71,8 @@ export async function runOrchestrator(goal: string): Promise<OrchestratorRun> {
   const run: OrchestratorRun = { id, goal, steps: [], final: null, status: "running", created_at: new Date().toISOString() };
   memRuns.set(id, run);
   if (dbConfigured && supabase) {
-    await supabase.from("pari_orchestrator_runs").insert({ id, goal, steps: [], status: "running" });
+    const { error } = await supabase.from("pari_orchestrator_runs").insert({ id, goal, steps: [], status: "running" });
+    if (error) log("error", "orchestrator", `runOrchestrator (insert): ${error.message}`);
   }
 
   try {
@@ -94,14 +96,16 @@ export async function runOrchestrator(goal: string): Promise<OrchestratorRun> {
   }
 
   if (dbConfigured && supabase) {
-    await supabase.from("pari_orchestrator_runs").update({ steps: run.steps, final: run.final, status: run.status }).eq("id", id);
+    const { error } = await supabase.from("pari_orchestrator_runs").update({ steps: run.steps, final: run.final, status: run.status }).eq("id", id);
+    if (error) log("error", "orchestrator", `runOrchestrator (update): ${error.message}`);
   }
   return run;
 }
 
 export async function getOrchestratorRun(id: string): Promise<OrchestratorRun | null> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_orchestrator_runs").select("*").eq("id", id).single();
+    const { data, error } = await supabase.from("pari_orchestrator_runs").select("*").eq("id", id).single();
+    if (error) log("error", "orchestrator", `getOrchestratorRun: ${error.message}`);
     return data || null;
   }
   return memRuns.get(id) || null;
@@ -109,7 +113,8 @@ export async function getOrchestratorRun(id: string): Promise<OrchestratorRun | 
 
 export async function listOrchestratorRuns(limit = 20): Promise<OrchestratorRun[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_orchestrator_runs").select("*").order("created_at", { ascending: false }).limit(limit);
+    const { data, error } = await supabase.from("pari_orchestrator_runs").select("*").order("created_at", { ascending: false }).limit(limit);
+    if (error) log("error", "orchestrator", `listOrchestratorRuns: ${error.message}`);
     return data || [];
   }
   return [...memRuns.values()].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, limit);

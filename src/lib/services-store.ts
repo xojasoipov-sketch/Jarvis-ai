@@ -1,5 +1,6 @@
 // Sotiladigan xizmatlar katalogi va buyurtmalar (Supabase-backed + in-memory fallback)
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 
 export type ServiceCategory = "smm" | "content" | "dev" | "design" | "consulting" | "automation" | "general";
 export type BillingCycle = "one_time" | "monthly" | "weekly";
@@ -51,7 +52,8 @@ export async function listServices(activeOnly = false): Promise<Service[]> {
   if (dbConfigured && supabase) {
     let q = supabase.from("pari_services").select("*").order("sort_order", { ascending: true }).order("created_at");
     if (activeOnly) q = q.eq("active", true);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) log("error", "services", `listServices: ${error.message}`);
     return data || [];
   }
   const services = activeOnly ? memServices.filter((s) => s.active) : [...memServices];
@@ -60,7 +62,8 @@ export async function listServices(activeOnly = false): Promise<Service[]> {
 
 export async function getService(id: number): Promise<Service | null> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_services").select("*").eq("id", id).single();
+    const { data, error } = await supabase.from("pari_services").select("*").eq("id", id).single();
+    if (error) log("error", "services", `getService: ${error.message}`);
     return data || null;
   }
   return memServices.find((s) => s.id === id) || null;
@@ -68,7 +71,8 @@ export async function getService(id: number): Promise<Service | null> {
 
 export async function createService(s: Omit<Service, "id" | "created_at">): Promise<Service> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_services").insert(s).select().single();
+    const { data, error } = await supabase.from("pari_services").insert(s).select().single();
+    if (error) log("error", "services", `createService: ${error.message}`);
     return data;
   }
   const row: Service = { ...s, id: nextServiceId++, created_at: new Date().toISOString() };
@@ -78,7 +82,8 @@ export async function createService(s: Omit<Service, "id" | "created_at">): Prom
 
 export async function updateService(id: number, patch: Partial<Service>): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_services").update(patch).eq("id", id);
+    const { error } = await supabase.from("pari_services").update(patch).eq("id", id);
+    if (error) log("error", "services", `updateService: ${error.message}`);
     return;
   }
   const i = memServices.findIndex((s) => s.id === id);
@@ -87,7 +92,8 @@ export async function updateService(id: number, patch: Partial<Service>): Promis
 
 export async function deleteService(id: number): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_services").delete().eq("id", id);
+    const { error } = await supabase.from("pari_services").delete().eq("id", id);
+    if (error) log("error", "services", `deleteService: ${error.message}`);
     return;
   }
   const i = memServices.findIndex((s) => s.id === id);
@@ -104,7 +110,8 @@ export async function listOrders(status?: OrderStatus): Promise<ServiceOrder[]> 
       .select("*, pari_services(name)")
       .order("created_at", { ascending: false });
     if (status) q = q.eq("status", status);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) log("error", "services", `listOrders: ${error.message}`);
     // Flatten service name from join
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data || []).map((o: any) => ({
@@ -119,7 +126,8 @@ export async function listOrders(status?: OrderStatus): Promise<ServiceOrder[]> 
 export async function createOrder(o: Omit<ServiceOrder, "id" | "created_at" | "updated_at">): Promise<ServiceOrder> {
   const now = new Date().toISOString();
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_service_orders").insert({ ...o, updated_at: now }).select().single();
+    const { data, error } = await supabase.from("pari_service_orders").insert({ ...o, updated_at: now }).select().single();
+    if (error) log("error", "services", `createOrder: ${error.message}`);
     return data;
   }
   const row: ServiceOrder = { ...o, id: nextOrderId++, created_at: now, updated_at: now };
@@ -130,7 +138,8 @@ export async function createOrder(o: Omit<ServiceOrder, "id" | "created_at" | "u
 export async function updateOrder(id: number, patch: Partial<ServiceOrder>): Promise<void> {
   const payload = { ...patch, updated_at: new Date().toISOString() };
   if (dbConfigured && supabase) {
-    await supabase.from("pari_service_orders").update(payload).eq("id", id);
+    const { error } = await supabase.from("pari_service_orders").update(payload).eq("id", id);
+    if (error) log("error", "services", `updateOrder: ${error.message}`);
     return;
   }
   const i = memOrders.findIndex((o) => o.id === id);
@@ -139,7 +148,8 @@ export async function updateOrder(id: number, patch: Partial<ServiceOrder>): Pro
 
 export async function deleteOrder(id: number): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_service_orders").delete().eq("id", id);
+    const { error } = await supabase.from("pari_service_orders").delete().eq("id", id);
+    if (error) log("error", "services", `deleteOrder: ${error.message}`);
     return;
   }
   const i = memOrders.findIndex((o) => o.id === id);

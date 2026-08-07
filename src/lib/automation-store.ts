@@ -3,6 +3,7 @@
  * Real DB when Supabase configured, in-memory fallback.
  */
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 import type { FlowNode, VisualFlow } from "./flows";
 
 export type TriggerType = "manual" | "schedule" | "webhook" | "keyword" | "event";
@@ -51,10 +52,11 @@ function uid() {
 
 export async function listFlows(): Promise<AutoFlow[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("pari_flows")
       .select("*")
       .order("created_at", { ascending: false });
+    if (error) log("error", "automation", `listFlows: ${error.message}`);
     return data || [];
   }
   return [...memFlows.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -62,7 +64,8 @@ export async function listFlows(): Promise<AutoFlow[]> {
 
 export async function getFlow(id: string): Promise<AutoFlow | null> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_flows").select("*").eq("id", id).single();
+    const { data, error } = await supabase.from("pari_flows").select("*").eq("id", id).single();
+    if (error) log("error", "automation", `getFlow: ${error.message}`);
     return data || null;
   }
   return memFlows.get(id) || null;
@@ -76,7 +79,8 @@ export async function createFlow(data: Omit<AutoFlow, "id" | "runs" | "created_a
     created_at: new Date().toISOString(),
   };
   if (dbConfigured && supabase) {
-    await supabase.from("pari_flows").insert(flow);
+    const { error } = await supabase.from("pari_flows").insert(flow);
+    if (error) log("error", "automation", `createFlow: ${error.message}`);
   } else {
     memFlows.set(flow.id, flow);
   }
@@ -88,7 +92,8 @@ export async function updateFlow(id: string, patch: Partial<AutoFlow>): Promise<
   if (!existing) return null;
   const updated = { ...existing, ...patch, updated_at: new Date().toISOString() };
   if (dbConfigured && supabase) {
-    await supabase.from("pari_flows").update(patch).eq("id", id);
+    const { error } = await supabase.from("pari_flows").update(patch).eq("id", id);
+    if (error) log("error", "automation", `updateFlow: ${error.message}`);
   } else {
     memFlows.set(id, updated);
   }
@@ -97,7 +102,8 @@ export async function updateFlow(id: string, patch: Partial<AutoFlow>): Promise<
 
 export async function deleteFlow(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_flows").delete().eq("id", id);
+    const { error } = await supabase.from("pari_flows").delete().eq("id", id);
+    if (error) log("error", "automation", `deleteFlow: ${error.message}`);
   } else {
     memFlows.delete(id);
   }
@@ -115,7 +121,8 @@ export async function createRun(flowId: string, trigger: string): Promise<FlowRu
     started_at: new Date().toISOString(),
   };
   if (dbConfigured && supabase) {
-    await supabase.from("pari_flow_runs").insert(run);
+    const { error } = await supabase.from("pari_flow_runs").insert(run);
+    if (error) log("error", "automation", `createRun: ${error.message}`);
   } else {
     memRuns.set(run.id, run);
   }
@@ -134,7 +141,8 @@ export async function finishRun(
     finished_at: new Date().toISOString(),
   };
   if (dbConfigured && supabase) {
-    await supabase.from("pari_flow_runs").update(patch).eq("id", runId);
+    const { error: dbError } = await supabase.from("pari_flow_runs").update(patch).eq("id", runId);
+    if (dbError) log("error", "automation", `finishRun: ${dbError.message}`);
   } else {
     const run = memRuns.get(runId);
     if (run) memRuns.set(runId, { ...run, ...patch } as FlowRun);
@@ -143,12 +151,13 @@ export async function finishRun(
 
 export async function listRuns(flowId: string, limit = 20): Promise<FlowRun[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("pari_flow_runs")
       .select("*")
       .eq("flow_id", flowId)
       .order("started_at", { ascending: false })
       .limit(limit);
+    if (error) log("error", "automation", `listRuns: ${error.message}`);
     return data || [];
   }
   return [...memRuns.values()]

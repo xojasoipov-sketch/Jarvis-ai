@@ -1,5 +1,6 @@
 // Biznes modullari — Sadining monetizatsiya yo'nalishlari (in-memory + Supabase fallback)
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 
 export type ModuleKey = "youtube" | "smm" | "courses" | "blogging" | "ai_tools";
 export type ModuleStatus = "idea" | "active" | "paused";
@@ -66,7 +67,8 @@ function uid() {
 
 export async function listModules(): Promise<BusinessModule[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_business_modules").select("*");
+    const { data, error } = await supabase.from("pari_business_modules").select("*");
+    if (error) log("error", "business", `listModules: ${error.message}`);
     const existing = new Map((data || []).map((m: BusinessModule) => [m.module_key, m]));
     return Object.keys(MODULE_DEFS).map((key) => {
       const k = key as ModuleKey;
@@ -88,10 +90,11 @@ export async function listModules(): Promise<BusinessModule[]> {
 export async function updateModule(moduleKey: ModuleKey, patch: Partial<Pick<BusinessModule, "status" | "revenue" | "notes">>): Promise<void> {
   const payload = { ...patch, updated_at: new Date().toISOString() };
   if (dbConfigured && supabase) {
-    await supabase.from("pari_business_modules").upsert(
+    const { error } = await supabase.from("pari_business_modules").upsert(
       { module_key: moduleKey, ...payload },
       { onConflict: "module_key" }
     );
+    if (error) log("error", "business", `updateModule: ${error.message}`);
     return;
   }
   const current = memModules.get(moduleKey) || {
@@ -105,7 +108,8 @@ export async function listIdeas(moduleKey?: ModuleKey): Promise<BusinessIdea[]> 
   if (dbConfigured && supabase) {
     let q = supabase.from("pari_business_ideas").select("*").order("created_at", { ascending: false });
     if (moduleKey) q = q.eq("module_key", moduleKey);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) log("error", "business", `listIdeas: ${error.message}`);
     return data || [];
   }
   const ideas = moduleKey ? memIdeas.filter((i) => i.module_key === moduleKey) : [...memIdeas];
@@ -115,7 +119,8 @@ export async function listIdeas(moduleKey?: ModuleKey): Promise<BusinessIdea[]> 
 export async function createIdea(idea: Omit<BusinessIdea, "id" | "created_at">): Promise<BusinessIdea> {
   const row: BusinessIdea = { ...idea, id: uid(), created_at: new Date().toISOString() };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_business_ideas").insert(row).select().single();
+    const { data, error } = await supabase.from("pari_business_ideas").insert(row).select().single();
+    if (error) log("error", "business", `createIdea: ${error.message}`);
     return data || row;
   }
   memIdeas.unshift(row);
@@ -124,7 +129,8 @@ export async function createIdea(idea: Omit<BusinessIdea, "id" | "created_at">):
 
 export async function deleteIdea(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_business_ideas").delete().eq("id", id);
+    const { error } = await supabase.from("pari_business_ideas").delete().eq("id", id);
+    if (error) log("error", "business", `deleteIdea: ${error.message}`);
     return;
   }
   const i = memIdeas.findIndex((x) => x.id === id);
@@ -133,7 +139,8 @@ export async function deleteIdea(id: string): Promise<void> {
 
 export async function updateIdea(id: string, patch: Partial<BusinessIdea>): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_business_ideas").update(patch).eq("id", id);
+    const { error } = await supabase.from("pari_business_ideas").update(patch).eq("id", id);
+    if (error) log("error", "business", `updateIdea: ${error.message}`);
     return;
   }
   const i = memIdeas.findIndex((x) => x.id === id);

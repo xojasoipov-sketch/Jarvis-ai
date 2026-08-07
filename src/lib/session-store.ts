@@ -9,6 +9,7 @@
 //   create policy "service_role full access" on pari_tg_sessions for all using (true) with check (true);
 
 import { supabase, dbConfigured } from "@/lib/supabase";
+import { log } from "@/lib/logger";
 
 export type Session = {
   mode: "chat" | "agent" | "smm_post" | "smm_generated" | "service_order";
@@ -33,17 +34,20 @@ export async function loadSession(chatId: number): Promise<Session> {
   if (cache.has(chatId)) return cache.get(chatId)!;
   if (!dbConfigured) return { ...DEFAULT };
   try {
-    const { data } = await supabase!
+    const { data, error } = await supabase!
       .from("pari_tg_sessions")
       .select("data")
       .eq("chat_id", chatId)
       .single();
+    if (error) log("error", "session", `loadSession: ${error.message}`);
     if (data?.data) {
       const s = data.data as Session;
       cache.set(chatId, s);
       return s;
     }
-  } catch {}
+  } catch (e) {
+    log("error", "session", `loadSession (throw): ${e instanceof Error ? e.message : String(e)}`);
+  }
   const fresh = { ...DEFAULT };
   cache.set(chatId, fresh);
   return fresh;
@@ -51,10 +55,12 @@ export async function loadSession(chatId: number): Promise<Session> {
 
 function persist(chatId: number, s: Session) {
   if (!dbConfigured) return;
-  void supabase!.from("pari_tg_sessions").upsert({
+  supabase!.from("pari_tg_sessions").upsert({
     chat_id: chatId,
     data: s,
     updated_at: new Date().toISOString(),
+  }).then(({ error }) => {
+    if (error) log("error", "session", `persist: ${error.message}`);
   });
 }
 

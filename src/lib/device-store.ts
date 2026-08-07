@@ -1,5 +1,6 @@
 // Qurilma registri — pairing, heartbeat, buyruqlar. Supabase + in-memory fallback.
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 
 export type Platform = "android" | "ios" | "windows" | "macos" | "linux";
 
@@ -54,7 +55,8 @@ export async function createPendingDevice(): Promise<string> {
     location: null, last_seen: null, paired_at: new Date().toISOString(), revoked: false, device_token_hash: null,
   };
   if (dbConfigured && supabase) {
-    await supabase.from("pari_devices").insert(device);
+    const { error } = await supabase.from("pari_devices").insert(device);
+    if (error) log("error", "devices", `createPendingDevice: ${error.message}`);
   } else {
     memDevices.set(id, device);
   }
@@ -63,7 +65,8 @@ export async function createPendingDevice(): Promise<string> {
 
 export async function savePairing(deviceId: string, expiresAt: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_device_pairings").upsert({ device_id: deviceId, expires_at: expiresAt, used: false });
+    const { error } = await supabase.from("pari_device_pairings").upsert({ device_id: deviceId, expires_at: expiresAt, used: false });
+    if (error) log("error", "devices", `savePairing: ${error.message}`);
     return;
   }
   memPairings.set(deviceId, { device_id: deviceId, expires_at: expiresAt, used: false });
@@ -71,9 +74,11 @@ export async function savePairing(deviceId: string, expiresAt: string): Promise<
 
 export async function consumePairing(deviceId: string): Promise<boolean> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_device_pairings").select("*").eq("device_id", deviceId).single();
+    const { data, error: getErr } = await supabase.from("pari_device_pairings").select("*").eq("device_id", deviceId).single();
+    if (getErr) log("error", "devices", `consumePairing (read): ${getErr.message}`);
     if (!data || data.used || new Date(data.expires_at).getTime() < Date.now()) return false;
-    await supabase.from("pari_device_pairings").update({ used: true }).eq("device_id", deviceId);
+    const { error } = await supabase.from("pari_device_pairings").update({ used: true }).eq("device_id", deviceId);
+    if (error) log("error", "devices", `consumePairing (write): ${error.message}`);
     return true;
   }
   const p = memPairings.get(deviceId);
@@ -90,7 +95,8 @@ export async function confirmDevice(deviceId: string, input: { name: string; pla
     status: "online" as const, last_seen: new Date().toISOString(), device_token_hash: tokenHash,
   };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_devices").update(patch).eq("id", deviceId).select().single();
+    const { data, error } = await supabase.from("pari_devices").update(patch).eq("id", deviceId).select().single();
+    if (error) log("error", "devices", `confirmDevice: ${error.message}`);
     return data || null;
   }
   const d = memDevices.get(deviceId);
@@ -110,7 +116,8 @@ export async function verifyDeviceSession(deviceId: string, deviceToken: string)
 /* ── Device CRUD ── */
 export async function getDevice(id: string): Promise<Device | null> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_devices").select("*").eq("id", id).single();
+    const { data, error } = await supabase.from("pari_devices").select("*").eq("id", id).single();
+    if (error) log("error", "devices", `getDevice: ${error.message}`);
     return data || null;
   }
   return memDevices.get(id) || null;
@@ -118,7 +125,8 @@ export async function getDevice(id: string): Promise<Device | null> {
 
 export async function listDevices(): Promise<Device[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_devices").select("*").not("device_token_hash", "is", null).order("paired_at", { ascending: false });
+    const { data, error } = await supabase.from("pari_devices").select("*").not("device_token_hash", "is", null).order("paired_at", { ascending: false });
+    if (error) log("error", "devices", `listDevices: ${error.message}`);
     return data || [];
   }
   return [...memDevices.values()].filter((d) => d.device_token_hash);
@@ -127,7 +135,8 @@ export async function listDevices(): Promise<Device[]> {
 export async function heartbeat(id: string, patch: Partial<Pick<Device, "battery" | "storage_free" | "cpu_load" | "ram_used" | "location">>): Promise<void> {
   const full = { ...patch, status: "online" as const, last_seen: new Date().toISOString() };
   if (dbConfigured && supabase) {
-    await supabase.from("pari_devices").update(full).eq("id", id);
+    const { error } = await supabase.from("pari_devices").update(full).eq("id", id);
+    if (error) log("error", "devices", `heartbeat: ${error.message}`);
     return;
   }
   const d = memDevices.get(id);
@@ -138,7 +147,8 @@ export async function heartbeat(id: string, patch: Partial<Pick<Device, "battery
 export async function markStaleOffline(): Promise<void> {
   const cutoff = new Date(Date.now() - 60_000).toISOString();
   if (dbConfigured && supabase) {
-    await supabase.from("pari_devices").update({ status: "offline" }).eq("status", "online").lt("last_seen", cutoff);
+    const { error } = await supabase.from("pari_devices").update({ status: "offline" }).eq("status", "online").lt("last_seen", cutoff);
+    if (error) log("error", "devices", `markStaleOffline: ${error.message}`);
     return;
   }
   for (const d of memDevices.values()) {
@@ -148,7 +158,8 @@ export async function markStaleOffline(): Promise<void> {
 
 export async function revokeDevice(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_devices").update({ revoked: true, status: "offline" }).eq("id", id);
+    const { error } = await supabase.from("pari_devices").update({ revoked: true, status: "offline" }).eq("id", id);
+    if (error) log("error", "devices", `revokeDevice: ${error.message}`);
     return;
   }
   const d = memDevices.get(id);
@@ -157,7 +168,8 @@ export async function revokeDevice(id: string): Promise<void> {
 
 export async function removeDevice(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_devices").delete().eq("id", id);
+    const { error } = await supabase.from("pari_devices").delete().eq("id", id);
+    if (error) log("error", "devices", `removeDevice: ${error.message}`);
     return;
   }
   memDevices.delete(id);
@@ -167,7 +179,8 @@ export async function removeDevice(id: string): Promise<void> {
 export async function queueCommand(deviceId: string, action: string, payload: Record<string, unknown>): Promise<DeviceCommand> {
   const cmd: DeviceCommand = { id: uid(), device_id: deviceId, action, payload, status: "pending", result: null, created_at: new Date().toISOString() };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_device_commands").insert(cmd).select().single();
+    const { data, error } = await supabase.from("pari_device_commands").insert(cmd).select().single();
+    if (error) log("error", "devices", `queueCommand: ${error.message}`);
     return data || cmd;
   }
   memCommands.push(cmd);
@@ -176,9 +189,11 @@ export async function queueCommand(deviceId: string, action: string, payload: Re
 
 export async function pollCommands(deviceId: string): Promise<DeviceCommand[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_device_commands").select("*").eq("device_id", deviceId).eq("status", "pending").order("created_at", { ascending: true });
+    const { data, error } = await supabase.from("pari_device_commands").select("*").eq("device_id", deviceId).eq("status", "pending").order("created_at", { ascending: true });
+    if (error) log("error", "devices", `pollCommands (read): ${error.message}`);
     if (data?.length) {
-      await supabase.from("pari_device_commands").update({ status: "delivered" }).in("id", data.map((c) => c.id));
+      const { error: updErr } = await supabase.from("pari_device_commands").update({ status: "delivered" }).in("id", data.map((c) => c.id));
+      if (updErr) log("error", "devices", `pollCommands (update): ${updErr.message}`);
     }
     return data || [];
   }
@@ -189,7 +204,8 @@ export async function pollCommands(deviceId: string): Promise<DeviceCommand[]> {
 
 export async function submitResult(cmdId: string, result: unknown, status: "done" | "error" = "done"): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_device_commands").update({ status, result }).eq("id", cmdId);
+    const { error } = await supabase.from("pari_device_commands").update({ status, result }).eq("id", cmdId);
+    if (error) log("error", "devices", `submitResult: ${error.message}`);
     return;
   }
   const c = memCommands.find((x) => x.id === cmdId);
@@ -198,7 +214,8 @@ export async function submitResult(cmdId: string, result: unknown, status: "done
 
 export async function listCommandHistory(deviceId: string, limit = 30): Promise<DeviceCommand[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_device_commands").select("*").eq("device_id", deviceId).order("created_at", { ascending: false }).limit(limit);
+    const { data, error } = await supabase.from("pari_device_commands").select("*").eq("device_id", deviceId).order("created_at", { ascending: false }).limit(limit);
+    if (error) log("error", "devices", `listCommandHistory: ${error.message}`);
     return data || [];
   }
   return memCommands.filter((c) => c.device_id === deviceId).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, limit);

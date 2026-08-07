@@ -1,6 +1,7 @@
 // Uzoq muddatli xotira — foydalanuvchi haqidagi faktlar, afzalliklar, maqsadlar.
 // Pari AI har suhbatda shu yerdan foydalanuvchini "eslab qoladi".
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 
 export type MemoryCategory = "fact" | "preference" | "goal" | "date";
 
@@ -24,7 +25,8 @@ export async function listMemory(category?: MemoryCategory): Promise<MemoryEntry
   if (dbConfigured && supabase) {
     let q = supabase.from("pari_memory").select("*").order("importance", { ascending: false });
     if (category) q = q.eq("category", category);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) log("error", "memory", `listMemory: ${error.message}`);
     return data || [];
   }
   const rows = category ? mem.filter((m) => m.category === category) : [...mem];
@@ -41,7 +43,7 @@ export async function rememberFact(input: {
   const now = new Date().toISOString();
   const importance = input.importance ?? 1;
   if (dbConfigured && supabase) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("pari_memory")
       .upsert(
         { category: input.category, key: input.key, value: input.value, importance, updated_at: now },
@@ -49,6 +51,7 @@ export async function rememberFact(input: {
       )
       .select()
       .single();
+    if (error) log("error", "memory", `rememberFact: ${error.message}`);
     return data;
   }
   const existing = mem.find((m) => m.category === input.category && m.key === input.key);
@@ -65,7 +68,8 @@ export async function rememberFact(input: {
 
 export async function forgetFact(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_memory").delete().eq("id", id);
+    const { error } = await supabase.from("pari_memory").delete().eq("id", id);
+    if (error) log("error", "memory", `forgetFact: ${error.message}`);
     return;
   }
   const idx = mem.findIndex((m) => m.id === id);

@@ -1,6 +1,7 @@
 // Moliya — kirim/chiqim, budjet, moliyaviy maqsadlar, obunalar, qarzlar.
 // Supabase + in-memory fallback (business-store.ts bilan bir xil pattern).
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 
 export type TxType = "income" | "expense";
 export type Transaction = { id: string; type: TxType; amount: number; category: string; note: string; date: string; created_at: string };
@@ -29,7 +30,8 @@ export async function listTransactions(opts?: { from?: string; type?: TxType }):
     let q = supabase.from("pari_finance_transactions").select("*").order("date", { ascending: false });
     if (opts?.from) q = q.gte("date", opts.from);
     if (opts?.type) q = q.eq("type", opts.type);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) log("error", "finance", `listTransactions: ${error.message}`);
     return data || [];
   }
   let rows = [...memTx];
@@ -44,7 +46,8 @@ export async function addTransaction(input: { type: TxType; amount: number; cate
     note: input.note || "", date: input.date || new Date().toISOString().slice(0, 10), created_at: new Date().toISOString(),
   };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_finance_transactions").insert(row).select().single();
+    const { data, error } = await supabase.from("pari_finance_transactions").insert(row).select().single();
+    if (error) log("error", "finance", `addTransaction: ${error.message}`);
     return data || row;
   }
   memTx.push(row);
@@ -52,7 +55,11 @@ export async function addTransaction(input: { type: TxType; amount: number; cate
 }
 
 export async function deleteTransaction(id: string): Promise<void> {
-  if (dbConfigured && supabase) { await supabase.from("pari_finance_transactions").delete().eq("id", id); return; }
+  if (dbConfigured && supabase) {
+    const { error } = await supabase.from("pari_finance_transactions").delete().eq("id", id);
+    if (error) log("error", "finance", `deleteTransaction: ${error.message}`);
+    return;
+  }
   const i = memTx.findIndex((t) => t.id === id);
   if (i >= 0) memTx.splice(i, 1);
 }
@@ -60,7 +67,8 @@ export async function deleteTransaction(id: string): Promise<void> {
 /* ── Budgets ── */
 export async function listBudgets(): Promise<Budget[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_finance_budgets").select("*");
+    const { data, error } = await supabase.from("pari_finance_budgets").select("*");
+    if (error) log("error", "finance", `listBudgets: ${error.message}`);
     return data || [];
   }
   return [...memBudgets];
@@ -68,8 +76,15 @@ export async function listBudgets(): Promise<Budget[]> {
 
 export async function setBudget(category: string, monthly_limit: number): Promise<Budget> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_finance_budgets").upsert({ category, monthly_limit }, { onConflict: "category" }).select().single();
-    return data;
+    const { data, error } = await supabase.from("pari_finance_budgets").upsert({ category, monthly_limit }, { onConflict: "category" }).select().single();
+    if (error) log("error", "finance", `setBudget: ${error.message}`);
+    if (data) return data;
+    // Fall through to in-memory only if Supabase genuinely returned nothing.
+    const existing = memBudgets.find((b) => b.category === category);
+    if (existing) { existing.monthly_limit = monthly_limit; return existing; }
+    const row: Budget = { id: uid(), category, monthly_limit };
+    memBudgets.push(row);
+    return row;
   }
   const existing = memBudgets.find((b) => b.category === category);
   if (existing) { existing.monthly_limit = monthly_limit; return existing; }
@@ -92,7 +107,8 @@ export async function budgetStatus(): Promise<{ category: string; limit: number;
 /* ── Goals ── */
 export async function listGoals(): Promise<Goal[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_finance_goals").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("pari_finance_goals").select("*").order("created_at", { ascending: false });
+    if (error) log("error", "finance", `listGoals: ${error.message}`);
     return data || [];
   }
   return [...memGoals];
@@ -101,7 +117,8 @@ export async function listGoals(): Promise<Goal[]> {
 export async function createGoal(input: { title: string; target_amount: number; deadline?: string }): Promise<Goal> {
   const row: Goal = { id: uid(), title: input.title, target_amount: input.target_amount, current_amount: 0, deadline: input.deadline || null, done: false };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_finance_goals").insert(row).select().single();
+    const { data, error } = await supabase.from("pari_finance_goals").insert(row).select().single();
+    if (error) log("error", "finance", `createGoal: ${error.message}`);
     return data || row;
   }
   memGoals.push(row);
@@ -110,10 +127,12 @@ export async function createGoal(input: { title: string; target_amount: number; 
 
 export async function contributeToGoal(id: string, amount: number): Promise<Goal | null> {
   if (dbConfigured && supabase) {
-    const { data: g } = await supabase.from("pari_finance_goals").select("*").eq("id", id).single();
+    const { data: g, error: getErr } = await supabase.from("pari_finance_goals").select("*").eq("id", id).single();
+    if (getErr) log("error", "finance", `contributeToGoal (read): ${getErr.message}`);
     if (!g) return null;
     const newAmount = g.current_amount + amount;
-    const { data } = await supabase.from("pari_finance_goals").update({ current_amount: newAmount, done: newAmount >= g.target_amount }).eq("id", id).select().single();
+    const { data, error } = await supabase.from("pari_finance_goals").update({ current_amount: newAmount, done: newAmount >= g.target_amount }).eq("id", id).select().single();
+    if (error) log("error", "finance", `contributeToGoal (write): ${error.message}`);
     return data;
   }
   const g = memGoals.find((x) => x.id === id);
@@ -126,7 +145,8 @@ export async function contributeToGoal(id: string, amount: number): Promise<Goal
 /* ── Subscriptions ── */
 export async function listSubscriptions(): Promise<Subscription[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_finance_subscriptions").select("*").eq("active", true).order("next_charge", { ascending: true });
+    const { data, error } = await supabase.from("pari_finance_subscriptions").select("*").eq("active", true).order("next_charge", { ascending: true });
+    if (error) log("error", "finance", `listSubscriptions: ${error.message}`);
     return data || [];
   }
   return memSubs.filter((s) => s.active);
@@ -135,7 +155,8 @@ export async function listSubscriptions(): Promise<Subscription[]> {
 export async function addSubscription(input: { name: string; amount: number; cycle: "monthly" | "yearly"; next_charge: string }): Promise<Subscription> {
   const row: Subscription = { id: uid(), active: true, ...input };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_finance_subscriptions").insert(row).select().single();
+    const { data, error } = await supabase.from("pari_finance_subscriptions").insert(row).select().single();
+    if (error) log("error", "finance", `addSubscription: ${error.message}`);
     return data || row;
   }
   memSubs.push(row);
@@ -143,7 +164,11 @@ export async function addSubscription(input: { name: string; amount: number; cyc
 }
 
 export async function cancelSubscription(id: string): Promise<void> {
-  if (dbConfigured && supabase) { await supabase.from("pari_finance_subscriptions").update({ active: false }).eq("id", id); return; }
+  if (dbConfigured && supabase) {
+    const { error } = await supabase.from("pari_finance_subscriptions").update({ active: false }).eq("id", id);
+    if (error) log("error", "finance", `cancelSubscription: ${error.message}`);
+    return;
+  }
   const s = memSubs.find((x) => x.id === id);
   if (s) s.active = false;
 }
@@ -151,7 +176,8 @@ export async function cancelSubscription(id: string): Promise<void> {
 /* ── Debts ── */
 export async function listDebts(): Promise<Debt[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_finance_debts").select("*").eq("paid", false).order("due_date", { ascending: true });
+    const { data, error } = await supabase.from("pari_finance_debts").select("*").eq("paid", false).order("due_date", { ascending: true });
+    if (error) log("error", "finance", `listDebts: ${error.message}`);
     return data || [];
   }
   return memDebts.filter((d) => !d.paid);
@@ -160,7 +186,8 @@ export async function listDebts(): Promise<Debt[]> {
 export async function addDebt(input: { title: string; amount: number; direction: "owe" | "owed"; due_date?: string }): Promise<Debt> {
   const row: Debt = { id: uid(), title: input.title, amount: input.amount, direction: input.direction, due_date: input.due_date || null, paid: false };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_finance_debts").insert(row).select().single();
+    const { data, error } = await supabase.from("pari_finance_debts").insert(row).select().single();
+    if (error) log("error", "finance", `addDebt: ${error.message}`);
     return data || row;
   }
   memDebts.push(row);
@@ -168,7 +195,11 @@ export async function addDebt(input: { title: string; amount: number; direction:
 }
 
 export async function settleDebt(id: string): Promise<void> {
-  if (dbConfigured && supabase) { await supabase.from("pari_finance_debts").update({ paid: true }).eq("id", id); return; }
+  if (dbConfigured && supabase) {
+    const { error } = await supabase.from("pari_finance_debts").update({ paid: true }).eq("id", id);
+    if (error) log("error", "finance", `settleDebt: ${error.message}`);
+    return;
+  }
   const d = memDebts.find((x) => x.id === id);
   if (d) d.paid = true;
 }

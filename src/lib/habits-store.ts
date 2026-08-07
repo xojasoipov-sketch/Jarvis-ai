@@ -1,5 +1,6 @@
 // Hayot yordamchisi — kunlik odatlarni kuzatish (suv ichish, sport, uyqu, o'qish va h.k.)
 import { supabase, dbConfigured } from "./supabase";
+import { log } from "./logger";
 
 export type Habit = {
   id: string;
@@ -31,7 +32,8 @@ function today(): string {
 
 export async function listHabits(): Promise<Habit[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_habits").select("*").eq("active", true).order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("pari_habits").select("*").eq("active", true).order("created_at", { ascending: false });
+    if (error) log("error", "habits", `listHabits: ${error.message}`);
     return data || [];
   }
   return memHabits.filter((h) => h.active);
@@ -47,7 +49,8 @@ export async function createHabit(input: { title: string; emoji?: string; target
     created_at: new Date().toISOString(),
   };
   if (dbConfigured && supabase) {
-    const { data } = await supabase.from("pari_habits").insert(row).select().single();
+    const { data, error } = await supabase.from("pari_habits").insert(row).select().single();
+    if (error) log("error", "habits", `createHabit: ${error.message}`);
     return data || row;
   }
   memHabits.push(row);
@@ -56,7 +59,8 @@ export async function createHabit(input: { title: string; emoji?: string; target
 
 export async function deleteHabit(id: string): Promise<void> {
   if (dbConfigured && supabase) {
-    await supabase.from("pari_habits").update({ active: false }).eq("id", id);
+    const { error } = await supabase.from("pari_habits").update({ active: false }).eq("id", id);
+    if (error) log("error", "habits", `deleteHabit: ${error.message}`);
     return;
   }
   const h = memHabits.find((x) => x.id === id);
@@ -67,11 +71,12 @@ export async function deleteHabit(id: string): Promise<void> {
 export async function checkinHabit(habitId: string, date = today(), done = true): Promise<HabitCheckin> {
   const row: HabitCheckin = { id: uid(), habit_id: habitId, date, done, created_at: new Date().toISOString() };
   if (dbConfigured && supabase) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("pari_habit_checkins")
       .upsert(row, { onConflict: "habit_id,date" })
       .select()
       .single();
+    if (error) log("error", "habits", `checkinHabit: ${error.message}`);
     return data || row;
   }
   const existing = memCheckins.find((c) => c.habit_id === habitId && c.date === date);
@@ -85,12 +90,13 @@ export async function checkinHabit(habitId: string, date = today(), done = true)
 
 export async function listCheckins(habitId: string, days = 30): Promise<HabitCheckin[]> {
   if (dbConfigured && supabase) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("pari_habit_checkins")
       .select("*")
       .eq("habit_id", habitId)
       .order("date", { ascending: false })
       .limit(days);
+    if (error) log("error", "habits", `listCheckins: ${error.message}`);
     return data || [];
   }
   return memCheckins.filter((c) => c.habit_id === habitId).sort((a, b) => b.date.localeCompare(a.date)).slice(0, days);
