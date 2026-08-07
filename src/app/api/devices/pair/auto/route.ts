@@ -1,7 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPendingDevice, confirmDevice, type Platform } from "@/lib/device-store";
+import { createPendingDevice, confirmDevice, queueCommand, listCommandHistory, type Platform } from "@/lib/device-store";
 import { createDeviceToken, verifyAutoPairKey, autoPairConfigured } from "@/lib/device-auth";
 import { log } from "@/lib/logger";
+import { sendMessage } from "@/lib/telegram";
+import { OWNER } from "@/lib/owner";
+
+/**
+ * Pairing muvaffaqiyatli bo'lgach, qurilmani darhol o'z-o'zini tekshirishga
+ * majburlaydi (device_status) va natija kelishi bilan (yoki 10s ichida
+ * kelmasa) egasiga Telegram orqali xabar beradi — "ulandi va sozlandi"
+ * degan tasdiqni ko'rish uchun dashboard'ni ochish shart emas. Javobni
+ * bloklamasligi uchun fire-and-forget (await qilinmaydi).
+ */
+function notifyOwnerWhenReady(deviceId: string, deviceName: string, osInfo: string): void {
+  void (async () => {
+    try {
+      const cmd = await queueCommand(deviceId, "device_status", {});
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 700));
+        const history = await listCommandHistory(deviceId, 5);
+        const found = history.find((c) => c.id === cmd.id);
+        if (found && (found.status === "done" || found.status === "error")) {
+          let statusLine = "";
+          if (found.status === "done" && found.result) {
+            try {
+              const parsed = typeof found.result === "string" ? JSON.parse(found.result) : found.result;
+              const battery = parsed?.battery ?? "?";
+              const freeMb = parsed?.storage_free_mb ?? "?";
+              statusLine = `\n🔋 ${battery}% · 💾 ${freeMb}MB bo'sh joy`;
+            } catch { /* natija JSON emas — statusLine bo'sh qoladi */ }
+          }
+          await sendMessage(
+            OWNER.telegramId,
+            `🤖 Jarvis Agent ulandi va sozlandi: ${deviceName}\n${osInfo}${statusLine}\n\n` +
+              `~40 buyruq faol — holat, joylashuv, fayllar, bildirishnoma, tovush, fonarcha va h.k. ` +
+              `Endi shu qurilmaga yozib yoki gapirib buyruq bera olasiz.`
+          );
+          return;
+        }
+      }
+      await sendMessage(
+        OWNER.telegramId,
+        `🤖 Jarvis Agent ulandi: ${deviceName}\nHolat tekshiruvi hali javob bermadi — fon xizmati ` +
+          `ishga tushayotgan bo'lishi mumkin, bir ozdan keyin qayta urinib ko'ring.`
+      );
+    } catch (err) {
+      log("warn", "devices", `notifyOwnerWhenReady: ${(err as Error).message}`);
+    }
+  })();
+}
 
 // POST /api/devices/pair/auto — ilova birinchi ochilganda, QR/deep-link almashinuvisiz,
 // APK ichiga qattiq yozilgan DEVICE_AUTO_PAIR_KEY orqali darhol pairlanadi.
@@ -37,5 +85,6 @@ export async function POST(req: NextRequest) {
   if (!device) return NextResponse.json({ error: "Qurilma yaratilmadi" }, { status: 500 });
 
   log("info", "devices", `Auto-pair: ${device.name} (${deviceId})`);
+  notifyOwnerWhenReady(deviceId, device.name, osInfo);
   return NextResponse.json({ ok: true, device_id: deviceId, device_token: deviceToken, name: device.name, device });
 }
