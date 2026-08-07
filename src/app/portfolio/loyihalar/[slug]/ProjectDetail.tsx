@@ -2,94 +2,128 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, ArrowLeft } from "lucide-react";
-import { GOLD, BORDER, goldButtonStyle, outlineStyle } from "../../_components/theme";
-import { fadeUp, Reveal, SectionLabel, Card } from "../../_components/ui";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import {
+  GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold, SHADOW_LUXURY,
+} from "../../_components/theme";
+import {
+  Container, Section, SectionLabel, SectionHeading, GlassCard, CtaBand,
+  fadeUp, Reveal, TextReveal, Counter, Lift, PointerTilt, Floating,
+} from "../../_components/ui";
 import type { Project } from "../../_data";
 
-/** Abstract phone mockups standing in for the project screenshots. */
-function ProjectVisual({ gradient }: { gradient: string }) {
+/** Device mockups standing in for project screenshots — no image assets needed. */
+function ProjectShowcase({ project }: { project: Project }) {
   return (
-    <div className="relative w-full aspect-[4/3] max-w-[440px] mx-auto">
+    <PointerTilt intensity={7} className="relative w-full aspect-[4/3] max-w-[520px] mx-auto">
       <div
-        className="absolute inset-[8%] rounded-3xl blur-3xl opacity-60"
-        style={{ background: `radial-gradient(circle at 50% 50%, ${GOLD}44, transparent 65%)` }}
+        aria-hidden="true"
+        className="absolute inset-[6%] blur-3xl"
+        style={{ background: `radial-gradient(circle at 50% 45%, ${gold(0.28)}, transparent 66%)` }}
       />
       {[
-        { left: "6%", top: "14%", rotate: -8, scale: 0.82, z: 1 },
-        { left: "50%", top: "6%", rotate: 0, scale: 1, z: 3 },
-        { left: "76%", top: "16%", rotate: 8, scale: 0.82, z: 2 },
+        { left: "8%", top: "16%", rot: -9, scale: 0.84, z: 1, delay: 0.4 },
+        { left: "50%", top: "6%", rot: 0, scale: 1, z: 3, delay: 0 },
+        { left: "78%", top: "18%", rot: 9, scale: 0.84, z: 2, delay: 0.8 },
       ].map((p, i) => (
         <div
           key={i}
-          className="absolute rounded-[1.6rem] overflow-hidden"
+          className="absolute"
           style={{
             left: p.left,
             top: p.top,
             width: "30%",
-            aspectRatio: "9 / 19",
-            transform: `translateX(-50%) rotate(${p.rotate}deg) scale(${p.scale})`,
+            transform: `translateX(-50%) rotate(${p.rot}deg) scale(${p.scale})`,
             zIndex: p.z,
-            background: gradient,
-            border: `1px solid ${GOLD}33`,
-            boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
           }}
         >
-          <div className="absolute inset-x-0 top-0 h-6 flex items-center justify-center">
-            <div className="w-8 h-1 rounded-full bg-white/20" />
-          </div>
-          <div className="absolute inset-x-3 top-10 space-y-2">
-            <div className="h-1.5 rounded-full bg-white/25" style={{ width: "70%" }} />
-            <div className="h-1.5 rounded-full bg-white/12" style={{ width: "50%" }} />
-          </div>
-          <div className="absolute inset-x-3 top-20 grid grid-cols-2 gap-1.5">
-            {Array.from({ length: 4 }).map((_, k) => (
-              <div key={k} className="rounded-md bg-white/8" style={{ aspectRatio: "1 / 1" }} />
-            ))}
-          </div>
+          <Floating amplitude={6} duration={7 + i} delay={p.delay}>
+            <div
+              className="relative w-full overflow-hidden"
+              style={{
+                aspectRatio: "9 / 19",
+                borderRadius: 26,
+                background: project.gradient,
+                border: `1px solid ${gold(0.22)}`,
+                boxShadow: "0 30px 70px -18px rgba(0,0,0,0.85)",
+              }}
+            >
+              <div className="absolute inset-x-0 top-0 h-7 flex items-center justify-center">
+                <div className="w-9 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.22)" }} />
+              </div>
+              <div className="absolute inset-x-4 top-12 space-y-2.5">
+                <div className="h-2 rounded-full" style={{ width: "72%", background: gold(0.5) }} />
+                <div className="h-1.5 rounded-full" style={{ width: "48%", background: "rgba(255,255,255,0.16)" }} />
+              </div>
+              <div className="absolute inset-x-4 top-28 grid grid-cols-2 gap-2">
+                {Array.from({ length: 6 }).map((_, k) => (
+                  <div
+                    key={k}
+                    className="rounded-lg"
+                    style={{ aspectRatio: "1 / 1", background: "rgba(255,255,255,0.07)" }}
+                  />
+                ))}
+              </div>
+            </div>
+          </Floating>
         </div>
       ))}
-    </div>
+    </PointerTilt>
   );
 }
 
-export default function ProjectDetail({ project }: { project: Project }) {
+export default function ProjectDetail({
+  project,
+  next,
+}: {
+  project: Project;
+  next: Project;
+}) {
   return (
     <>
-      <section className="pt-32 pb-12 md:pt-36">
-        <div className="max-w-6xl mx-auto px-5">
+      {/* ── Hero ── */}
+      <section className="relative pt-36 pb-16 md:pt-44 overflow-hidden">
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 h-[560px] pointer-events-none"
+          style={{ background: `radial-gradient(ellipse 60% 100% at 60% 5%, ${gold(0.1)}, transparent 68%)` }}
+        />
+        <Container className="relative">
           <Reveal>
-            <motion.div variants={fadeUp} className="mb-6">
+            <motion.div variants={fadeUp} className="mb-8">
               <Link
                 href="/portfolio/loyihalar"
-                className="inline-flex items-center gap-2 text-[13px] text-white/45 hover:text-white transition-colors"
+                className="inline-flex items-center gap-2 text-[13px] transition-colors hover:text-white"
+                style={{ color: TEXT_DIM }}
               >
                 <ArrowLeft size={14} /> Barcha loyihalar
               </Link>
             </motion.div>
 
-            <div className="grid md:grid-cols-2 gap-10 items-center">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div>
-                <motion.div variants={fadeUp} className="mb-5">
+                <motion.div variants={fadeUp} className="mb-6">
                   <SectionLabel>{project.category}</SectionLabel>
                 </motion.div>
-                <motion.h1
+                <TextReveal
+                  as="h1"
+                  text={project.title}
+                  highlight={project.title}
+                  className="text-[2.5rem] md:text-[3.5rem] font-bold tracking-[-0.03em] leading-[1.06]"
+                />
+                <motion.p
                   variants={fadeUp}
-                  className="text-3xl md:text-[2.7rem] font-bold tracking-tight leading-[1.12] text-white mb-4"
+                  className="mt-6 text-base md:text-lg leading-relaxed max-w-md"
+                  style={{ color: TEXT_DIM }}
                 >
-                  <span style={{ color: GOLD }}>{project.title}</span>
-                  <br />
-                  {project.tagline}
-                </motion.h1>
-                <motion.p variants={fadeUp} className="text-white/40 leading-relaxed mb-6 max-w-md text-[15px]">
                   {project.summary}
                 </motion.p>
-                <motion.div variants={fadeUp} className="flex flex-wrap gap-2">
+                <motion.div variants={fadeUp} className="flex flex-wrap gap-2.5 mt-8">
                   {project.tech.map((t) => (
                     <span
                       key={t}
-                      className="text-[11px] font-medium px-3 py-1.5 rounded-full text-white/70"
-                      style={outlineStyle}
+                      className="text-[11px] font-medium px-3.5 py-2 rounded-full"
+                      style={{ border: `1px solid ${BORDER}`, color: "rgba(255,255,255,0.7)", background: "rgba(255,255,255,0.03)" }}
                     >
                       {t}
                     </span>
@@ -98,75 +132,107 @@ export default function ProjectDetail({ project }: { project: Project }) {
               </div>
 
               <motion.div variants={fadeUp}>
-                <ProjectVisual gradient={project.gradient} />
+                <ProjectShowcase project={project} />
               </motion.div>
             </div>
           </Reveal>
-        </div>
+        </Container>
       </section>
 
-      <section className="pb-12">
-        <div className="max-w-6xl mx-auto px-5">
-          <Reveal>
-            <Card className="grid grid-cols-2 md:grid-cols-4 divide-x">
-              {project.metrics.map((m) => (
-                <motion.div key={m.label} variants={fadeUp} className="px-5 py-6" style={{ borderColor: BORDER }}>
-                  <div className="text-2xl md:text-3xl font-bold leading-none" style={{ color: GOLD }}>
-                    {m.value}
-                  </div>
-                  <div className="text-[12px] text-white/40 mt-2 leading-tight">{m.label}</div>
-                </motion.div>
-              ))}
-            </Card>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="pb-20">
-        <div className="max-w-6xl mx-auto px-5">
-          <Reveal>
-            <motion.h2 variants={fadeUp} className="text-2xl md:text-3xl font-bold text-white mb-8">
-              Loyiha haqida
-            </motion.h2>
-            <div className="grid md:grid-cols-2 gap-5">
-              <motion.div variants={fadeUp}>
-                <Card className="p-6 md:p-7 h-full">
-                  <h3 className="font-semibold text-white mb-3">Muammo</h3>
-                  <p className="text-[14px] text-white/45 leading-relaxed">{project.problem}</p>
-                </Card>
+      {/* ── Results ── */}
+      <Section className="pt-4">
+        <Reveal>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {project.metrics.map((m) => (
+              <motion.div key={m.label} variants={fadeUp}>
+                <GlassCard className="p-7">
+                  <Counter
+                    value={m.value}
+                    className="block text-[2.25rem] font-bold leading-none tracking-[-0.02em]"
+                    style={{ color: GOLD }}
+                  />
+                  <span className="block text-[12px] mt-3" style={{ color: TEXT_DIM }}>{m.label}</span>
+                </GlassCard>
               </motion.div>
-              <motion.div variants={fadeUp}>
-                <Card className="p-6 md:p-7 h-full">
-                  <h3 className="font-semibold mb-3" style={{ color: GOLD }}>Yechimimiz</h3>
-                  <p className="text-[14px] text-white/45 leading-relaxed">{project.solution}</p>
-                </Card>
-              </motion.div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
+            ))}
+          </div>
+        </Reveal>
+      </Section>
 
-      <section className="pb-24">
-        <div className="max-w-6xl mx-auto px-5">
-          <Reveal>
+      {/* ── Problem / Solution ── */}
+      <Section style={{ background: BG_ALT }}>
+        <Reveal>
+          <SectionHeading label="Loyiha haqida" title="Muammo va yechim" highlight="yechim" className="mb-12" />
+          <div className="grid md:grid-cols-2 gap-5">
             <motion.div variants={fadeUp}>
-              <Card className="p-8 md:p-10 text-center">
-                <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">Shunga o{"'"}xshash loyiha kerakmi?</h2>
-                <p className="text-white/40 max-w-lg mx-auto mb-7 leading-relaxed">
-                  Bepul konsultatsiya oling — g{"'"}oyangizni birgalikda rejaga aylantiramiz.
+              <GlassCard className="p-8 md:p-10 h-full">
+                <span className="text-[11px] uppercase tracking-[0.18em]" style={{ color: TEXT_DIM }}>Muammo</span>
+                <p className="text-[15px] leading-relaxed mt-5" style={{ color: "rgba(255,255,255,0.72)" }}>
+                  {project.problem}
                 </p>
-                <Link
-                  href="/portfolio/aloqa"
-                  className="inline-flex items-center gap-2 font-semibold px-6 py-3 rounded-full transition-opacity hover:opacity-90"
-                  style={goldButtonStyle}
-                >
-                  Buyurtma berish <ArrowRight size={16} />
-                </Link>
-              </Card>
+              </GlassCard>
             </motion.div>
-          </Reveal>
-        </div>
-      </section>
+            <motion.div variants={fadeUp}>
+              <div
+                className="p-8 md:p-10 h-full"
+                style={{
+                  borderRadius: 24,
+                  background: `linear-gradient(165deg, ${gold(0.12)}, rgba(18,18,18,0.85))`,
+                  border: `1px solid ${gold(0.26)}`,
+                  boxShadow: SHADOW_LUXURY,
+                }}
+              >
+                <span className="text-[11px] uppercase tracking-[0.18em]" style={{ color: GOLD }}>Yechimimiz</span>
+                <p className="text-[15px] leading-relaxed mt-5" style={{ color: "rgba(255,255,255,0.85)" }}>
+                  {project.solution}
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        </Reveal>
+      </Section>
+
+      {/* ── Next project ── */}
+      <Section>
+        <Reveal>
+          <motion.div variants={fadeUp}>
+            <Link href={`/portfolio/loyihalar/${next.slug}`} className="block">
+              <Lift>
+                <div
+                  className="relative overflow-hidden group px-8 py-14 md:px-14 md:py-16"
+                  style={{ borderRadius: 24, border: `1px solid ${BORDER}`, background: SURFACE }}
+                >
+                  <div
+                    className="absolute inset-0 opacity-40 transition-transform duration-700 group-hover:scale-105"
+                    style={{ background: next.gradient }}
+                  />
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgba(0,0,0,0.9), rgba(0,0,0,0.55))" }} />
+                  <div className="relative flex flex-wrap items-center justify-between gap-6">
+                    <div>
+                      <span className="text-[11px] uppercase tracking-[0.18em]" style={{ color: TEXT_DIM }}>
+                        Keyingi loyiha
+                      </span>
+                      <h2 className="text-2xl md:text-3xl font-bold mt-3">{next.title}</h2>
+                      <span className="text-[13px] mt-2 block" style={{ color: GOLD }}>{next.tagline}</span>
+                    </div>
+                    <span
+                      className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 transition-transform group-hover:translate-x-1"
+                      style={{ border: `1px solid ${gold(0.3)}`, background: gold(0.1) }}
+                    >
+                      <ArrowRight size={18} style={{ color: GOLD }} />
+                    </span>
+                  </div>
+                </div>
+              </Lift>
+            </Link>
+          </motion.div>
+        </Reveal>
+      </Section>
+
+      <CtaBand
+        title="Shunga o'xshash loyiha kerakmi?"
+        subtitle="Bepul konsultatsiya oling — g'oyangizni birgalikda rejaga aylantiramiz."
+      />
     </>
   );
 }

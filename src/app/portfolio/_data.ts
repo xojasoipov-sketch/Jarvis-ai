@@ -430,3 +430,56 @@ export const FAQS = [
     a: "Ha. Avval joriy holatni tahlil qilamiz, so'ng bosqichma-bosqich yangilash yoki noldan qayta qurish bo'yicha taklif beramiz.",
   },
 ];
+
+/* ── Testimonials ─────────────────────────────────────────────────────────── */
+
+export interface Testimonial {
+  quote: string;
+  name: string;
+  role: string;
+  /** Initials shown in the avatar tile. */
+  initials: string;
+}
+
+export const TESTIMONIALS: Testimonial[] = [
+  {
+    quote:
+      "Telegram do'konimiz ishga tushgan birinchi oyda buyurtmalar ikki baravar oshdi. Eng muhimi — endi hech bir buyurtma yo'qolmaydi.",
+    name: "Aziz Rahimov",
+    role: "DLI Shop, asoschisi",
+    initials: "AR",
+  },
+  {
+    quote:
+      "Muddatni aniq aytishdi va aniq bajarishdi. Har hafta demo ko'rsatib borishgani jarayonni juda tinch qildi.",
+    name: "Nilufar Karimova",
+    role: "Real Estate Platform, marketing direktori",
+    initials: "NK",
+  },
+  {
+    quote:
+      "AI panel qo'llab-quvvatlash jamoamiz vaqtining uchdan ikkisini tejadi. Muammoli suhbatlar endi o'zi yuqoriga chiqadi.",
+    name: "Bekzod To'lqinov",
+    role: "AI Chat Dashboard, operatsiyalar rahbari",
+    initials: "BT",
+  },
+  {
+    quote:
+      "Kod to'liq bizga topshirildi, hech qanday bog'liqlik qolmadi. Bu boshqa agentliklarda ko'rmagan yondashuv.",
+    name: "Dilshod Ergashev",
+    role: "CRM Dashboard, texnik direktor",
+    initials: "DE",
+  },
+];
+
+/* ── Trusted companies ────────────────────────────────────────────────────── */
+
+/** Client wordmarks — rendered as type, so the site ships with no logo files. */
+export const COMPANIES = [
+  "DLI SHOP",
+  "ESTATE UZ",
+  "MEDLAB",
+  "AUTOPRIME",
+  "EDUFLOW",
+  "NEXA",
+] as const;

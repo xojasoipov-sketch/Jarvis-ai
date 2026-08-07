@@ -4,11 +4,14 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Globe, Send, Gem, Settings2, TrendingUp, Palette, Bot, Database,
-  ArrowRight, ArrowUpRight, type LucideIcon,
+  ArrowUpRight, Check, type LucideIcon,
 } from "lucide-react";
-import { GOLD, goldButtonStyle, outlineStyle } from "../_components/theme";
-import { fadeUp, Reveal, PageHero, Card, IconTile } from "../_components/ui";
-import { SERVICES } from "../_data";
+import { GOLD, TEXT_DIM, BG_ALT, gold } from "../_components/theme";
+import {
+  Section, SectionHeading, PageHero, GlassCard, IconTile, CtaBand,
+  fadeUp, Reveal,
+} from "../_components/ui";
+import { SERVICES, WORKFLOW } from "../_data";
 
 const ICONS: Record<string, LucideIcon> = {
   "web-saytlar": Globe,
@@ -21,74 +24,142 @@ const ICONS: Record<string, LucideIcon> = {
   "crm": Database,
 };
 
+const TECH_STACK = [
+  { group: "Frontend", items: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Framer Motion"] },
+  { group: "Backend", items: ["Node.js", "PostgreSQL", "Supabase", "REST API", "Redis"] },
+  { group: "AI", items: ["OpenAI", "Anthropic", "Gemini", "Groq", "RAG", "MCP"] },
+  { group: "Platforma", items: ["Telegram Mini Apps", "Railway", "Vercel", "Cloudflare"] },
+];
+
+const BENEFITS = [
+  "Manba kodi to'liq sizga topshiriladi",
+  "Har haftada progress hisoboti va demo",
+  "Kelishilgan muddat — kechikish bo'lsa, ogohlantiramiz",
+  "Topshirgandan keyin qo'llab-quvvatlash davom etadi",
+];
+
 export default function XizmatlarPage() {
   return (
     <>
       <PageHero
         label="Xizmatlar"
-        titleTop="Bizning"
-        titleGold="xizmatlarimiz"
+        title="Bizning xizmatlarimiz"
+        highlight="xizmatlarimiz"
         subtitle="G'oyadan ishga tushirishgacha — biznesingizga kerak bo'lgan barcha raqamli yechimlar bitta jamoadan."
       />
 
-      <section className="pb-20">
-        <div className="max-w-6xl mx-auto px-5">
-          <Reveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {SERVICES.map((s) => {
-              const Icon = ICONS[s.slug] ?? Globe;
-              return (
-                <motion.div key={s.slug} variants={fadeUp} id={s.slug} className="scroll-mt-24">
-                  <Card className="p-5 h-full flex flex-col group">
-                    <IconTile><Icon size={18} style={{ color: GOLD }} strokeWidth={1.75} /></IconTile>
-                    <h2 className="font-semibold text-white text-[15px] mt-4 mb-2">{s.title}</h2>
-                    <p className="text-[13px] text-white/40 leading-relaxed flex-1">{s.desc}</p>
-                    <Link
-                      href="/portfolio/aloqa"
-                      className="inline-flex items-center gap-1.5 text-[12px] font-medium mt-4 transition-colors"
-                      style={{ color: GOLD }}
-                    >
-                      Batafsil <ArrowUpRight size={12} />
-                    </Link>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="pb-24">
-        <div className="max-w-6xl mx-auto px-5">
-          <Reveal>
-            <motion.div variants={fadeUp}>
-              <Card className="p-8 md:p-10 text-center">
-                <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
-                  Kerakli xizmatni topa olmadingizmi?
-                </h2>
-                <p className="text-white/40 max-w-lg mx-auto mb-7 leading-relaxed">
-                  Loyihangizni tavsiflab bering — sizga mos yechimni birgalikda ishlab chiqamiz.
-                </p>
-                <div className="flex flex-wrap items-center justify-center gap-3">
+      {/* ── Service grid ── */}
+      <Section className="pt-4">
+        <Reveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {SERVICES.map((s) => {
+            const Icon = ICONS[s.slug] ?? Globe;
+            return (
+              <motion.div key={s.slug} variants={fadeUp} id={s.slug} className="scroll-mt-28">
+                <GlassCard className="p-7 flex flex-col">
+                  <IconTile><Icon size={20} style={{ color: GOLD }} strokeWidth={1.6} /></IconTile>
+                  <h2 className="font-semibold text-[16px] mt-6 mb-3">{s.title}</h2>
+                  <p className="text-[13px] leading-relaxed flex-1" style={{ color: TEXT_DIM }}>{s.desc}</p>
                   <Link
                     href="/portfolio/aloqa"
-                    className="inline-flex items-center gap-2 font-semibold px-6 py-3 rounded-full transition-opacity hover:opacity-90"
-                    style={goldButtonStyle}
+                    className="inline-flex items-center gap-1.5 text-[12px] font-medium mt-6"
+                    style={{ color: GOLD }}
                   >
-                    Bepul konsultatsiya <ArrowRight size={16} />
+                    Batafsil <ArrowUpRight size={12} />
                   </Link>
-                  <Link
-                    href="/portfolio/narxlar"
-                    className="inline-flex items-center gap-2 font-medium px-6 py-3 rounded-full text-white transition-colors"
-                    style={outlineStyle}
-                  >
-                    Narxlarni ko{"'"}rish
-                  </Link>
-                </div>
-              </Card>
-            </motion.div>
-          </Reveal>
-        </div>
-      </section>
+                </GlassCard>
+              </motion.div>
+            );
+          })}
+        </Reveal>
+      </Section>
+
+      {/* ── Technology stack ── */}
+      <Section style={{ background: BG_ALT }}>
+        <Reveal>
+          <SectionHeading
+            label="Texnologiyalar"
+            title="Biz ishlatadigan stack"
+            highlight="stack"
+            subtitle="Moda uchun emas — barqarorligi va uzoq muddatli qo'llab-quvvatlanishi uchun tanlangan."
+            align="center"
+            className="mb-14"
+          />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {TECH_STACK.map((g) => (
+              <motion.div key={g.group} variants={fadeUp}>
+                <GlassCard className="p-7 h-full">
+                  <h3 className="font-semibold text-[15px] mb-5" style={{ color: GOLD }}>{g.group}</h3>
+                  <ul className="space-y-2.5">
+                    {g.items.map((t) => (
+                      <li key={t} className="text-[13px] flex items-center gap-2.5" style={{ color: TEXT_DIM }}>
+                        <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: gold(0.7) }} />
+                        {t}
+                      </li>
+                    ))}
+                  </ul>
+                </GlassCard>
+              </motion.div>
+            ))}
+          </div>
+        </Reveal>
+      </Section>
+
+      {/* ── Process ── */}
+      <Section>
+        <Reveal>
+          <SectionHeading
+            label="Jarayon"
+            title="Har bir loyiha shu yo'ldan o'tadi"
+            highlight="shu yo'ldan"
+            align="center"
+            className="mb-14"
+          />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {WORKFLOW.map((s) => (
+              <motion.div key={s.n} variants={fadeUp}>
+                <GlassCard className="p-6 h-full" interactive={false}>
+                  <span className="text-xs font-semibold" style={{ color: GOLD }}>{s.n}</span>
+                  <h3 className="font-semibold text-[15px] mt-3 mb-2">{s.title}</h3>
+                  <p className="text-[12px] leading-relaxed" style={{ color: TEXT_DIM }}>{s.desc}</p>
+                </GlassCard>
+              </motion.div>
+            ))}
+          </div>
+        </Reveal>
+      </Section>
+
+      {/* ── Benefits ── */}
+      <Section style={{ background: BG_ALT }}>
+        <Reveal className="grid lg:grid-cols-2 gap-12 items-center">
+          <SectionHeading
+            label="Nega biz"
+            title="Har bir loyihada kafolatlaymiz"
+            highlight="kafolatlaymiz"
+            subtitle="Bular marketing va'dasi emas — shartnomaga kiritiladigan bandlar."
+          />
+          <motion.ul variants={fadeUp} className="space-y-4">
+            {BENEFITS.map((b) => (
+              <li key={b} className="flex items-start gap-4">
+                <span
+                  className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                  style={{ background: gold(0.14), border: `1px solid ${gold(0.28)}` }}
+                >
+                  <Check size={13} style={{ color: GOLD }} strokeWidth={2.5} />
+                </span>
+                <span className="text-[15px] leading-relaxed pt-0.5">{b}</span>
+              </li>
+            ))}
+          </motion.ul>
+        </Reveal>
+      </Section>
+
+      <CtaBand
+        title="Kerakli xizmatni topa olmadingizmi?"
+        subtitle="Loyihangizni tavsiflab bering — sizga mos yechimni birgalikda ishlab chiqamiz."
+        primaryLabel="Bepul konsultatsiya"
+        secondaryHref="/portfolio/narxlar"
+        secondaryLabel="Narxlarni ko'rish"
+      />
     </>
   );
 }

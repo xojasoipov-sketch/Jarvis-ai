@@ -1,10 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, MapPin, Clock } from "lucide-react";
-import { GOLD, BORDER, goldButtonStyle, outlineStyle } from "../_components/theme";
-import { fadeUp, Reveal, Card } from "../_components/ui";
+import { ArrowRight, MapPin, Clock, Sparkles } from "lucide-react";
+import { GOLD, TEXT_DIM, BG_ALT, gold } from "../_components/theme";
+import {
+  Section, SectionHeading, PageHero, GlassCard, GhostButton, CtaBand,
+  fadeUp, Reveal, Lift,
+} from "../_components/ui";
 
 const OPENINGS = [
   { role: "Frontend Developer", type: "To'liq stavka", place: "Andijon / Masofaviy", stack: "Next.js · TypeScript · Tailwind" },
@@ -14,102 +16,95 @@ const OPENINGS = [
 ];
 
 const PERKS = [
-  "Masofaviy ishlash imkoniyati",
-  "Real loyihalarda tajriba",
-  "O'qish va sertifikatlar uchun byudjet",
-  "Moslashuvchan ish grafigi",
+  { t: "Masofaviy ish", d: "Qayerdan ishlashingiz emas, natijangiz muhim" },
+  { t: "Real loyihalar", d: "Birinchi kundan ishlab turgan mahsulotlar ustida" },
+  { t: "O'quv byudjeti", d: "Kurs va sertifikatlar xarajatini qoplaymiz" },
+  { t: "Moslashuvchan grafik", d: "Ish vaqtini o'zingiz rejalashtirasiz" },
 ];
 
 export default function KaryeraPage() {
   return (
     <>
-      <section className="pt-32 pb-16 md:pt-36 relative overflow-hidden">
-        <div
-          className="absolute inset-0 -z-10"
-          style={{ background: `radial-gradient(ellipse 50% 40% at 70% 40%, ${GOLD}14, transparent 70%)` }}
-        />
-        <div className="max-w-6xl mx-auto px-5">
-          <Reveal className="grid md:grid-cols-2 gap-10 items-center">
-            <div>
-              <motion.h1
-                variants={fadeUp}
-                className="text-3xl md:text-[2.9rem] font-bold tracking-tight leading-[1.12] text-white mb-5"
-              >
-                Karyerangizni
-                <br />
-                <span style={{ color: GOLD }}>biz bilan boshlang</span>
-              </motion.h1>
-              <motion.p variants={fadeUp} className="text-white/45 leading-relaxed max-w-md text-[15px] mb-7">
-                Kichik jamoada katta loyihalar ustida ishlang. Biz tajribadan ko{"'"}ra o{"'"}rganishga
-                tayyorlikni ko{"'"}proq qadrlaymiz.
-              </motion.p>
-              <motion.div variants={fadeUp}>
-                <Link
-                  href="/portfolio/aloqa"
-                  className="inline-flex items-center gap-2 font-semibold px-6 py-3 rounded-full transition-opacity hover:opacity-90"
-                  style={goldButtonStyle}
-                >
-                  Vakansiyalarni ko{"'"}rish <ArrowRight size={16} />
-                </Link>
-              </motion.div>
-            </div>
+      <PageHero
+        label="Karyera"
+        title="Karyerangizni biz bilan boshlang"
+        highlight="biz bilan boshlang"
+        subtitle="Kichik jamoada katta loyihalar ustida ishlang. Biz tajribadan ko'ra o'rganishga tayyorlikni ko'proq qadrlaymiz."
+      />
 
-            <motion.div variants={fadeUp}>
-              <Card className="p-7">
-                <h2 className="font-semibold text-white mb-5">Nima taklif qilamiz</h2>
-                <ul className="space-y-3.5">
-                  {PERKS.map((p) => (
-                    <li key={p} className="flex items-start gap-3 text-[14px] text-white/60">
-                      <span
-                        className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-2"
-                        style={{ background: GOLD, boxShadow: `0 0 10px ${GOLD}` }}
-                      />
-                      {p}
-                    </li>
-                  ))}
-                </ul>
-              </Card>
+      {/* ── Perks ── */}
+      <Section className="pt-4">
+        <Reveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {PERKS.map((p) => (
+            <motion.div key={p.t} variants={fadeUp}>
+              <GlassCard className="p-7 h-full">
+                <div
+                  className="w-2 h-2 rounded-full mb-6"
+                  style={{ background: GOLD, boxShadow: `0 0 14px ${GOLD}` }}
+                />
+                <h2 className="font-semibold text-[16px] mb-2.5">{p.t}</h2>
+                <p className="text-[13px] leading-relaxed" style={{ color: TEXT_DIM }}>{p.d}</p>
+              </GlassCard>
             </motion.div>
-          </Reveal>
-        </div>
-      </section>
+          ))}
+        </Reveal>
+      </Section>
 
-      <section className="pb-24">
-        <div className="max-w-6xl mx-auto px-5">
-          <Reveal>
-            <motion.h2 variants={fadeUp} className="text-2xl md:text-3xl font-bold text-white mb-8">
-              Ochiq vakansiyalar
-            </motion.h2>
-            <div className="space-y-3">
-              {OPENINGS.map((o) => (
-                <motion.div key={o.role} variants={fadeUp}>
-                  <Card className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-white text-[15px] mb-2">{o.role}</h3>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-white/40">
-                        <span className="flex items-center gap-1.5"><Clock size={12} /> {o.type}</span>
-                        <span className="flex items-center gap-1.5"><MapPin size={12} /> {o.place}</span>
-                        <span style={{ color: `${GOLD}cc` }}>{o.stack}</span>
+      {/* ── Openings ── */}
+      <Section style={{ background: BG_ALT }}>
+        <Reveal>
+          <SectionHeading
+            label="Vakansiyalar"
+            title="Ochiq pozitsiyalar"
+            highlight="pozitsiyalar"
+            className="mb-12"
+          />
+          <div className="space-y-4">
+            {OPENINGS.map((o) => (
+              <motion.div key={o.role} variants={fadeUp}>
+                <Lift>
+                  <GlassCard className="p-7 md:p-8" interactive={false}>
+                    <div className="flex flex-wrap items-center justify-between gap-6">
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-[17px] mb-3">{o.role}</h3>
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]" style={{ color: TEXT_DIM }}>
+                          <span className="flex items-center gap-1.5"><Clock size={12} /> {o.type}</span>
+                          <span className="flex items-center gap-1.5"><MapPin size={12} /> {o.place}</span>
+                          <span style={{ color: gold(0.85) }}>{o.stack}</span>
+                        </div>
                       </div>
+                      <GhostButton href="/portfolio/aloqa">
+                        Ariza yuborish <ArrowRight size={13} />
+                      </GhostButton>
                     </div>
-                    <Link
-                      href="/portfolio/aloqa"
-                      className="inline-flex items-center gap-2 text-[13px] font-medium px-5 py-2.5 rounded-full text-white transition-colors flex-shrink-0"
-                      style={outlineStyle}
-                    >
-                      Ariza yuborish <ArrowRight size={13} />
-                    </Link>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
+                  </GlassCard>
+                </Lift>
+              </motion.div>
+            ))}
+          </div>
 
-            <motion.p variants={fadeUp} className="text-[13px] text-white/30 mt-8 text-center" style={{ borderColor: BORDER }}>
-              Ro{"'"}yxatda o{"'"}zingizga mos yo{"'"}nalish yo{"'"}qmi? Baribir yozing — kuchli nomzodlar uchun joy topamiz.
-            </motion.p>
-          </Reveal>
-        </div>
-      </section>
+          <motion.div variants={fadeUp} className="mt-10">
+            <div
+              className="flex items-start gap-4 p-7"
+              style={{ borderRadius: 24, background: gold(0.06), border: `1px solid ${gold(0.2)}` }}
+            >
+              <Sparkles size={18} style={{ color: GOLD }} strokeWidth={1.6} className="flex-shrink-0 mt-0.5" />
+              <p className="text-[14px] leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
+                Ro{"'"}yxatda o{"'"}zingizga mos yo{"'"}nalish yo{"'"}qmi? Baribir yozing — kuchli
+                nomzodlar uchun har doim joy topamiz.
+              </p>
+            </div>
+          </motion.div>
+        </Reveal>
+      </Section>
+
+      <CtaBand
+        title="Jamoamizga qo'shilishni xohlaysizmi?"
+        subtitle="CV va portfolioingizni yuboring — har bir arizani o'zimiz o'qib chiqamiz."
+        primaryLabel="Ariza yuborish"
+        secondaryHref="/portfolio/haqida"
+        secondaryLabel="Biz haqimizda"
+      />
     </>
   );
 }

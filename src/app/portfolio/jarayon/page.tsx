@@ -1,105 +1,117 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Search, Microscope, Palette, Code2, TestTube2, Rocket, Headphones, TrendingUp,
-  ArrowRight, type LucideIcon,
+  type LucideIcon,
 } from "lucide-react";
-import { GOLD, BORDER, goldButtonStyle } from "../_components/theme";
-import { fadeUp, Reveal, PageHero, Card, IconTile } from "../_components/ui";
+import { GOLD, TEXT_DIM, BG_ALT, SURFACE, gold } from "../_components/theme";
+import {
+  Section, SectionHeading, PageHero, GlassCard, IconTile, CtaBand,
+  fadeUp, Reveal,
+} from "../_components/ui";
 import { WORKFLOW } from "../_data";
 
 const ICONS: LucideIcon[] = [Search, Microscope, Palette, Code2, TestTube2, Rocket, Headphones, TrendingUp];
+
+const PRINCIPLES = [
+  { k: "Shaffoflik", v: "Har hafta progress hisoboti va ishlaydigan demo — taxmin qilishingiz shart emas." },
+  { k: "Moslashuvchanlik", v: "Talab o'zgarsa, reja ham moslashadi. Qat'iy shartnoma ijodni bo'g'masligi kerak." },
+  { k: "Kafolat", v: "Topshirgandan keyin ham qo'llab-quvvatlaymiz — loyiha yakuni aloqaning oxiri emas." },
+];
 
 export default function JarayonPage() {
   return (
     <>
       <PageHero
         label="Jarayon"
-        titleTop="Bizning ish"
-        titleGold="jarayonimiz"
+        title="Bizning ish jarayonimiz"
+        highlight="jarayonimiz"
         subtitle="Sakkiz bosqichli shaffof jarayon — har bir qadamda nima bo'layotganini aniq bilasiz."
       />
 
-      <section className="pb-20">
-        <div className="max-w-6xl mx-auto px-5">
-          <Reveal className="relative">
-            {/* Connecting arc behind the two rows, desktop only */}
-            <svg
-              className="hidden lg:block absolute inset-x-0 top-[86px] w-full h-40 pointer-events-none"
-              viewBox="0 0 1000 160"
-              fill="none"
-              preserveAspectRatio="none"
+      {/* ── Timeline ── */}
+      <Section className="pt-4">
+        <Reveal>
+          <div className="relative">
+            {/* animated vertical spine (desktop) */}
+            <motion.div
               aria-hidden="true"
-            >
-              <path
-                d="M60 10 H940 Q985 10 985 60 Q985 110 940 110 H60 Q15 110 15 60"
-                stroke={GOLD}
-                strokeWidth="1"
-                strokeDasharray="4 6"
-                opacity="0.28"
-              />
-            </svg>
+              className="hidden lg:block absolute left-[27px] top-4 bottom-4 w-px origin-top"
+              style={{ background: `linear-gradient(180deg, ${gold(0.5)}, ${gold(0.08)})` }}
+              initial={{ scaleY: 0 }}
+              whileInView={{ scaleY: 1 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
+            />
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 relative">
+            <div className="space-y-4">
               {WORKFLOW.map((s, i) => {
                 const Icon = ICONS[i] ?? Search;
                 return (
-                  <motion.div key={s.n} variants={fadeUp}>
-                    <Card className="p-5 h-full">
-                      <div className="flex items-center justify-between mb-4">
-                        <IconTile><Icon size={18} style={{ color: GOLD }} strokeWidth={1.75} /></IconTile>
-                        <span className="text-xs font-semibold" style={{ color: GOLD }}>{s.n}</span>
+                  <motion.div key={s.n} variants={fadeUp} className="relative lg:pl-24">
+                    {/* node on the spine */}
+                    <div
+                      className="hidden lg:flex absolute left-0 top-5 w-14 h-14 rounded-full items-center justify-center"
+                      style={{ background: SURFACE, border: `1px solid ${gold(0.3)}`, boxShadow: `0 0 34px -8px ${gold(0.55)}` }}
+                    >
+                      <Icon size={19} style={{ color: GOLD }} strokeWidth={1.6} />
+                    </div>
+
+                    <GlassCard className="p-7 md:p-8">
+                      <div className="flex items-start gap-5">
+                        <div className="lg:hidden">
+                          <IconTile><Icon size={19} style={{ color: GOLD }} strokeWidth={1.6} /></IconTile>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-baseline gap-3 mb-2">
+                            <span className="text-xs font-semibold" style={{ color: GOLD }}>{s.n}</span>
+                            <h2 className="font-semibold text-[17px]">{s.title}</h2>
+                          </div>
+                          <p className="text-sm leading-relaxed" style={{ color: TEXT_DIM }}>{s.desc}</p>
+                        </div>
                       </div>
-                      <h2 className="font-semibold text-white text-[15px] mb-1.5">{s.title}</h2>
-                      <p className="text-[13px] text-white/40 leading-relaxed">{s.desc}</p>
-                    </Card>
+                    </GlassCard>
                   </motion.div>
                 );
               })}
             </div>
-          </Reveal>
-        </div>
-      </section>
+          </div>
+        </Reveal>
+      </Section>
 
-      <section className="pb-24">
-        <div className="max-w-6xl mx-auto px-5">
-          <Reveal className="grid md:grid-cols-3 gap-4">
-            {[
-              { k: "Shaffoflik", v: "Har hafta progress hisoboti va demo" },
-              { k: "Moslashuvchanlik", v: "Talab o'zgarsa — reja ham moslashadi" },
-              { k: "Kafolat", v: "Topshirgandan keyin ham qo'llab-quvvatlaymiz" },
-            ].map((item) => (
-              <motion.div key={item.k} variants={fadeUp}>
-                <Card className="p-6 h-full">
+      {/* ── Principles ── */}
+      <Section style={{ background: BG_ALT }}>
+        <Reveal>
+          <SectionHeading
+            label="Prinsiplar"
+            title="Jarayonni ushlab turadigan uch narsa"
+            highlight="uch narsa"
+            align="center"
+            className="mb-14"
+          />
+          <div className="grid md:grid-cols-3 gap-5">
+            {PRINCIPLES.map((p) => (
+              <motion.div key={p.k} variants={fadeUp}>
+                <GlassCard className="p-8 h-full">
                   <div
-                    className="w-1.5 h-1.5 rounded-full mb-4"
-                    style={{ background: GOLD, boxShadow: `0 0 12px ${GOLD}` }}
+                    className="w-2 h-2 rounded-full mb-6"
+                    style={{ background: GOLD, boxShadow: `0 0 16px ${GOLD}` }}
                   />
-                  <h3 className="font-semibold text-white mb-2">{item.k}</h3>
-                  <p className="text-[13px] text-white/40 leading-relaxed">{item.v}</p>
-                </Card>
+                  <h3 className="font-semibold text-[17px] mb-3">{p.k}</h3>
+                  <p className="text-sm leading-relaxed" style={{ color: TEXT_DIM }}>{p.v}</p>
+                </GlassCard>
               </motion.div>
             ))}
-          </Reveal>
+          </div>
+        </Reveal>
+      </Section>
 
-          <Reveal>
-            <motion.div variants={fadeUp} className="mt-10 text-center">
-              <Link
-                href="/portfolio/aloqa"
-                className="inline-flex items-center gap-2 font-semibold px-6 py-3 rounded-full transition-opacity hover:opacity-90"
-                style={goldButtonStyle}
-              >
-                Loyihani boshlash <ArrowRight size={16} />
-              </Link>
-              <p className="text-xs text-white/30 mt-4" style={{ borderColor: BORDER }}>
-                Birinchi konsultatsiya bepul
-              </p>
-            </motion.div>
-          </Reveal>
-        </div>
-      </section>
+      <CtaBand
+        title="Jarayonni birinchi qadamdan boshlaymizmi?"
+        subtitle="Birinchi konsultatsiya bepul — biznesingizni tushunib, aniq reja taklif qilamiz."
+        primaryLabel="Loyihani boshlash"
+      />
     </>
   );
 }
