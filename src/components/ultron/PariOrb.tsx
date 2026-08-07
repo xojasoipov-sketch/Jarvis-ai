@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createOrbScene, type OrbSceneApi } from "@/lib/ultron/orbScene";
 import { HandTracker, type TrackerStatus } from "@/lib/ultron/handTracker";
+import { VoiceMeter } from "@/lib/ultron/voiceMeter";
 
-type CameraState = "off" | "starting" | "on" | "error";
+type DeviceState = "off" | "starting" | "on" | "error";
 
 const MODE_LABEL: Record<TrackerStatus["mode"], string> = {
   idle: "STANDBY",
@@ -20,55 +21,14 @@ export default function PariOrb() {
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<OrbSceneApi | null>(null);
   const trackerRef = useRef<HandTracker | null>(null);
+  const voiceRef = useRef<VoiceMeter | null>(null);
 
-  const [camera, setCamera] = useState<CameraState>("off");
+  const [camera, setCamera] = useState<DeviceState>("off");
+  const [mic, setMic] = useState<DeviceState>("off");
+  const [awake, setAwake] = useState(false);
   const [status, setStatus] = useState<TrackerStatus>({ hands: 0, mode: "idle" });
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const scene = createOrbScene(container);
-    sceneRef.current = scene;
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "g" || e.key === "G") {
-        if (trackerRef.current) stopGestures();
-        else void startGestures();
-      }
-      if (e.key === "r" || e.key === "R") sceneRef.current?.reset();
-      if (e.key === "+" || e.key === "=") sceneRef.current?.zoomBy(0.92);
-      if (e.key === "-" || e.key === "_") sceneRef.current?.zoomBy(1.08);
-    };
-    window.addEventListener("keydown", onKey);
-
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      trackerRef.current?.stop();
-      trackerRef.current = null;
-      scene.dispose();
-      sceneRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Mouse hover also lights up nodes — the network stays alive without a camera.
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const onMove = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") return; // touch/gesture drag shouldn't fight the orbit drag
-      const rect = container.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-      sceneRef.current?.highlightAt(ndcX, ndcY);
-    };
-
-    container.addEventListener("pointermove", onMove);
-    return () => container.removeEventListener("pointermove", onMove);
-  }, []);
+  const [micError, setMicError] = useState<string | null>(null);
 
   const stopGestures = useCallback(() => {
     trackerRef.current?.stop();
@@ -111,12 +71,101 @@ export default function PariOrb() {
     }
   }, []);
 
+  const stopVoice = useCallback(() => {
+    voiceRef.current?.stop();
+    voiceRef.current = null;
+    setMic("off");
+    setAwake(false);
+    sceneRef.current?.setMode("idle");
+    sceneRef.current?.setAudio(0, null);
+  }, []);
+
+  const startVoice = useCallback(async () => {
+    if (voiceRef.current) return;
+    setMic("starting");
+    setMicError(null);
+
+    const meter = new VoiceMeter({
+      onFrame: ({ level, spectrum, speaking }) => {
+        sceneRef.current?.setAudio(level, spectrum);
+        sceneRef.current?.setMode(speaking ? "active" : "idle");
+        setAwake(speaking);
+      },
+    });
+    voiceRef.current = meter;
+
+    try {
+      await meter.start();
+      setMic("on");
+    } catch (err) {
+      voiceRef.current = null;
+      meter.stop();
+      setMic("error");
+      setMicError(
+        err instanceof DOMException && err.name === "NotAllowedError"
+          ? "MIKROFONGA RUXSAT BERILMADI"
+          : "MIKROFON ISHGA TUSHMADI",
+      );
+    }
+  }, []);
+
+  const toggleVoice = useCallback(() => {
+    if (voiceRef.current) stopVoice();
+    else void startVoice();
+  }, [startVoice, stopVoice]);
+
   const toggleGestures = useCallback(() => {
     if (trackerRef.current) stopGestures();
     else void startGestures();
   }, [startGestures, stopGestures]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const scene = createOrbScene(container);
+    sceneRef.current = scene;
+    scene.setMode("idle");
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "g" || e.key === "G") toggleGestures();
+      if (e.key === "v" || e.key === "V") toggleVoice();
+      if (e.key === "r" || e.key === "R") sceneRef.current?.reset();
+      if (e.key === "+" || e.key === "=") sceneRef.current?.zoomBy(0.92);
+      if (e.key === "-" || e.key === "_") sceneRef.current?.zoomBy(1.08);
+    };
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      trackerRef.current?.stop();
+      trackerRef.current = null;
+      voiceRef.current?.stop();
+      voiceRef.current = null;
+      scene.dispose();
+      sceneRef.current = null;
+    };
+  }, [toggleGestures, toggleVoice]);
+
+  // Mouse hover also lights up nodes — the network stays alive without a camera.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return; // touch/gesture drag shouldn't fight the orbit drag
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      sceneRef.current?.highlightAt(ndcX, ndcY);
+    };
+
+    container.addEventListener("pointermove", onMove);
+    return () => container.removeEventListener("pointermove", onMove);
+  }, []);
+
   const cameraOn = camera === "on";
+  const micOn = mic === "on";
 
   return (
     <div className="relative h-full w-full bg-black text-white select-none">
@@ -147,30 +196,50 @@ export default function PariOrb() {
 
       {/* HUD */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-4">
-        <div className="pointer-events-auto">
-          <div className="text-[10px] tracking-[0.25em] text-cyan-300/80">PARI · ORB</div>
-          <div className="mt-1 text-xs text-white/50">
-            {MODE_LABEL[status.mode]} · hands {status.hands}
+        {/* pt clears the page-level nav pills that sit at top-left above this HUD */}
+        <div className="pointer-events-auto pt-8">
+          <div
+            className="text-[10px] tracking-[0.25em] transition-colors duration-500"
+            style={{ color: awake ? "#a8e6ff" : "#ffc266" }}
+          >
+            PARI · ORB
+          </div>
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-white/50">
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full transition-colors duration-300"
+              style={{ background: awake ? "#a8e6ff" : "#ffc266" }}
+            />
+            {micOn ? (awake ? "ESHITYAPTI" : "UYQUDA") : MODE_LABEL[status.mode]}
+            {cameraOn && ` · hands ${status.hands}`}
           </div>
           {error && <div className="mt-1 text-xs text-red-400">{error}</div>}
+          {micError && <div className="mt-1 text-xs text-red-400">{micError}</div>}
         </div>
-        <button
-          type="button"
-          onClick={toggleGestures}
-          className="pointer-events-auto rounded border border-white/20 bg-black/50 px-3 py-1.5 text-[11px] tracking-wider text-white/80 backdrop-blur hover:border-cyan-400/40"
-        >
-          {camera === "starting"
-            ? "INITIALIZING…"
-            : cameraOn
-              ? "GESTURES ON"
-              : "GESTURES OFF"}
-        </button>
+
+        <div className="pointer-events-auto flex gap-2">
+          <button
+            type="button"
+            onClick={toggleVoice}
+            className="rounded border border-white/20 bg-black/50 px-3 py-1.5 text-[11px] tracking-wider text-white/80 backdrop-blur transition-colors hover:border-white/40"
+            style={micOn ? { borderColor: awake ? "#a8e6ff66" : "#ffc26666" } : undefined}
+          >
+            {mic === "starting" ? "OCHILMOQDA…" : micOn ? "OVOZ YONIQ" : "OVOZ O'CHIQ"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleGestures}
+            className="rounded border border-white/20 bg-black/50 px-3 py-1.5 text-[11px] tracking-wider text-white/80 backdrop-blur hover:border-white/40"
+          >
+            {camera === "starting" ? "INITIALIZING…" : cameraOn ? "GESTURES ON" : "GESTURES OFF"}
+          </button>
+        </div>
       </div>
 
       <div className="pointer-events-none absolute bottom-4 left-4 z-10 text-[10px] leading-relaxed text-white/35">
-        Drag spin · Scroll zoom · G gestures · R reset
+        V ovoz · G qo&apos;l harakati · R reset · drag aylantirish · scroll zoom
         <br />
-        Pinch 1 hand spin · pinch 2 hands zoom · point a finger to light up a node
+        Ovoz yoniq bo&apos;lsa: jim — sariq, gapirsangiz — ko&apos;k, har bir nuqta ovozning o&apos;z
+        chastotasiga javob beradi
       </div>
     </div>
   );

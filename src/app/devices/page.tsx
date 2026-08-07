@@ -6,7 +6,7 @@ import {
   Smartphone, Monitor, Wifi, WifiOff,
   Send, Trash2, Plus, RefreshCw, Terminal, Copy, Check,
   Volume2, MonitorSmartphone, Bell, MessageSquare, Phone,
-  ChevronDown, ChevronUp, Download, QrCode,
+  ChevronDown, ChevronUp, Download, QrCode, ShieldCheck,
   Camera, Mic, MapPin, Battery, Clipboard, Globe, Share2,
   RotateCcw, Cpu, Zap,
 } from "lucide-react";
@@ -127,12 +127,11 @@ export default function DevicesPage() {
   const [qrPhone, setQrPhone] = useState<string | null>(null);
   const [newDeviceId] = useState(() => crypto.randomUUID());
 
-  // Paired devices (QR pairing system)
+  // Paired devices — the Jarvis Agent app pairs itself on first launch
+  // (POST /api/devices/pair/auto with its built-in key); nothing to scan here.
   const [paired, setPaired] = useState<PairedDevice[]>([]);
   const [selectedPaired, setSelectedPaired] = useState<string | null>(null);
   const [pairedCmdType, setPairedCmdType] = useState(PAIRED_COMMANDS[0]);
-  const [pairing, setPairing] = useState<{ device_id: string; qr_url: string; deep_link: string; expires_at: string } | null>(null);
-  const [pairingStatus, setPairingStatus] = useState<"idle" | "waiting" | "done">("idle");
 
   const addLog = useCallback((msg: string) => {
     const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -151,35 +150,6 @@ export default function DevicesPage() {
   }, []);
 
   useEffect(() => { void fetchAll(); const t = setInterval(() => void fetchAll(), 5000); return () => clearInterval(t); }, [fetchAll]);
-
-  // "Add Device" — QR pairing boshlash
-  const startPairing = async () => {
-    const res = await fetch("/api/devices/pair/init", { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) { addLog(`❌ Pairing xato: ${data.error || "noma'lum"}`); return; }
-    setPairing(data);
-    setPairingStatus("waiting");
-  };
-
-  // Pairing kutish paytida qurilma ro'yxatida paydo bo'lishini tekshirish
-  useEffect(() => {
-    if (pairingStatus !== "waiting" || !pairing) return;
-    const t = setInterval(async () => {
-      if (new Date(pairing.expires_at).getTime() < Date.now()) {
-        setPairingStatus("idle"); setPairing(null); addLog("⏱ Pairing muddati tugadi");
-        clearInterval(t); return;
-      }
-      const r = await fetch("/api/devices").then(res => res.json()) as { devices: PairedDevice[] };
-      const found = (r.devices || []).find(d => d.id === pairing.device_id);
-      if (found) {
-        setPaired(r.devices || []);
-        setPairingStatus("done");
-        addLog(`✅ Qurilma ulandi: ${found.name}`);
-        clearInterval(t);
-      }
-    }, 2000);
-    return () => clearInterval(t);
-  }, [pairingStatus, pairing, addLog]);
 
   const sendPairedCmd = async () => {
     if (!selectedPaired) return;
@@ -306,8 +276,8 @@ export default function DevicesPage() {
               color: tab === t ? "#ff6a1a" : "#52525b", letterSpacing: "0.03em",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
             }}>
-              {t === "computers" ? <Monitor size={12} /> : t === "phones" ? <Smartphone size={12} /> : <QrCode size={12} />}
-              {t === "computers" ? "PC / Mac" : t === "phones" ? "Telefon" : "QR Pairing"}
+              {t === "computers" ? <Monitor size={12} /> : t === "phones" ? <Smartphone size={12} /> : <ShieldCheck size={12} />}
+              {t === "computers" ? "PC / Mac" : t === "phones" ? "Telefon" : "Jarvis Agent"}
             </button>
           ))}
         </div>
@@ -319,7 +289,6 @@ export default function DevicesPage() {
           <div style={{ display: "flex", gap: 4 }}>
             <Btn onClick={fetchAll}><RefreshCw size={11} /></Btn>
             {tab === "phones" && <Btn onClick={() => showAdd ? setShowAdd(false) : openAddForm()}><Plus size={11} /></Btn>}
-            {tab === "paired" && <Btn onClick={() => void startPairing()}><Plus size={11} /></Btn>}
           </div>
         </div>
 
@@ -384,59 +353,15 @@ export default function DevicesPage() {
             />
           ))}
           {tab === "paired" && paired.length === 0 && (
-            <div style={{ textAlign: "center", padding: 20, color: "#3f3f46", fontSize: 11 }}>
-              <QrCode size={24} style={{ margin: "0 auto 8px", color: "#27272a" }} />
-              <div>QR kod orqali yangi</div>
-              <div>qurilma ulang</div>
-              <button onClick={() => void startPairing()} style={{ ...linkBtn, marginTop: 8 }}>+ Add Device</button>
+            <div style={{ textAlign: "center", padding: 20, color: "#3f3f46", fontSize: 11, lineHeight: 1.6 }}>
+              <Smartphone size={24} style={{ margin: "0 auto 8px", color: "#27272a" }} />
+              <div style={{ color: "#52525b" }}>Hali qurilma yo&apos;q</div>
+              <div style={{ marginTop: 6 }}>
+                Jarvis Agent ilovasini o&apos;rnating — u birinchi ochilishda o&apos;zi ulanadi.
+              </div>
             </div>
           )}
         </div>
-
-        {/* Pairing QR panel */}
-        {tab === "paired" && pairing && (
-          <div style={{ borderTop: "1px solid #1f1f23", padding: 10, background: "#0d0d0f" }}>
-            <div style={{ fontSize: 10, color: "#ff6a1a", fontWeight: 700, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
-              {pairingStatus === "done" ? "✅ Ulandi!" : "QR kodni skanerlang"}
-              <button onClick={() => { setPairing(null); setPairingStatus("idle"); }} style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer", fontSize: 12 }}>✕</button>
-            </div>
-            {pairingStatus !== "done" && (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={pairing.qr_url} alt="Pairing QR" style={{ width: "100%", borderRadius: 4, display: "block" }} />
-                <div style={{ fontSize: 9, color: "#71717a", marginTop: 6, lineHeight: 1.5 }}>
-                  Jarvis Agent (Termux/Android) bilan skanerlang. Agent o&apos;rnatilmagan bo&apos;lsa,
-                  QR sizni o&apos;rnatish sahifasiga yo&apos;naltiradi. Token 10 daqiqada tugaydi.
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* QR Code overlay for phone setup */}
-        {tab === "phones" && qrPhone && (() => {
-          const dev = phones.find(p => p.id === qrPhone);
-          if (!dev) return null;
-          const origin = typeof window !== "undefined" ? window.location.origin : "";
-          const setupUrl = `${origin}/api/phones/webhook?device_id=${dev.id}`;
-          const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(setupUrl)}`;
-          return (
-            <div style={{ borderTop: "1px solid #1f1f23", padding: 10, background: "#0d0d0f" }}>
-              <div style={{ fontSize: 10, color: "#ff6a1a", fontWeight: 700, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
-                QR — {dev.name}
-                <button onClick={() => setQrPhone(null)} style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer", fontSize: 12 }}>✕</button>
-              </div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qrUrl} alt="QR code" style={{ width: "100%", borderRadius: 4, display: "block" }} />
-              <div style={{ fontSize: 9, color: "#52525b", marginTop: 5, wordBreak: "break-all", fontFamily: "monospace" }}>
-                {setupUrl}
-              </div>
-              <div style={{ fontSize: 9, color: "#71717a", marginTop: 4, lineHeight: 1.5 }}>
-                Skanerlash → Termux ni o'rnating → webhook URL si avtomatik kiritiladi
-              </div>
-            </div>
-          );
-        })()}
 
         {/* Add phone form */}
         {tab === "phones" && showAdd && (
