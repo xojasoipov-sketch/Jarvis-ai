@@ -40,6 +40,7 @@ export async function register() {
       console.log(`[instrumentation] ✅ TG webhook o'rnatildi: ${webhookUrl}`);
     } else {
       console.warn("[instrumentation] TG webhook xato:", whData.description, "| status:", whRes.status);
+      // Mavjud webhook ni tekshir
       const infoRes = await fetch(`${api}/getWebhookInfo`);
       const info = await infoRes.json() as { result?: { url?: string } };
       console.log("[instrumentation] Hozirgi webhook:", info?.result?.url || "yo'q");

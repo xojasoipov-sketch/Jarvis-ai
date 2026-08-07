@@ -898,6 +898,255 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     parameters: { type: "object", properties: { goal: { type: "string" } }, required: ["goal"] },
     run: async (args) => runOrchestrator(String(args.goal)),
   },
+
+  // ─── Automation Flows ──────────────────────────────────────────────────────
+  {
+    name: "flow_list",
+    description: "Barcha automation flowlarni ro'yxatini olish",
+    parameters: { type: "object", properties: {}, required: [] },
+    run: async () => {
+      const { listFlows } = await import("./automation-store");
+      const flows = await listFlows();
+      return flows.map((f) => ({ id: f.id, name: f.name, active: f.active, trigger: f.trigger_type, runs: f.runs }));
+    },
+  },
+  {
+    name: "flow_run",
+    description: "Automation flowni qo'lda ishga tushirish",
+    parameters: {
+      type: "object",
+      properties: {
+        flow_id: { type: "string", description: "Flow ID" },
+        input: { type: "string", description: "Kirish matni (ixtiyoriy)" },
+      },
+      required: ["flow_id"],
+    },
+    run: async (args) => {
+      const { getFlow } = await import("./automation-store");
+      const { runFlow } = await import("./flow-runner");
+      const flow = await getFlow(String(args.flow_id));
+      if (!flow) throw new Error("Flow topilmadi");
+      return runFlow(flow, "manual", String(args.input || ""));
+    },
+  },
+  {
+    name: "flow_create",
+    description: "Yangi oddiy automation flow yaratish (trigger → agent → telegram)",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        trigger_type: { type: "string", enum: ["manual", "schedule", "webhook"] },
+        cron: { type: "string", description: "Jadval uchun cron ifodasi, masalan '0 9 * * *'" },
+      },
+      required: ["name"],
+    },
+    run: async (args) => {
+      const { createFlow } = await import("./automation-store");
+      const triggerType = (args.trigger_type as string) || "manual";
+      const flow = await createFlow({
+        name: String(args.name),
+        trigger_type: triggerType as "manual" | "schedule" | "webhook",
+        trigger_config: args.cron ? { cron: String(args.cron) } : {},
+        active: true,
+        nodes: [
+          { id: "n1", kind: "trigger", type: triggerType, label: triggerType, config: args.cron ? { cron: String(args.cron) } : {} },
+          { id: "n2", kind: "action", type: "agent", label: "Assistant", config: { agentId: "assistant" } },
+          { id: "n3", kind: "action", type: "telegram", label: "Telegram", config: {} },
+          { id: "n4", kind: "output", type: "end", label: "Tugash", config: {} },
+        ],
+      });
+      return { id: flow.id, name: flow.name, created: true };
+    },
+  },
+  // ── NOTION ─────────────────────────────────────────────────────────────────
+  {
+    name: "notion_search",
+    description: "Notion workspace'da sahifa yoki ma'lumot qidirish",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Qidiruv so'zi" },
+        limit: { type: "number", description: "Natijalar soni (default 10)" },
+      },
+      required: ["query"],
+    },
+    run: async (args) => {
+      const { notionSearch } = await import("./notion");
+      return notionSearch(String(args.query), Number(args.limit || 10));
+    },
+  },
+  {
+    name: "notion_create_page",
+    description: "Notion database ga yangi sahifa (yozuv) yaratish",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        content: { type: "string" },
+        database_id: { type: "string", description: "Notion database ID (ixtiyoriy, default ishlatiladi)" },
+      },
+      required: ["title", "content"],
+    },
+    run: async (args) => {
+      const { notionCreatePage } = await import("./notion");
+      return notionCreatePage(String(args.database_id || ""), String(args.title), String(args.content));
+    },
+  },
+
+  // ── GOOGLE CALENDAR ─────────────────────────────────────────────────────────
+  {
+    name: "calendar_list",
+    description: "Google Calendar'dan kelgusi tadbirlarni ko'rish",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Tadbirlar soni (default 10)" },
+        days_ahead: { type: "number", description: "Necha kun oldini ko'rish (default 7)" },
+      },
+      required: [],
+    },
+    run: async (args) => {
+      const { calendarListEvents } = await import("./google");
+      const daysAhead = Number(args.days_ahead || 7);
+      const timeMax = new Date(Date.now() + daysAhead * 86400_000).toISOString();
+      return calendarListEvents(Number(args.limit || 10), undefined, timeMax);
+    },
+  },
+  {
+    name: "calendar_create",
+    description: "Google Calendar'da yangi tadbir yaratish",
+    parameters: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "Tadbir nomi" },
+        description: { type: "string" },
+        start: { type: "string", description: "Boshlanish vaqti ISO format (2026-08-07T10:00:00)" },
+        end: { type: "string", description: "Tugash vaqti ISO format" },
+        location: { type: "string" },
+      },
+      required: ["summary", "start", "end"],
+    },
+    run: async (args) => {
+      const { calendarCreateEvent } = await import("./google");
+      return calendarCreateEvent({
+        summary: String(args.summary),
+        description: args.description ? String(args.description) : undefined,
+        start: String(args.start),
+        end: String(args.end),
+        location: args.location ? String(args.location) : undefined,
+      });
+    },
+  },
+
+  // ── GOOGLE DRIVE ────────────────────────────────────────────────────────────
+  {
+    name: "drive_search",
+    description: "Google Drive'da fayl qidirish",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        limit: { type: "number" },
+      },
+      required: ["query"],
+    },
+    run: async (args) => {
+      const { driveSearchFiles } = await import("./google");
+      return driveSearchFiles(String(args.query), Number(args.limit || 10));
+    },
+  },
+  {
+    name: "drive_upload",
+    description: "Google Drive'ga matn fayl yuklash",
+    parameters: {
+      type: "object",
+      properties: {
+        file_name: { type: "string" },
+        content: { type: "string" },
+        mime_type: { type: "string", description: "text/plain, application/json, text/markdown" },
+      },
+      required: ["file_name", "content"],
+    },
+    run: async (args) => {
+      const { driveUploadFile } = await import("./google");
+      return driveUploadFile(String(args.file_name), String(args.content), String(args.mime_type || "text/plain"));
+    },
+  },
+
+  // ── CANVA ───────────────────────────────────────────────────────────────────
+  {
+    name: "canva_carousel",
+    description: "Instagram karusel uchun Canva'da N ta slide design yaratish",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Karusel sarlavhasi" },
+        slides: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              heading: { type: "string" },
+              body: { type: "string" },
+            },
+          },
+          description: "Har bir slide mazmuni",
+        },
+      },
+      required: ["title", "slides"],
+    },
+    run: async (args) => {
+      const { canvaCreateCarousel } = await import("./canva");
+      const slides = (args.slides as { heading: string; body: string }[]) || [];
+      return canvaCreateCarousel({ title: String(args.title), slideCount: slides.length, slides });
+    },
+  },
+  {
+    name: "canva_list",
+    description: "Canva'dagi dizainlar ro'yxatini olish",
+    parameters: { type: "object", properties: { limit: { type: "number" } }, required: [] },
+    run: async (args) => {
+      const { canvaListDesigns } = await import("./canva");
+      return canvaListDesigns(Number(args.limit || 20));
+    },
+  },
+
+  // ── CLOUDFLARE ──────────────────────────────────────────────────────────────
+  {
+    name: "cf_kv_get",
+    description: "Cloudflare KV storage dan qiymat o'qish",
+    parameters: {
+      type: "object",
+      properties: {
+        namespace_id: { type: "string" },
+        key: { type: "string" },
+      },
+      required: ["namespace_id", "key"],
+    },
+    run: async (args) => {
+      const { cfKvGet } = await import("./cloudflare");
+      return cfKvGet(String(args.namespace_id), String(args.key));
+    },
+  },
+  {
+    name: "cf_kv_put",
+    description: "Cloudflare KV storage ga qiymat yozish",
+    parameters: {
+      type: "object",
+      properties: {
+        namespace_id: { type: "string" },
+        key: { type: "string" },
+        value: { type: "string" },
+        ttl: { type: "number", description: "TTL soniyalarda (ixtiyoriy)" },
+      },
+      required: ["namespace_id", "key", "value"],
+    },
+    run: async (args) => {
+      const { cfKvPut } = await import("./cloudflare");
+      return cfKvPut(String(args.namespace_id), String(args.key), String(args.value), args.ttl ? Number(args.ttl) : undefined);
+    },
+  },
 ];
 
 export function toolsAsOpenAIFunctions() {

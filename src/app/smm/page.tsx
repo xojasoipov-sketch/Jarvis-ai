@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Plus, Trash2, Send, Clock, Sparkles, RefreshCw,
   Radio, CheckCircle2, XCircle, AlertCircle, Copy,
+  ExternalLink, ImagePlay, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 type Channel = {
@@ -32,7 +33,7 @@ export default function SmmPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [activeTab, setActiveTab] = useState<"posts" | "channels" | "generate">("posts");
+  const [activeTab, setActiveTab] = useState<"posts" | "channels" | "generate" | "carousel">("posts");
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
   const [loading, setLoading] = useState(false);
 
@@ -58,6 +59,20 @@ export default function SmmPage() {
   const [genCount, setGenCount] = useState(3);
   const [generating, setGenerating] = useState(false);
   const [generatedPosts, setGeneratedPosts] = useState<string[]>([]);
+
+  // Carousel state
+  type CarouselSlide = { heading: string; body: string };
+  type CarouselResult = { slide: number; heading: string; body: string; id?: string; editUrl?: string; viewUrl?: string };
+  const [carouselTitle, setCarouselTitle] = useState("");
+  const [carouselSlides, setCarouselSlides] = useState<CarouselSlide[]>([
+    { heading: "", body: "" },
+    { heading: "", body: "" },
+    { heading: "", body: "" },
+  ]);
+  const [carouselResults, setCarouselResults] = useState<CarouselResult[]>([]);
+  const [carouselLoading, setCarouselLoading] = useState(false);
+  const [carouselError, setCarouselError] = useState("");
+  const [expandedSlide, setExpandedSlide] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -171,6 +186,36 @@ export default function SmmPage() {
 
   const channelMap = Object.fromEntries(channels.map((c) => [c.id, c]));
 
+  function updateSlide(idx: number, field: "heading" | "body", value: string) {
+    setCarouselSlides((prev) => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
+  }
+  function addSlide() {
+    setCarouselSlides((prev) => [...prev, { heading: "", body: "" }]);
+  }
+  function removeSlide(idx: number) {
+    if (carouselSlides.length <= 1) return;
+    setCarouselSlides((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function createCarousel() {
+    if (!carouselTitle || carouselSlides.some((s) => !s.heading)) return;
+    setCarouselLoading(true);
+    setCarouselError("");
+    setCarouselResults([]);
+    const res = await fetch("/api/smm/carousel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: carouselTitle, slides: carouselSlides }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setCarouselError(data.error || "Xato yuz berdi");
+    } else {
+      setCarouselResults(data.slides || []);
+    }
+    setCarouselLoading(false);
+  }
+
   return (
     <div className="fade-in max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -202,8 +247,8 @@ export default function SmmPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        {(["posts", "channels", "generate"] as const).map((tab) => (
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit flex-wrap">
+        {(["posts", "channels", "generate", "carousel"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -211,7 +256,10 @@ export default function SmmPage() {
               activeTab === tab ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            {tab === "posts" ? "Postlar" : tab === "channels" ? "Kanallar" : "AI Yaratish"}
+            {tab === "posts" ? "Postlar"
+              : tab === "channels" ? "Kanallar"
+              : tab === "generate" ? "AI Yaratish"
+              : "Instagram Karusel"}
           </button>
         ))}
       </div>
@@ -430,6 +478,155 @@ export default function SmmPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ──── CAROUSEL TAB ──── */}
+      {activeTab === "carousel" && (
+        <div className="space-y-5">
+          {/* Header info */}
+          <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 flex items-start gap-3">
+            <ImagePlay size={18} className="text-orange-500 flex-shrink-0 mt-0.5" strokeWidth={1.75} />
+            <div>
+              <p className="text-sm font-medium text-orange-800">Canva orqali Instagram karusel</p>
+              <p className="text-xs text-orange-600 mt-0.5">
+                Har bir slide uchun sarlavha va matn kiriting. Canva da 1080×1080 design yaratiladi va tahrirlash havolasi beriladi.
+                CANVA_ACCESS_TOKEN ni .env ga qo'shing.
+              </p>
+            </div>
+          </div>
+
+          {/* Carousel builder */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">Karusel sarlavhasi (Canva da ko'rinadi)</label>
+              <input
+                value={carouselTitle}
+                onChange={(e) => setCarouselTitle(e.target.value)}
+                placeholder="Masalan: Startap uchun 5 ta maslahat"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-400"
+              />
+            </div>
+
+            {/* Slides */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-gray-500">{carouselSlides.length} ta slide</p>
+                <button
+                  onClick={addSlide}
+                  className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-800 font-medium"
+                >
+                  <Plus size={12} strokeWidth={2.5} /> Slide qo'shish
+                </button>
+              </div>
+
+              {carouselSlides.map((slide, idx) => (
+                <div key={idx} className="border border-gray-100 rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setExpandedSlide(expandedSlide === idx ? null : idx)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  >
+                    <span className="text-xs font-medium text-gray-600">
+                      Slide {idx + 1}{slide.heading ? ` — ${slide.heading.slice(0, 40)}` : ""}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {carouselSlides.length > 1 && (
+                        <span
+                          role="button"
+                          onClick={(e) => { e.stopPropagation(); removeSlide(idx); }}
+                          className="text-gray-300 hover:text-red-400 transition-colors p-0.5"
+                        >
+                          <Trash2 size={12} strokeWidth={1.75} />
+                        </span>
+                      )}
+                      {expandedSlide === idx
+                        ? <ChevronUp size={13} className="text-gray-400" />
+                        : <ChevronDown size={13} className="text-gray-400" />}
+                    </div>
+                  </button>
+
+                  {(expandedSlide === idx || expandedSlide === null) && (
+                    <div className="p-4 space-y-2.5">
+                      <input
+                        value={slide.heading}
+                        onChange={(e) => updateSlide(idx, "heading", e.target.value)}
+                        placeholder={`Slide ${idx + 1} sarlavhasi *`}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                      />
+                      <textarea
+                        value={slide.body}
+                        onChange={(e) => updateSlide(idx, "body", e.target.value)}
+                        placeholder="Slide matni (ixtiyoriy)"
+                        rows={2}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-400 resize-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {carouselError && (
+              <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{carouselError}</p>
+            )}
+
+            <button
+              onClick={createCarousel}
+              disabled={carouselLoading || !carouselTitle || carouselSlides.some((s) => !s.heading)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium disabled:opacity-40 transition-colors"
+            >
+              <ImagePlay size={15} strokeWidth={2} className={carouselLoading ? "animate-pulse" : ""} />
+              {carouselLoading ? `Canva da yaratyapman (${carouselSlides.length} slide)...` : "Canva da yaratish"}
+            </button>
+          </div>
+
+          {/* Results */}
+          {carouselResults.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-gray-500">{carouselResults.length} ta design yaratildi — Canva da tahrirlang:</p>
+              {carouselResults.map((r) => (
+                <div key={r.slide} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold text-orange-500">{r.slide}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{r.heading}</p>
+                    {r.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{r.body}</p>}
+                    <div className="flex gap-2 mt-2.5">
+                      {r.editUrl && (
+                        <a
+                          href={r.editUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-medium text-orange-600 hover:text-orange-800 bg-orange-50 px-2.5 py-1 rounded-lg transition-colors"
+                        >
+                          <ExternalLink size={11} strokeWidth={2} />
+                          Canva da tahrirlash
+                        </a>
+                      )}
+                      {r.viewUrl && (
+                        <a
+                          href={r.viewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg transition-colors"
+                        >
+                          <ExternalLink size={11} strokeWidth={2} />
+                          Ko'rish
+                        </a>
+                      )}
+                      {!r.editUrl && !r.id && (
+                        <span className="text-xs text-gray-400 italic">Design yaratildi (CANVA_ACCESS_TOKEN token kerak)</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <p className="text-xs text-gray-400 text-center pt-1">
+                Har bir linkni ochib, Canva da matn/rang/rasm qo'shing, keyin PNG sifatida yuklab oling.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

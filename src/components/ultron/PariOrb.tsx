@@ -10,6 +10,7 @@ const MODE_LABEL: Record<TrackerStatus["mode"], string> = {
   idle: "STANDBY",
   spin: "SPIN",
   zoom: "ZOOM",
+  point: "TARGETING",
 };
 
 /** Ultron orb UI — https://github.com/SAGAR-TAMANG/ultron-by-sagar-builds (MIT) */
@@ -51,6 +52,24 @@ export default function PariOrb() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Mouse hover also lights up nodes — the network stays alive without a camera.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return; // touch/gesture drag shouldn't fight the orbit drag
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      sceneRef.current?.highlightAt(ndcX, ndcY);
+    };
+
+    container.addEventListener("pointermove", onMove);
+    return () => container.removeEventListener("pointermove", onMove);
+  }, []);
+
   const stopGestures = useCallback(() => {
     trackerRef.current?.stop();
     trackerRef.current = null;
@@ -69,6 +88,10 @@ export default function PariOrb() {
     const tracker = new HandTracker(video, overlay, {
       onRotate: (dt, dp) => sceneRef.current?.rotateBy(dt, dp),
       onZoom: (factor) => sceneRef.current?.zoomBy(factor),
+      onPoint: (ndcX, ndcY) => {
+        if (ndcX === null || ndcY === null) sceneRef.current?.clearHighlight();
+        else sceneRef.current?.highlightAt(ndcX, ndcY);
+      },
       onStatus: setStatus,
     });
     trackerRef.current = tracker;
@@ -147,7 +170,7 @@ export default function PariOrb() {
       <div className="pointer-events-none absolute bottom-4 left-4 z-10 text-[10px] leading-relaxed text-white/35">
         Drag spin · Scroll zoom · G gestures · R reset
         <br />
-        Ultron orb UI (MIT) · hand tracking via MediaPipe
+        Pinch 1 hand spin · pinch 2 hands zoom · point a finger to light up a node
       </div>
     </div>
   );

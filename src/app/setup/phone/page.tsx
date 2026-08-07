@@ -112,6 +112,7 @@ function PhoneSetupInner() {
       padding: "32px 20px",
       boxSizing: "border-box",
     }}>
+      {/* Logo */}
       <div style={{
         width: 56, height: 56, borderRadius: 16,
         background: "#ff6a1a",
@@ -126,18 +127,23 @@ function PhoneSetupInner() {
         {deviceName} — telefon ulash
       </p>
 
+      {/* LOADING */}
       {step === "loading" && (
         <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14 }}>Tayorlanmoqda...</p>
       )}
 
+      {/* ERROR */}
       {step === "error" && (
         <div style={{ ...card, borderColor: "rgba(255,80,60,0.3)", textAlign: "center" }}>
           <p style={{ color: "#ff5040", margin: 0 }}>{errorMsg}</p>
         </div>
       )}
 
+      {/* READY */}
       {step === "ready" && (
         <div style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 12 }}>
+
+          {/* Status */}
           <div style={{ ...card, display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               width: 8, height: 8, borderRadius: "50%",
@@ -151,6 +157,7 @@ function PhoneSetupInner() {
             </div>
           </div>
 
+          {/* Steps */}
           <div style={{ ...card }}>
             <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", margin: "0 0 12px", textTransform: "uppercase", letterSpacing: "0.07em" }}>
               Qadamlar
@@ -158,7 +165,7 @@ function PhoneSetupInner() {
             {[
               "Termux (F-Droid) o'rnating",
               "Quyidagi tugmani bosing — buyruq nusxalanadi va Termux ochiladi",
-              'Termux da uzoq bosib "Paste" → Enter',
+              "Termux da uzoq bosib \"Paste\" → Enter",
             ].map((s, i) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: i < 2 ? 10 : 0 }}>
                 <span style={{
@@ -172,6 +179,7 @@ function PhoneSetupInner() {
             ))}
           </div>
 
+          {/* Command preview */}
           <div style={{ ...card, background: "#0e1018" }}>
             <p style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Termux buyrug'i
@@ -196,6 +204,7 @@ function PhoneSetupInner() {
         </div>
       )}
 
+      {/* COPIED */}
       {step === "copied" && (
         <div style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
           <div style={{
@@ -203,11 +212,13 @@ function PhoneSetupInner() {
             background: "rgba(255,106,26,0.12)", border: "2px solid #ff6a1a",
             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26,
           }}>📋</div>
+
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, textAlign: "center" }}>
             Termux ochilyapti...
           </h2>
+
           <div style={{ ...card }}>
-            {["Termux ekraniga uzoq bosing (long press)", '"Paste" ni tanlang', "Enter tugmasini bosing"].map((s, i) => (
+            {["Termux ekraniga uzoq bosing (long press)", "\"Paste\" ni tanlang", "Enter tugmasini bosing"].map((s, i) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: i < 2 ? 10 : 0 }}>
                 <span style={{
                   minWidth: 20, height: 20, borderRadius: 6,
@@ -219,12 +230,14 @@ function PhoneSetupInner() {
               </div>
             ))}
           </div>
+
           <button onClick={() => setStep("done")} style={btn(false)}>
             ✓ Ishga tushdi
           </button>
         </div>
       )}
 
+      {/* DONE */}
       {step === "done" && (
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
           <div style={{ fontSize: 52 }}>✅</div>

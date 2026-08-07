@@ -11,15 +11,23 @@ const MODEL_URL =
 
 const WRIST = 0;
 const THUMB_TIP = 4;
+const INDEX_PIP = 6;
 const INDEX_TIP = 8;
 const MIDDLE_MCP = 9;
+const MIDDLE_PIP = 10;
+const MIDDLE_TIP = 12;
+const RING_PIP = 14;
+const RING_TIP = 16;
+const PINKY_PIP = 18;
+const PINKY_TIP = 20;
 
 const PINCH_ON = 0.32;
 const PINCH_OFF = 0.45;
 const ROTATE_SPEED = 5.0;
 const SMOOTHING = 0.4;
+const CURL_RATIO = 1.12; // tip must clear pip by this much (relative to wrist) to count "extended"
 
-export type GestureMode = "idle" | "spin" | "zoom";
+export type GestureMode = "idle" | "spin" | "zoom" | "point";
 
 export interface TrackerStatus {
   hands: number;
@@ -29,6 +37,8 @@ export interface TrackerStatus {
 export interface HandTrackerCallbacks {
   onRotate(deltaTheta: number, deltaPhi: number): void;
   onZoom(factor: number): void;
+  /** ndcX/ndcY in [-1, 1], or null when no hand is pointing. */
+  onPoint(ndcX: number | null, ndcY: number | null): void;
   onStatus(status: TrackerStatus): void;
 }
 
@@ -56,6 +66,7 @@ export class HandTracker {
   private prevMode: GestureMode = "idle";
   private prevSpinGrab: Point | null = null;
   private prevZoomDist: number | null = null;
+  private wasPointing = false;
   private lastStatus: TrackerStatus = { hands: 0, mode: "idle" };
 
   constructor(
@@ -110,6 +121,10 @@ export class HandTracker {
     this.prevMode = "idle";
     this.prevSpinGrab = null;
     this.prevZoomDist = null;
+    if (this.wasPointing) {
+      this.wasPointing = false;
+      this.callbacks.onPoint(null, null);
+    }
     const ctx = this.overlay.getContext("2d");
     ctx?.clearRect(0, 0, this.overlay.width, this.overlay.height);
     this.emitStatus({ hands: 0, mode: "idle" });
@@ -136,6 +151,7 @@ export class HandTracker {
     labels: string[],
   ): void {
     const pinchedGrabs: Point[] = [];
+    const pointingHands: NormalizedLandmark[][] = [];
     const seen = new Set<string>();
 
     landmarks.forEach((lm, i) => {
@@ -165,7 +181,11 @@ export class HandTracker {
         y: state.grab.y + (raw.y - state.grab.y) * SMOOTHING,
       };
 
-      if (state.pinching) pinchedGrabs.push(state.grab);
+      if (state.pinching) {
+        pinchedGrabs.push(state.grab);
+      } else if (isPointingHand(lm)) {
+        pointingHands.push(lm);
+      }
     });
 
     for (const key of this.handStates.keys()) {
@@ -173,7 +193,13 @@ export class HandTracker {
     }
 
     const mode: GestureMode =
-      pinchedGrabs.length >= 2 ? "zoom" : pinchedGrabs.length === 1 ? "spin" : "idle";
+      pinchedGrabs.length >= 2
+        ? "zoom"
+        : pinchedGrabs.length === 1
+          ? "spin"
+          : pointingHands.length >= 1
+            ? "point"
+            : "idle";
 
     if (mode !== this.prevMode) {
       this.prevSpinGrab = null;
@@ -201,6 +227,17 @@ export class HandTracker {
         this.callbacks.onZoom(factor);
       }
       this.prevZoomDist = d;
+    }
+
+    if (mode === "point") {
+      const tip = pointingHands[0][INDEX_TIP];
+      const ndcX = (1 - tip.x) * 2 - 1;
+      const ndcY = -(tip.y * 2 - 1);
+      this.callbacks.onPoint(ndcX, ndcY);
+      this.wasPointing = true;
+    } else if (this.wasPointing) {
+      this.wasPointing = false;
+      this.callbacks.onPoint(null, null);
     }
 
     this.emitStatus({ hands: landmarks.length, mode });
@@ -233,22 +270,36 @@ export class HandTracker {
       const handScale = dist2d(lm[WRIST], lm[MIDDLE_MCP]);
       const pinched =
         handScale > 1e-6 && dist2d(thumb, index) / handScale < PINCH_ON;
+      const pointing = !pinched && isPointingHand(lm);
 
-      ctx.strokeStyle = pinched ? "#ffcc66" : "rgba(255,170,48,0.5)";
-      ctx.lineWidth = pinched ? 2 : 1;
-      ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(ix, iy);
-      ctx.stroke();
-
-      ctx.fillStyle = pinched ? "#ffcc66" : "rgba(255,170,48,0.7)";
-      for (const [x, y] of [
-        [tx, ty],
-        [ix, iy],
-      ]) {
+      if (pinched) {
+        ctx.strokeStyle = "#ffcc66";
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(x, y, pinched ? 5 : 3, 0, Math.PI * 2);
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(ix, iy);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = pinched
+        ? "#ffcc66"
+        : pointing
+          ? "#ff9c42"
+          : "rgba(255,170,48,0.5)";
+      const r = pinched ? 5 : pointing ? 6 : 3;
+      if (pointing) {
+        ctx.beginPath();
+        ctx.arc(ix, iy, r, 0, Math.PI * 2);
         ctx.fill();
+      } else {
+        for (const [x, y] of [
+          [tx, ty],
+          [ix, iy],
+        ]) {
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
   }
@@ -256,4 +307,19 @@ export class HandTracker {
 
 function dist2d(a: NormalizedLandmark, b: NormalizedLandmark): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** index finger extended, middle/ring/pinky curled — the "point at something" shape. */
+function isPointingHand(lm: NormalizedLandmark[]): boolean {
+  const wrist = lm[WRIST];
+  const extended = (tip: number, pip: number) =>
+    dist2d(wrist, lm[tip]) > dist2d(wrist, lm[pip]) * CURL_RATIO;
+  const curled = (tip: number, pip: number) => !extended(tip, pip);
+
+  return (
+    extended(INDEX_TIP, INDEX_PIP) &&
+    curled(MIDDLE_TIP, MIDDLE_PIP) &&
+    curled(RING_TIP, RING_PIP) &&
+    curled(PINKY_TIP, PINKY_PIP)
+  );
 }
