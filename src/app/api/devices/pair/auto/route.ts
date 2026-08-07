@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPendingDevice, confirmDevice, type Platform } from "@/lib/device-store";
 import { createDeviceToken, verifyAutoPairKey, autoPairConfigured } from "@/lib/device-auth";
 import { log } from "@/lib/logger";
+import { supabase, dbConfigured } from "@/lib/supabase";
 
 // POST /api/devices/pair/auto — ilova birinchi ochilganda, QR/deep-link almashinuvisiz,
 // APK ichiga qattiq yozilgan DEVICE_AUTO_PAIR_KEY orqali darhol pairlanadi.
@@ -34,7 +35,17 @@ export async function POST(req: NextRequest) {
     deviceToken
   );
 
-  if (!device) return NextResponse.json({ error: "Qurilma yaratilmadi" }, { status: 500 });
+  if (!device) {
+    // Vaqtinchalik tashxis: /api/logs'ga login qilmasdan sababni ko'rish uchun.
+    let probe: unknown = null;
+    if (dbConfigured && supabase) {
+      const { error } = await supabase.from("pari_devices").insert({
+        id: "diag-" + deviceId, name: "diag", platform: "android", os_info: "", status: "offline", paired_at: new Date().toISOString(), revoked: false,
+      });
+      probe = error ? { message: error.message, code: error.code, details: error.details, hint: error.hint } : "insert_ok";
+    }
+    return NextResponse.json({ error: "Qurilma yaratilmadi", debug: { dbConfigured, deviceId, probe } }, { status: 500 });
+  }
 
   log("info", "devices", `Auto-pair: ${device.name} (${deviceId})`);
   return NextResponse.json({ ok: true, device_id: deviceId, device_token: deviceToken, name: device.name, device });
