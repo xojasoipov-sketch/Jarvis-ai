@@ -20,9 +20,9 @@ async def execute_tool(name: str, params: dict[str, Any]) -> Any:
                 f'Tool topilmadi: "{name}". '
                 f"Ehtimol shu tool'lardan birini nazarda tutdingizmi: {hint}"
             )
+        available = ", ".join(all_names) if all_names else "(hech biri yo'q)"
         raise ValueError(
-            f'Tool topilmadi: "{name}". '
-            f"Mavjud tool'lar: {', '.join(all_names) if all_names else '(hech biri yo\\'q)'}"
+            f'Tool topilmadi: "{name}". Mavjud tool\'lar: {available}'
         )
 
     entry = tool_log.start(name, params)
