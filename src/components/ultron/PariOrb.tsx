@@ -52,6 +52,24 @@ export default function PariOrb() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Mouse hover also lights up nodes — the network stays alive without a camera.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return; // touch/gesture drag shouldn't fight the orbit drag
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      sceneRef.current?.highlightAt(ndcX, ndcY);
+    };
+
+    container.addEventListener("pointermove", onMove);
+    return () => container.removeEventListener("pointermove", onMove);
+  }, []);
+
   const stopGestures = useCallback(() => {
     trackerRef.current?.stop();
     trackerRef.current = null;
