@@ -47,14 +47,17 @@ data class PollResponse(
 @Serializable
 data class DeviceCommand(
     @SerialName("id") val id: String,
-    @SerialName("command") val command: String,
-    @SerialName("params") val params: Map<String, String> = emptyMap(),
+    // Server (device-store.ts / /api/devices/poll) sends "action" + "payload",
+    // not "command" + "params" — field names must match the live API contract exactly.
+    @SerialName("action") val command: String,
+    @SerialName("payload") val params: Map<String, String> = emptyMap(),
     @SerialName("created_at") val createdAt: String? = null,
 )
 
 @Serializable
 data class CommandResultRequest(
-    @SerialName("command_id") val commandId: String,
+    // Server (/api/devices/result) reads body.cmd_id, not command_id.
+    @SerialName("cmd_id") val commandId: String,
     @SerialName("device_id") val deviceId: String,
     @SerialName("result") val result: String,
     @SerialName("status") val status: String = "done", // done | error
