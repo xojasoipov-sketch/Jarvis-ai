@@ -3,7 +3,9 @@ package uz.jarvis.agent.service
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
@@ -133,6 +135,33 @@ class AgentForegroundService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    /**
+     * Foydalanuvchi ilovani recents (so'nggi ilovalar) ro'yxatidan surib tashlaganda
+     * chaqiriladi. START_STICKY ko'p qurilmada yetarli, lekin Infinix (XOS), Xiaomi
+     * (MIUI) kabi agressiv batareya boshqaruvchilar START_STICKY'ni e'tiborsiz
+     * qoldirib xizmatni butunlay o'ldirishi mumkin — shuning uchun AlarmManager
+     * orqali xizmatni bir necha soniyadan keyin majburan qayta ishga tushiramiz.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val restartIntent = Intent(applicationContext, AgentForegroundService::class.java)
+        val pendingIntent = PendingIntent.getService(
+            applicationContext, 2, restartIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val am = applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val triggerAt = SystemClock.elapsedRealtime() + 1_000
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (am.canScheduleExactAlarms()) {
+                am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+            } else {
+                am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+            }
+        } else {
+            am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+        }
+        super.onTaskRemoved(rootIntent)
+    }
 
     override fun onDestroy() {
         scope.cancel()

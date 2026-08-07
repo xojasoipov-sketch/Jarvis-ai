@@ -1,7 +1,12 @@
 package uz.jarvis.agent.ui.screen
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -32,6 +37,25 @@ import uz.jarvis.agent.ui.viewmodel.MainViewModel
 import uz.jarvis.agent.ui.viewmodel.UiState
 import java.text.SimpleDateFormat
 import java.util.*
+
+/**
+ * Batareya optimizatsiyasidan ozod qilishni so'raydi — bitta tizim dialogi
+ * ("Ruxsat berish" bosilsa tamom). Buni bermasa, Infinix (XOS), Xiaomi (MIUI)
+ * kabi tizimlar ilova recents'dan o'chirilgach fon xizmatini bir necha
+ * daqiqada o'ldiradi, ulanish uziladi. Allaqachon ruxsat berilgan bo'lsa
+ * hech narsa qilmaydi.
+ */
+private fun requestIgnoreBatteryOptimizations(context: Context) {
+    val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+    if (pm.isIgnoringBatteryOptimizations(context.packageName)) return
+    try {
+        context.startActivity(
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+        )
+    } catch (_: Exception) {
+        // Ba'zi OEM prošivkalarda bu ekran mavjud emas — jimgina o'tkazib yuboramiz.
+    }
+}
 
 /** Agentga kerakli barcha runtime ruxsatlar — auto-connect boshida birma-bir so'raladi. */
 private fun requiredPermissions(): List<String> = buildList {
@@ -171,6 +195,7 @@ fun HomeScreen(
                             AgentForegroundService.start(context)
                             viewModel.setAgentRunning(true)
                         }
+                        requestIgnoreBatteryOptimizations(context)
                     }
                     PairedContent(
                         state = state,

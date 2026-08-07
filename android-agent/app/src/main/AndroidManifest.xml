@@ -23,6 +23,11 @@
          so'ralmaydi. network_status/get_wifi_info buyruqlari uchun kerak. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Ilova exit qilingandan/recents'dan o'chirilgandan keyin ham fon xizmati
+         ishlashda davom etishi uchun — ayniqsa Infinix (XOS)/Xiaomi (MIUI) kabi
+         agressiv batareya boshqaruvchi tizimlarda bu shart bo'lmasa xizmat
+         daqiqalar ichida o'ldiriladi. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
