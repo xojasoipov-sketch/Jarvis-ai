@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createOrbScene, type OrbSceneApi } from "@/lib/orbScene";
-import { HandTracker, type TrackerStatus } from "@/lib/handTracker";
+import { createOrbScene, type OrbSceneApi } from "@/lib/ultron/orbScene";
+import { HandTracker, type TrackerStatus } from "@/lib/ultron/handTracker";
 
 type CameraState = "off" | "starting" | "on" | "error";
 
@@ -10,6 +10,7 @@ const MODE_LABEL: Record<TrackerStatus["mode"], string> = {
   idle: "STANDBY",
   spin: "SPIN",
   zoom: "ZOOM",
+  point: "TARGETING",
 };
 
 interface HermesOrbProps {
@@ -49,6 +50,24 @@ export default function HermesOrb({
     };
   }, []);
 
+  // Mouse hover also lights up nodes — the network stays alive without a camera.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      sceneRef.current?.highlightAt(ndcX, ndcY);
+    };
+
+    container.addEventListener("pointermove", onMove);
+    return () => container.removeEventListener("pointermove", onMove);
+  }, []);
+
   const stopGestures = useCallback(() => {
     trackerRef.current?.stop();
     trackerRef.current = null;
@@ -68,6 +87,10 @@ export default function HermesOrb({
     const tracker = new HandTracker(video, overlay, {
       onRotate: (dt, dp) => sceneRef.current?.rotateBy(dt, dp),
       onZoom: (factor) => sceneRef.current?.zoomBy(factor),
+      onPoint: (ndcX, ndcY) => {
+        if (ndcX === null || ndcY === null) sceneRef.current?.clearHighlight();
+        else sceneRef.current?.highlightAt(ndcX, ndcY);
+      },
       onStatus: setStatus,
     });
     trackerRef.current = tracker;
@@ -97,9 +120,9 @@ export default function HermesOrb({
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === "INPUT" || (e.target as HTMLElement)?.tagName === "TEXTAREA") return;
       switch (e.key) {
-        case "+": case "=": sceneRef.current?.zoomIn(); break;
-        case "-": case "_": sceneRef.current?.zoomOut(); break;
-        case "r": case "R": sceneRef.current?.resetView(); break;
+        case "+": case "=": sceneRef.current?.zoomBy(0.92); break;
+        case "-": case "_": sceneRef.current?.zoomBy(1.08); break;
+        case "r": case "R": sceneRef.current?.reset(); break;
         case "g": case "G": toggleGestures(); break;
       }
     };
@@ -164,9 +187,9 @@ export default function HermesOrb({
           )}
 
           <div style={{ display: "flex", gap: 6 }}>
-            <OrbButton onClick={() => sceneRef.current?.zoomIn()} aria-label="Zoom in">+</OrbButton>
-            <OrbButton onClick={() => sceneRef.current?.zoomOut()} aria-label="Zoom out">−</OrbButton>
-            <OrbButton onClick={() => sceneRef.current?.resetView()}>RESET</OrbButton>
+            <OrbButton onClick={() => sceneRef.current?.zoomBy(0.92)} aria-label="Zoom in">+</OrbButton>
+            <OrbButton onClick={() => sceneRef.current?.zoomBy(1.08)} aria-label="Zoom out">−</OrbButton>
+            <OrbButton onClick={() => sceneRef.current?.reset()}>RESET</OrbButton>
             <OrbButton
               onClick={toggleGestures}
               disabled={camera === "starting"}
@@ -186,6 +209,7 @@ export default function HermesOrb({
       }}>
         <div><kbd style={{ opacity: 0.7 }}>DRAG</kbd> orb · <kbd style={{ opacity: 0.7 }}>SCROLL</kbd> zoom</div>
         <div><kbd style={{ opacity: 0.7 }}>G</kbd> gestures · <kbd style={{ opacity: 0.7 }}>R</kbd> reset · <kbd style={{ opacity: 0.7 }}>+/−</kbd> zoom</div>
+        <div>pinch to spin/zoom · point a finger to light up a node</div>
       </div>
     </div>
   );
