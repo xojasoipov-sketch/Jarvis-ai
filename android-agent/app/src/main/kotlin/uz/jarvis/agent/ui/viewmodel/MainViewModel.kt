@@ -129,6 +129,7 @@ class MainViewModel @Inject constructor(
     fun revokeDevice() {
         viewModelScope.launch {
             repo.revokeDevice()
+            _agentRunning.value = false
             _uiState.value = UiState.Connecting
         }
     }

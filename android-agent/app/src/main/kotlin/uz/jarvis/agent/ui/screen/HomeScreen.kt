@@ -50,7 +50,6 @@ private fun requiredPermissions(): List<String> = buildList {
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel = hiltViewModel(),
-    onOpenScanner: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()

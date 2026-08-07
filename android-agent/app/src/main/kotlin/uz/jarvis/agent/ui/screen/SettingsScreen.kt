@@ -92,7 +92,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showRevokeDialog = false },
             title = { Text("Qurilmani uzish", color = TextPrimary) },
-            text = { Text("Bu qurilma serverdan uzilib, token o'chiriladi. Qayta ulash uchun yangi QR kod kerak bo'ladi.", color = TextSecondary) },
+            text = { Text("Bu qurilma serverdan uzilib, token o'chiriladi. Ilova qayta avtomatik ulanadi — hech narsa kiritish shart emas.", color = TextSecondary) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.revokeDevice()

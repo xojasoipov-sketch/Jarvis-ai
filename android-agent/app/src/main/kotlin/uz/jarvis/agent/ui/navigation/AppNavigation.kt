@@ -23,7 +23,6 @@ fun AppNavigation(
         composable(Screen.Home.route) {
             HomeScreen(
                 viewModel = viewModel,
-                onOpenScanner = { navController.navigate(Screen.QrScanner.route) },
                 onOpenSettings = { navController.navigate(Screen.Settings.route) },
             )
         }
