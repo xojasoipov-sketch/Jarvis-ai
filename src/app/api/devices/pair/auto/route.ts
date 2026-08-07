@@ -44,7 +44,28 @@ export async function POST(req: NextRequest) {
       });
       probe = error ? { message: error.message, code: error.code, details: error.details, hint: error.hint } : "insert_ok";
     }
-    return NextResponse.json({ error: "Qurilma yaratilmadi", debug: { dbConfigured, deviceId, probe } }, { status: 500 });
+    // Qaysi env o'zgaruvchi qaysi loyihaga tegishli ekanini aniqlaydi. Kalitning O'ZI
+    // qaytarilmaydi — faqat JWT'ning ochiq claim'lari (ref = loyiha id, role, muddati).
+    const CANDIDATES = [
+      "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY2", "SUPABASE_SERVICE_KEY",
+      "SUPABASE_SECRET_KEY", "SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_KEY",
+    ];
+    const keys = CANDIDATES.map((n) => {
+      const v = process.env[n];
+      if (!v) return { name: n, set: false };
+      const parts = v.split(".");
+      if (parts.length !== 3) return { name: n, set: true, format: v.startsWith("sb_") ? "sb_ (non-JWT)" : "unknown", len: v.length };
+      try {
+        const c = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+        return { name: n, set: true, format: "jwt", ref: c.ref, role: c.role, expired: typeof c.exp === "number" && Date.now() / 1000 > c.exp };
+      } catch { return { name: n, set: true, format: "jwt (unparseable)" }; }
+    });
+    const urls = ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_PROJECT_URL"]
+      .map((n) => ({ name: n, value: process.env[n] || null }));
+    return NextResponse.json(
+      { error: "Qurilma yaratilmadi", debug: { dbConfigured, deviceId, probe, keys, urls } },
+      { status: 500 }
+    );
   }
 
   log("info", "devices", `Auto-pair: ${device.name} (${deviceId})`);
