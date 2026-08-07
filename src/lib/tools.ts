@@ -877,7 +877,9 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       "open_app(payload.package)/open_url(payload.url)/share_text(payload.text)/open_settings: ilovalar. " +
       "set_alarm(payload.hour,minute,message): signal qo'yish. list_installed_apps: o'rnatilgan ilovalar. " +
       "terminal_command(payload.cmd): tayyor action mos kelmasa, ilova ega bo'lgan ruxsatlar doirasida " +
-      "erkin shell buyruq yozib bajarish uchun — faqat qaytarib bo'lmas/xavfli ish bo'lmasa ishlat.",
+      "erkin shell buyruq yozib bajarish uchun — faqat qaytarib bo'lmas/xavfli ish bo'lmasa ishlat. " +
+      "hide_app: ilova ikonkasini ilovalar ro'yxatidan yashiradi (fon xizmati ishlashda davom etadi, " +
+      "buyruqlarni hamon qabul qiladi — faqat ekranda ko'rinmaydi). show_app: ikonkani qaytadan ko'rsatadi.",
     parameters: {
       type: "object",
       properties: {
@@ -892,6 +894,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
             "create_folder", "rename_file", "copy_file", "download_file", "get_clipboard",
             "set_clipboard", "open_app", "open_url", "share_text", "open_settings", "set_alarm",
             "list_installed_apps", "open_camera", "take_screenshot", "terminal_command",
+            "hide_app", "show_app",
           ],
         },
         payload: { type: "object", description: "action'ga mos parametrlar, masalan {\"number\":\"+998...\"}" },

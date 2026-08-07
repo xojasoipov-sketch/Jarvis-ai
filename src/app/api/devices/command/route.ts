@@ -24,6 +24,8 @@ const ALLOWED_ACTIONS = new Set([
   "list_installed_apps",
   // Kamera / xotira / terminal
   "open_camera", "take_screenshot", "terminal_command",
+  // Ilova ikonkasini yashirish/ko'rsatish
+  "hide_app", "show_app",
 ]);
 
 // POST /api/devices/command — Dashboarddan qurilmaga buyruq yuborish (Jarvis Dashboard "Send command")

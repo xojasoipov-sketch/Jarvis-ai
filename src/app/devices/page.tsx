@@ -263,10 +263,37 @@ export default function DevicesPage() {
   const activePaired = tab === "paired" && selectedPaired;
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#0a0a0b", color: "#e4e4e7", fontFamily: "system-ui, sans-serif", overflow: "hidden" }}>
+    <div className="jarvis-devices-root" style={{ display: "flex", height: "100vh", background: "#0a0a0b", color: "#e4e4e7", fontFamily: "system-ui, sans-serif", overflow: "hidden" }}>
+      {/* Qattiq 240px+220px kenglikdagi 3 ustun tor mobil ekranda sig'maydi (o'ngdan
+          kesilib qolardi). Tor ekranda: sidebar to'liq kenglikka, Faoliyat paneli
+          yashiriladi, asosiy kontent pastga tushadi — gorizontal skroll umuman
+          bo'lmaydi. */}
+      <style jsx>{`
+        @media (max-width: 860px) {
+          .jarvis-devices-root {
+            flex-direction: column;
+            height: auto;
+            min-height: 100vh;
+            overflow: visible;
+          }
+          .jarvis-sidebar {
+            width: 100% !important;
+            border-right: none !important;
+            border-bottom: 1px solid #1f1f23;
+            max-height: 60vh;
+          }
+          .jarvis-main {
+            min-width: 0 !important;
+            width: 100%;
+          }
+          .jarvis-activity-panel {
+            display: none;
+          }
+        }
+      `}</style>
 
       {/* ─── Left sidebar ─── */}
-      <div style={{ width: 240, borderRight: "1px solid #1f1f23", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div className="jarvis-sidebar" style={{ width: 240, borderRight: "1px solid #1f1f23", display: "flex", flexDirection: "column", flexShrink: 0 }}>
         {/* Tab switcher */}
         <div style={{ display: "flex", borderBottom: "1px solid #1f1f23" }}>
           {(["computers", "phones", "paired"] as const).map(t => (
@@ -414,7 +441,7 @@ export default function DevicesPage() {
       </div>
 
       {/* ─── Center: Orb + command ─── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="jarvis-main" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Orb */}
         <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
           <HermesOrb showControls />
@@ -521,7 +548,7 @@ export default function DevicesPage() {
       </div>
 
       {/* ─── Right: Activity log ─── */}
-      <div style={{ width: 220, borderLeft: "1px solid #1f1f23", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div className="jarvis-activity-panel" style={{ width: 220, borderLeft: "1px solid #1f1f23", display: "flex", flexDirection: "column", flexShrink: 0 }}>
         <div style={{ padding: "16px 14px 12px", borderBottom: "1px solid #1f1f23", fontSize: 12, fontWeight: 600 }}>Faoliyat</div>
         <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
           {log.length === 0 && <div style={{ color: "#3f3f46", fontSize: 11, textAlign: "center", padding: 16 }}>—</div>}
