@@ -3,24 +3,6 @@ import { createPendingDevice, confirmDevice, type Platform } from "@/lib/device-
 import { createDeviceToken, verifyAutoPairKey, autoPairConfigured } from "@/lib/device-auth";
 import { log } from "@/lib/logger";
 
-// TEMPORARY: the phone reports 401 while the same key succeeds via curl, so we
-// need to see what the phone actually sends. Records a fingerprint only — never
-// the key itself. Remove once pairing is confirmed working from the device.
-type Attempt = {
-  at: string;
-  ua: string | null;
-  hadHeader: boolean;
-  keyPrefix: string;
-  keyLen: number;
-  matched: boolean;
-};
-const recentAttempts: Attempt[] = [];
-
-// GET /api/devices/pair/auto — last few pairing attempts, for diagnosis.
-export async function GET() {
-  return NextResponse.json({ attempts: recentAttempts.slice(0, 10) });
-}
-
 // POST /api/devices/pair/auto — ilova birinchi ochilganda, QR/deep-link almashinuvisiz,
 // APK ichiga qattiq yozilgan DEVICE_AUTO_PAIR_KEY orqali darhol pairlanadi.
 // Header: Authorization: Bearer <DEVICE_AUTO_PAIR_KEY>
@@ -29,21 +11,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "DEVICE_AUTO_PAIR_KEY sozlanmagan" }, { status: 503 });
   }
 
-  const rawAuth = req.headers.get("authorization");
-  const token = rawAuth?.replace(/^Bearer\s+/i, "");
-  const matched = Boolean(token && verifyAutoPairKey(token));
-
-  recentAttempts.unshift({
-    at: new Date().toISOString(),
-    ua: req.headers.get("user-agent"),
-    hadHeader: Boolean(rawAuth),
-    keyPrefix: token ? token.slice(0, 6) : "",
-    keyLen: token?.length ?? 0,
-    matched,
-  });
-  if (recentAttempts.length > 10) recentAttempts.length = 10;
-
-  if (!matched) {
+  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!token || !verifyAutoPairKey(token)) {
     return NextResponse.json({ error: "Ruxsat berilmagan" }, { status: 401 });
   }
 
