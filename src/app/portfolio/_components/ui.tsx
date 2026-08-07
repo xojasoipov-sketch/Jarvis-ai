@@ -18,20 +18,35 @@ export function Container({ children, className = "" }: { children: ReactNode; c
   return <div className={`${CONTAINER} ${className}`}>{children}</div>;
 }
 
-/** Vertical rhythm wrapper — the brief calls for generous, consistent spacing. */
+/**
+ * Vertical rhythm wrapper — the brief calls for generous, consistent spacing.
+ *
+ * Top and bottom padding are props rather than something callers override via
+ * className: a plain `pt-4` loses to this component's own `md:pt-28`, because a
+ * media-query rule outranks an unqualified one. That silently left ~190px of
+ * dead space under every page heading.
+ */
 export function Section({
   children,
   className = "",
   id,
   style,
+  top = true,
+  bottom = true,
 }: {
   children: ReactNode;
   className?: string;
   id?: string;
   style?: CSSProperties;
+  /** Set false to butt this section against the one above it. */
+  top?: boolean;
+  /** Set false to butt this section against the one below it. */
+  bottom?: boolean;
 }) {
+  const padTop = top ? "pt-20 md:pt-28" : "pt-0";
+  const padBottom = bottom ? "pb-20 md:pb-28" : "pb-0";
   return (
-    <section id={id} className={`py-20 md:py-28 ${className}`} style={style}>
+    <section id={id} className={`${padTop} ${padBottom} ${className}`} style={style}>
       <Container>{children}</Container>
     </section>
   );

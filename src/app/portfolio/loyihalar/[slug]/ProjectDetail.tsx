@@ -140,7 +140,7 @@ export default function ProjectDetail({
       </section>
 
       {/* ── Results ── */}
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {project.metrics.map((m) => (

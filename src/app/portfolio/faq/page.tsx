@@ -22,7 +22,7 @@ export default function FaqPage() {
         subtitle="Eng ko'p so'raladigan savollarga javoblar. Kerakli javobni topa olmasangiz — bizga yozing."
       />
 
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal className="grid lg:grid-cols-[1.35fr_1fr] gap-10 items-start">
           {/* accordion */}
           <div className="space-y-3.5">

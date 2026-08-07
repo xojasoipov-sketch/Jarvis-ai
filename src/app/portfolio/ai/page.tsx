@@ -23,7 +23,7 @@ export default function AiShowcasePage() {
         subtitle="Biznesingizga real foyda keltiradigan sun'iy intellekt imkoniyatlari — namoyish emas, ishlaydigan mahsulot."
       />
 
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-5">
           {AI_CAPABILITIES.map((cap, i) => {
             const Icon = ICONS[i] ?? Bot;

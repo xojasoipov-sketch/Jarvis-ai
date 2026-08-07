@@ -32,7 +32,7 @@ export default function NarxlarPage() {
       />
 
       {/* ── Plans ── */}
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal>
           <div className="grid md:grid-cols-3 gap-5 items-start">
             {PLANS.map((plan) => (

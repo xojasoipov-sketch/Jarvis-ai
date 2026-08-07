@@ -31,7 +31,7 @@ export default function JarayonPage() {
       />
 
       {/* ── Timeline ── */}
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal>
           <div className="relative">
             {/* animated vertical spine (desktop) */}

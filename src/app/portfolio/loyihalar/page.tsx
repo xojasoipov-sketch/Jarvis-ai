@@ -21,7 +21,7 @@ export default function LoyihalarPage() {
         subtitle="Har bir loyiha — real biznes muammosiga topilgan yechim, o'lchangan natijalari bilan."
       />
 
-      <Section className="pt-4">
+      <Section top={false}>
         {/* filters */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}

@@ -33,7 +33,7 @@ export default function KaryeraPage() {
       />
 
       {/* ── Perks ── */}
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {PERKS.map((p) => (
             <motion.div key={p.t} variants={fadeUp}>

@@ -59,7 +59,7 @@ export default function HaqidaPage() {
       />
 
       {/* ── Story + visual ── */}
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal className="grid lg:grid-cols-2 gap-12 items-center">
           <motion.div variants={fadeUp}>
             <p className="text-[15px] leading-relaxed mb-5" style={{ color: TEXT_DIM }}>{SADIPRIME.description}</p>

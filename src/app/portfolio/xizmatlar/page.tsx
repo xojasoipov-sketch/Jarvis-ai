@@ -49,7 +49,7 @@ export default function XizmatlarPage() {
       />
 
       {/* ── Service grid ── */}
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {SERVICES.map((s) => {
             const Icon = ICONS[s.slug] ?? Globe;

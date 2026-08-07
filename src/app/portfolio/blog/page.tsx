@@ -50,7 +50,7 @@ export default function BlogPage() {
       />
 
       {/* ── Featured ── */}
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal>
           <motion.div variants={fadeUp}>
             <Link href="/portfolio/blog" className="block">
@@ -102,7 +102,7 @@ export default function BlogPage() {
       </Section>
 
       {/* ── Search + categories + list ── */}
-      <Section className="pt-0">
+      <Section top={false}>
         <div className="flex flex-wrap items-center justify-between gap-5 mb-10">
           <div className="flex flex-wrap gap-2.5">
             {CATEGORIES.map((c) => (

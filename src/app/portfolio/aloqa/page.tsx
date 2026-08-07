@@ -90,7 +90,7 @@ export default function AloqaPage() {
         subtitle="Loyihangiz haqida qisqacha yozing — bir ish kuni ichida javob beramiz."
       />
 
-      <Section className="pt-4">
+      <Section top={false}>
         <Reveal className="grid lg:grid-cols-2 gap-5 items-stretch">
           {/* left: map + details */}
           <motion.div variants={fadeUp} className="flex flex-col gap-5">
