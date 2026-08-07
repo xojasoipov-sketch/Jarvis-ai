@@ -189,6 +189,16 @@ export async function queueCommand(deviceId: string, action: string, payload: Re
 
 export async function pollCommands(deviceId: string): Promise<DeviceCommand[]> {
   if (dbConfigured && supabase) {
+    // 1) "delivered" holatida 60 soniyadan ko'proq qolgan buyruqlarni "pending"ga qaytaramiz
+    //    (telefon crash bo'lsa buyruqlar yo'qolmasin)
+    const stuckCutoff = new Date(Date.now() - 60_000).toISOString();
+    await supabase.from("pari_device_commands")
+      .update({ status: "pending" })
+      .eq("device_id", deviceId)
+      .eq("status", "delivered")
+      .lt("created_at", stuckCutoff);
+
+    // 2) Yangi pending buyruqlarni olamiz
     const { data, error } = await supabase.from("pari_device_commands").select("*").eq("device_id", deviceId).eq("status", "pending").order("created_at", { ascending: true });
     if (error) log("error", "devices", `pollCommands (read): ${error.message}`);
     if (data?.length) {

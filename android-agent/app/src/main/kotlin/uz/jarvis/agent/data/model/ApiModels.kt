@@ -2,6 +2,9 @@ package uz.jarvis.agent.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 // ─── Pairing ──────────────────────────────────────────────────────────────────
 
@@ -61,9 +64,17 @@ data class DeviceCommand(
     // Server (device-store.ts / /api/devices/poll) sends "action" + "payload",
     // not "command" + "params" — field names must match the live API contract exactly.
     @SerialName("action") val command: String,
-    @SerialName("payload") val params: Map<String, String> = emptyMap(),
+    // JsonObject ishlatamiz — server payload'da string bo'lmagan qiymatlar
+    // (raqam, boolean, null) bo'lishi mumkin; Map<String,String> bular uchun crash bo'ladi.
+    @SerialName("payload") val rawPayload: JsonObject = JsonObject(emptyMap()),
     @SerialName("created_at") val createdAt: String? = null,
-)
+) {
+    /** Barcha qiymatlarni String'ga aylantiradi: "50" → "50", true → "true" va h.k. */
+    val params: Map<String, String>
+        get() = rawPayload.entries.associate { (k, v) ->
+            k to try { v.jsonPrimitive.content } catch (_: Exception) { v.toString().trim('"') }
+        }
+}
 
 @Serializable
 data class CommandResultRequest(

