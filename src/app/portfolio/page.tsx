@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { motion, type Variants } from "framer-motion";
 import {
-  Globe, Send, Sparkles, Settings2, TrendingUp,
+  Globe, Send, Gem, Settings2, TrendingUp,
   ArrowRight, ArrowUpRight, Menu, X, Mail, MapPin,
   Play, ChevronLeft, ChevronRight, Plus,
   Search, ClipboardCheck, Rocket, Headphones,
@@ -31,7 +31,7 @@ const NAV = [
   { label: "Biz haqimizda", href: "#about" },
 ];
 
-const SERVICE_ICONS: LucideIcon[] = [Globe, Send, Sparkles, Settings2, TrendingUp];
+const SERVICE_ICONS: LucideIcon[] = [Globe, Send, Gem, Settings2, TrendingUp];
 const SERVICE_ORDER = ["Veb-saytlar", "Telegram Mini App", "AI Yechimlar", "Avtomatlashtirish", "Marketing"];
 const SERVICES = SERVICE_ORDER.map((title, i) => ({
   ...SERVICES_RAW.find((s) => s.title === title)!,
@@ -196,7 +196,7 @@ function Hero() {
       </div>
 
       <div className="max-w-6xl mx-auto px-5">
-        <div className="grid md:grid-cols-2 gap-12 items-center">
+        <div className="grid md:grid-cols-2 gap-8 items-center">
           <motion.div initial="hidden" animate="visible" variants={stagger}>
             <motion.div
               variants={fadeUp}
@@ -213,11 +213,11 @@ function Hero() {
             <motion.p variants={fadeUp} className="text-white/45 text-base leading-relaxed mb-8 max-w-md">
               Veb-saytlar, ilovalar, AI yechimlar, avtomatlashtirish va marketing — biz biznesingizni keyingi bosqichga olib chiqamiz.
             </motion.p>
-            <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-4 mb-10">
-              <a href="#services" className="inline-flex items-center gap-2 font-semibold px-6 py-3 rounded-full transition-opacity hover:opacity-90" style={{ background: GOLD, color: "#1a1408" }}>
+            <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-3 mb-10">
+              <a href="#services" className="inline-flex items-center gap-2 whitespace-nowrap font-semibold px-5 py-3 rounded-full transition-opacity hover:opacity-90" style={{ background: GOLD, color: "#1a1408" }}>
                 Xizmatlarimiz bilan tanishing <ArrowRight size={16} />
               </a>
-              <a href="#projects" className="inline-flex items-center gap-2 font-medium px-6 py-3 rounded-full text-white transition-colors" style={{ border: `1px solid ${BORDER}` }}>
+              <a href="#projects" className="inline-flex items-center gap-2 whitespace-nowrap font-medium px-5 py-3 rounded-full text-white transition-colors" style={{ border: `1px solid ${BORDER}` }}>
                 Portfolio ko{"'"}rish <ChevronRight size={16} />
               </a>
             </motion.div>
@@ -312,11 +312,12 @@ function ProjectsSection() {
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {PROJECTS.map((p) => (
-              <motion.div key={p.title} variants={fadeUp} className="relative rounded-2xl overflow-hidden aspect-[3/4] group cursor-pointer">
+              <motion.div key={p.title} variants={fadeUp} className="relative rounded-2xl overflow-hidden aspect-[3/4] group cursor-pointer" style={{ border: `1px solid ${BORDER}` }}>
                 <div className="absolute inset-0" style={{ background: p.gradient }} />
-                <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 45%)" }} />
-                <div className="absolute inset-0 flex items-center justify-center px-4 text-center">
-                  <span className="text-white/90 font-semibold text-sm leading-tight">{p.title}</span>
+                <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 55%)" }} />
+                <div className="absolute top-3 left-3 right-3 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: GOLD }} />
+                  <span className="text-white/90 font-semibold text-[13px] leading-tight">{p.title}</span>
                 </div>
                 <div className="absolute bottom-3 left-3">
                   <span className="text-[10px] font-medium px-2.5 py-1 rounded-full text-white/80" style={{ background: "rgba(0,0,0,0.5)", border: `1px solid ${BORDER}` }}>
