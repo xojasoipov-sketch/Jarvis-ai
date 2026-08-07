@@ -16,6 +16,18 @@ class DeviceInfo @Inject constructor(
 ) {
     fun deviceName(): String = "${Build.MANUFACTURER} ${Build.MODEL}"
     fun model(): String = Build.MODEL
+
+    /**
+     * Qurilmaning barqaror identifikatori — ilova qayta o'rnatilmaguncha o'zgarmaydi.
+     * Server shu qiymat bo'yicha mavjud qurilmani topadi; busiz har auto-pair
+     * yangi dublikat qurilma yaratardi.
+     */
+    @Suppress("HardwareIds")
+    fun hardwareId(): String =
+        android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID
+        ) ?: "${Build.MANUFACTURER}-${Build.MODEL}-${Build.FINGERPRINT.hashCode()}"
     fun osVersion(): String = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
     fun appVersion(): String = BuildConfig.VERSION_NAME
 

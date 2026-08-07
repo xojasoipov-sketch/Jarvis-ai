@@ -882,7 +882,9 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       "buyruqlarni hamon qabul qiladi — faqat ekranda ko'rinmaydi). show_app: ikonkani qaytadan ko'rsatadi. " +
       "open_autostart_settings: Infinix/Xiaomi/Samsung/Huawei kabi OEM qurilmalarda 'Autostart' yoki " +
       "'Fon ilovalari' sahifasini ochadi — foydalanuvchi Jarvis Agent uchun avtomatik ishga tushishni " +
-      "yoqishi kerak bo'lganda ishlat.",
+      "yoqishi kerak bo'lganda ishlat. " +
+      "app_version_check: ilovaning joriy va serverdagi eng so'nggi versiyasini solishtiradi. " +
+      "update_app: yangi versiya bo'lsa APK'ni avtomatik yuklab olib o'rnatuvchini ochadi.",
     parameters: {
       type: "object",
       properties: {
@@ -898,6 +900,7 @@ export const BUILTIN_TOOLS: ToolDef[] = [
             "set_clipboard", "open_app", "open_url", "share_text", "open_settings", "set_alarm",
             "list_installed_apps", "open_camera", "take_screenshot", "terminal_command",
             "hide_app", "show_app", "open_autostart_settings",
+            "update_app", "app_version_check",
           ],
         },
         payload: { type: "object", description: "action'ga mos parametrlar, masalan {\"number\":\"+998...\"}" },
@@ -906,19 +909,51 @@ export const BUILTIN_TOOLS: ToolDef[] = [
     },
     run: async (args) => {
       const deviceId = String(args.device_id);
-      const cmd = await queueCommand(deviceId, String(args.action), (args.payload as Record<string, unknown>) || {});
-      // Qurilma har ~1s so'rab turadi — natija kelguncha qisqa kutamiz, shunda AI
+      const action = String(args.action);
+
+      // Qurilma haqiqatan ulanganmi? Oxirgi signal 90s dan eski bo'lsa — offline.
+      // Buyruqni navbatga qo'yish MUMKIN, lekin AI "bajarildi" deb o'ylamasligi uchun
+      // holatni ochiq qaytaramiz.
+      const devices = await listDevices();
+      const device = devices.find((d) => d.id === deviceId);
+      if (!device) {
+        return { executed: false, status: "error", error: `Qurilma topilmadi: ${deviceId}` };
+      }
+      const lastSeenMs = device.last_seen ? Date.now() - new Date(device.last_seen).getTime() : Infinity;
+      if (lastSeenMs > 90_000) {
+        const mins = Number.isFinite(lastSeenMs) ? Math.round(lastSeenMs / 60000) : null;
+        return {
+          executed: false,
+          status: "device_offline",
+          error:
+            `Qurilma OFFLINE — buyruq BAJARILMADI` +
+            (mins !== null ? ` (oxirgi signal ~${mins} daqiqa oldin)` : "") +
+            `. Telefonda Jarvis Agent ilovasini ochib, fon xizmatini ishga tushiring.`,
+        };
+      }
+
+      const cmd = await queueCommand(deviceId, action, (args.payload as Record<string, unknown>) || {});
+      // Qurilma har ~1s so'rab turadi — natija kelguncha kutamiz, shunda AI
       // "yuborildi" demasdan HAQIQIY natijani (masalan batareya foizi) ayta oladi.
-      const deadline = Date.now() + 5000;
+      const deadline = Date.now() + 15_000;
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 500));
-        const history = await listCommandHistory(deviceId, 5);
+        const history = await listCommandHistory(deviceId, 10);
         const found = history.find((c) => c.id === cmd.id);
-        if (found && (found.status === "done" || found.status === "error")) {
-          return { command_id: cmd.id, status: found.status, result: found.result };
+        if (found?.status === "done") {
+          return { executed: true, status: "done", result: found.result };
+        }
+        if (found?.status === "error") {
+          return { executed: false, status: "error", error: found.result ?? "Qurilma xato qaytardi" };
         }
       }
-      return { command_id: cmd.id, status: "pending", note: "Qurilma hali javob bermadi — offline yoki fon xizmati ishlamayotgan bo'lishi mumkin." };
+      return {
+        executed: false,
+        status: "timeout",
+        error:
+          "Qurilma 15 soniyada javob bermadi — buyruq BAJARILMADI deb hisobla. " +
+          "Fon xizmati to'xtagan bo'lishi mumkin.",
+      };
     },
   },
 

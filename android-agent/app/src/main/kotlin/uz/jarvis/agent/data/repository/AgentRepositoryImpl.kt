@@ -28,6 +28,7 @@ class AgentRepositoryImpl @Inject constructor(
                     model = deviceInfo.model(),
                     osVersion = deviceInfo.osVersion(),
                     appVersion = deviceInfo.appVersion(),
+                    hardwareId = deviceInfo.hardwareId(),
                 )
             )
             if (resp.isSuccessful) {

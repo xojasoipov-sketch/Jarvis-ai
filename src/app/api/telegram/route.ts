@@ -8,11 +8,14 @@ import { listServices, getService, createOrder } from "@/lib/services-store";
 import { loadSession, getSession, updateSession, addToHistory, clearHistory } from "@/lib/session-store";
 import { classifyFast, normalizeUzbek } from "@/lib/fatosat";
 import { getProviders } from "@/lib/providers";
-import { runToolLoop, type ChatMessage } from "@/lib/toolloop";
-import { DEVICE_CONTROL_RULES } from "@/lib/agentLoop";
+import { runToolLoopWithFallback, DEVICE_CONTROL_RULES, type ChatMessage } from "@/lib/agentLoop";
 import { log } from "@/lib/logger";
 import { portfolioTelegramSummary, guestStartText, SADIPRIME } from "@/lib/sadiprime";
 import { isOwnerTelegram, checkGuestTelegramLimit, consumeGuestTelegram, OWNER } from "@/lib/owner";
+
+// Tool-loop (qurilma buyruqlari natijasini kutish bilan) 10s standart limitdan
+// uzoqroq davom etadi — busiz route yarim yo'lda uzilib qolardi.
+export const maxDuration = 60;
 
 const TG_SYSTEM = `Sen Pari — Sadining shaxsiy AI yordamchisi. Telegram orqali.
 
@@ -21,7 +24,17 @@ QOIDALAR (buzsiz):
 - Buyruq kelsa → darhol bajar. Noaniq bo'lsa → eng mantiqiy talqin qil.
 - Tool kerak bo'lsa → CHAQIR, so'rama: get_business_overview, list_services, create_task, knowledge_search, web_search va boshqalar.
 - Javob: qisqa, aniq, o'zbek tilida. Markdown yo'q — Telegram oddiy matn.
-- Jarvis uslubi: ishonchli, tez, konkret. "Bajarildi." "Tayyor." "Topildi:"
+- Jarvis uslubi: ishonchli, tez, konkret.
+
+SOXTA JAVOB MUTLAQO TAQIQLANADI:
+- "Bajarildi", "Tayyor", "Ochildi", "Yoqildi" so'zlarini FAQAT tegishli tool chaqirilib,
+  natijasi status="done" bo'lib qaytgandagina yoz. Boshqa hech qanday holatda yozma.
+- Qurilma bilan bog'liq har qanday so'rov uchun device_command tool'ini CHAQIRISHING SHART.
+  Tool chaqirmasdan "bajardim" deb yozish — eng jiddiy xato.
+- Tool status="pending" qaytarsa: "Qurilma javob bermadi — offline. BAJARILMADI." deb yoz.
+- Tool status="error" qaytarsa: xatoning aniq matnini foydalanuvchiga ayt.
+- Texnik jihatdan imkonsiz ishni (masalan boshqa odamga xabar yozish) so'rashsa —
+  "Buni qila olmayman, sababi: ..." deb ochiq ayt. To'qib "yozdim" DEMA.
 ${DEVICE_CONTROL_RULES}`;
 
 
@@ -506,25 +519,30 @@ async function regularChat(chatId: number, text: string, _history: Array<{ role:
   await sendChatAction(chatId);
   addToHistory(chatId, "user", text);
 
-  const providers = getProviders();
-  const toolProvider = providers.find((p) => p.supportsTools && p.key !== "dummy");
+  // Tool-capable provayderlarning BARCHASI — biri ishlamasa keyingisiga o'tadi.
+  // Ilgari faqat birinchisi sinalar, u xato bersa jimgina TOOL'SIZ callAI'ga
+  // tushib ketardi — natijada model qurilma buyrug'ini umuman chaqirmay
+  // "Tayyor, bajarildi" deb TO'QIB javob berardi. Endi bunday yo'l yo'q.
+  const toolProviders = getProviders().filter((p) => p.supportsTools && p.key !== "dummy");
+
+  if (toolProviders.length === 0) {
+    log("error", "telegram", "Tool-capable provayder yo'q — qurilma buyruqlari bajarilmaydi");
+    await sendMessage(chatId, "❌ Hech qanday tool-provayder sozlanmagan (GROQ_API_KEY va h.k.). Qurilma buyruqlarini bajara olmayman.");
+    return;
+  }
+
+  const convo: ChatMessage[] = [{ role: "system", content: TG_SYSTEM }, ...getSession(chatId).history];
 
   try {
-    let reply: string;
-    if (toolProvider) {
-      try {
-        const convo: ChatMessage[] = [{ role: "system", content: TG_SYSTEM }, ...getSession(chatId).history];
-        reply = await runToolLoop(toolProvider, convo);
-      } catch {
-        reply = await callAI(getSession(chatId).history, TG_SYSTEM);
-      }
-    } else {
-      reply = await callAI(getSession(chatId).history, TG_SYSTEM);
-    }
+    const reply = await runToolLoopWithFallback(toolProviders, convo, (name, err) =>
+      log("warn", "telegram", `Provider ${name} muvaffaqiyatsiz: ${(err as Error)?.message}`)
+    );
     addToHistory(chatId, "assistant", reply);
     await sendMessage(chatId, cleanMarkdown(reply));
-  } catch {
-    await sendMessage(chatId, "❌ Xato.");
+  } catch (err) {
+    // Tool'siz rejimga TUSHMAYMIZ — aks holda soxta "bajarildi" javobi chiqadi.
+    log("error", "telegram", `Barcha tool-provayderlar muvaffaqiyatsiz: ${(err as Error)?.message}`);
+    await sendMessage(chatId, "❌ AI provayderlarga ulanib bo'lmadi — buyruq BAJARILMADI. Birozdan keyin qayta urinib ko'ring.");
   }
 }
 

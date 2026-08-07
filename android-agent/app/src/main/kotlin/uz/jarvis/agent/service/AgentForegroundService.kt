@@ -21,6 +21,7 @@ class AgentForegroundService : Service() {
 
     @Inject lateinit var repo: AgentRepositoryImpl
     @Inject lateinit var executor: CommandExecutor
+    @Inject lateinit var updater: uz.jarvis.agent.util.AppUpdater
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -60,6 +61,7 @@ class AgentForegroundService : Service() {
 
     private suspend fun agentLoop() {
         var heartbeatTick = 0
+        var updateTick = 0
 
         while (true) {
             try {
@@ -69,6 +71,14 @@ class AgentForegroundService : Service() {
                     heartbeatTick = 0
                     val ok = repo.heartbeat()
                     updateNotification(if (ok) "Faol — server bilan ulangan" else "Server bilan muammo")
+                }
+
+                // Yangilanishni ~30 daqiqada bir tekshiramiz — yangi versiya chiqqan
+                // bo'lsa APK avtomatik yuklanadi, foydalanuvchi faqat "O'rnatish" bosadi.
+                updateTick++
+                if (updateTick >= 1800) {
+                    updateTick = 0
+                    checkForUpdate()
                 }
 
                 // Poll & execute commands
@@ -85,6 +95,18 @@ class AgentForegroundService : Service() {
                 delay(5_000) // Back off on errors
             }
         }
+    }
+
+    /** Serverda yangi versiya bormi — bo'lsa yuklab olib o'rnatuvchini ochadi. */
+    private suspend fun checkForUpdate() {
+        try {
+            val server = repo.getSession()?.serverUrl ?: return
+            val info = updater.check(server) ?: return
+            updateNotification("Yangilanish yuklanmoqda: v${info.versionName}")
+            updater.downloadAndInstall(info)
+                .onSuccess { updateNotification("Yangilanish tayyor — \"O'rnatish\" ni bosing") }
+                .onFailure { updateNotification("Faol — server bilan ulangan") }
+        } catch (_: Exception) { /* keyingi siklda qayta urinadi */ }
     }
 
     private fun buildNotification(status: String): Notification {

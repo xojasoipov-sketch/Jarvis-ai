@@ -19,6 +19,8 @@ export type Device = {
   paired_at: string;
   revoked: boolean;
   device_token_hash: string | null;
+  /** Barqaror qurilma identifikatori (Android ANDROID_ID) — dublikatlarni oldini oladi. */
+  hardware_id: string | null;
 };
 
 export type DeviceCommand = {
@@ -53,6 +55,7 @@ export async function createPendingDevice(): Promise<string> {
     id, name: "Yangi qurilma", platform: "android", os_info: "",
     status: "offline", battery: null, storage_free: null, cpu_load: null, ram_used: null,
     location: null, last_seen: null, paired_at: new Date().toISOString(), revoked: false, device_token_hash: null,
+    hardware_id: null,
   };
   if (dbConfigured && supabase) {
     const { error } = await supabase.from("pari_devices").insert(device);
@@ -103,6 +106,35 @@ export async function confirmDevice(deviceId: string, input: { name: string; pla
   if (!d) return null;
   Object.assign(d, patch);
   return d;
+}
+
+/**
+ * hardware_id bo'yicha mavjud (revoke qilinmagan) qurilmani topadi.
+ * Auto-pair shu orqali har ulanishda yangi dublikat yaratmay, ayni qurilmani qayta ishlatadi.
+ */
+export async function findDeviceByHardwareId(hardwareId: string): Promise<Device | null> {
+  if (!hardwareId) return null;
+  if (dbConfigured && supabase) {
+    const { data, error } = await supabase
+      .from("pari_devices").select("*")
+      .eq("hardware_id", hardwareId).eq("revoked", false)
+      .maybeSingle();
+    if (error) log("error", "devices", `findDeviceByHardwareId: ${error.message}`);
+    return data || null;
+  }
+  return [...memDevices.values()].find((d) => d.hardware_id === hardwareId && !d.revoked) || null;
+}
+
+/** Qurilmaga hardware_id yozadi (auto-pair paytida). */
+export async function setHardwareId(deviceId: string, hardwareId: string): Promise<void> {
+  if (!hardwareId) return;
+  if (dbConfigured && supabase) {
+    const { error } = await supabase.from("pari_devices").update({ hardware_id: hardwareId }).eq("id", deviceId);
+    if (error) log("error", "devices", `setHardwareId: ${error.message}`);
+    return;
+  }
+  const d = memDevices.get(deviceId);
+  if (d) d.hardware_id = hardwareId;
 }
 
 /** Device tokenning DB'dagi hash bilan mosligini va revoke qilinmaganini tekshiradi. */

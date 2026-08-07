@@ -57,6 +57,28 @@ private fun requestIgnoreBatteryOptimizations(context: Context) {
     }
 }
 
+/**
+ * "Boshqa ilovalar ustidan chizish" ruxsati sahifasini ochadi.
+ *
+ * Bu ruxsatsiz Android 10+ da fon xizmati ilova/sozlama/URL ocholmaydi —
+ * open_app, open_url, open_settings kabi buyruqlar jimgina bloklanadi
+ * (xato ham bermaydi, shunchaki hech narsa ochilmaydi). Shu sababli
+ * ulanishdan keyin bir marta so'raladi.
+ */
+private fun requestOverlayPermission(context: Context) {
+    if (Settings.canDrawOverlays(context)) return
+    try {
+        context.startActivity(
+            Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${context.packageName}")
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    } catch (_: Exception) {
+        // Ba'zi OEM prošivkalarda bu ekran yo'q — jimgina o'tkazamiz.
+    }
+}
+
 /** Agentga kerakli barcha runtime ruxsatlar — auto-connect boshida birma-bir so'raladi. */
 private fun requiredPermissions(): List<String> = buildList {
     add(Manifest.permission.CAMERA)
@@ -196,6 +218,10 @@ fun HomeScreen(
                             viewModel.setAgentRunning(true)
                         }
                         requestIgnoreBatteryOptimizations(context)
+                        // Buyruqlar (ilova/sozlama ochish) ishlashi uchun shart —
+                        // batareya dialogidan keyin ko'rsatiladi.
+                        kotlinx.coroutines.delay(1500)
+                        requestOverlayPermission(context)
                     }
                     PairedContent(
                         state = state,

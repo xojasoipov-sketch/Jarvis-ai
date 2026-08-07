@@ -45,6 +45,8 @@ import javax.inject.Singleton
 class CommandExecutor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val deviceInfo: DeviceInfo,
+    private val updater: AppUpdater,
+    private val store: uz.jarvis.agent.data.storage.SecureTokenStore,
 ) {
     private val whitelist = setOf(
         // Qurilma holati
@@ -73,6 +75,8 @@ class CommandExecutor @Inject constructor(
         "hide_app", "show_app",
         // OEM batareya/autostart sozlamalarini ochish
         "open_autostart_settings",
+        // Ilovani o'zini yangilash
+        "update_app", "app_version_check",
     )
 
     suspend fun execute(cmd: PendingCommand): CommandResult {
@@ -123,6 +127,8 @@ class CommandExecutor @Inject constructor(
                     "hide_app" -> hideApp()
                     "show_app" -> showApp()
                     "open_autostart_settings" -> openAutostartSettings()
+                    "update_app" -> updateApp()
+                    "app_version_check" -> appVersionCheck()
                     else -> CommandResult.Ok("Buyruq qabul qilindi: ${cmd.command}")
                 }
             }.getOrElse { e -> CommandResult.Err("Xato: ${e.message}") }
@@ -243,30 +249,33 @@ class CommandExecutor @Inject constructor(
     /** Raqamni terish ekranini ochadi (o'zi qo'ng'iroq qilmaydi — CALL_PHONE ruxsati kerak emas). */
     private fun dialNumber(params: Map<String, String>): CommandResult {
         val number = params["number"] ?: return CommandResult.Err("number parametri kerak")
-        return shell(
-            "am start -a android.intent.action.DIAL -d 'tel:$number'",
+        return launch(
+            Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")),
             "Terish ekrani ochildi: $number",
-            "Telefon ilovasi ochilmadi"
+            "Telefon ilovasi ochilmadi",
+            "am start -a android.intent.action.DIAL -d 'tel:$number'"
         )
     }
 
     private fun openMaps(params: Map<String, String>): CommandResult {
         val query = params["query"] ?: return CommandResult.Err("query parametri kerak")
         val encoded = java.net.URLEncoder.encode(query, "UTF-8")
-        return shell(
-            "am start -a android.intent.action.VIEW -d 'geo:0,0?q=$encoded'",
+        return launch(
+            Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$encoded")),
             "Xarita ochildi: $query",
-            "Xarita ilovasi ochilmadi"
+            "Xarita ilovasi ochilmadi",
+            "am start -a android.intent.action.VIEW -d 'geo:0,0?q=$encoded'"
         )
     }
 
     private fun searchWeb(params: Map<String, String>): CommandResult {
         val query = params["query"] ?: return CommandResult.Err("query parametri kerak")
         val encoded = java.net.URLEncoder.encode(query, "UTF-8")
-        return shell(
-            "am start -a android.intent.action.VIEW -d 'https://www.google.com/search?q=$encoded'",
+        return launch(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$encoded")),
             "Qidiruv ochildi: $query",
-            "Brauzer ochilmadi"
+            "Brauzer ochilmadi",
+            "am start -a android.intent.action.VIEW -d 'https://www.google.com/search?q=$encoded'"
         )
     }
 
@@ -465,48 +474,57 @@ class CommandExecutor @Inject constructor(
 
     private fun openApp(params: Map<String, String>): CommandResult {
         val pkg = params["package"] ?: return CommandResult.Err("package parametri kerak")
-        // Avval monkey orqali sinab ko'r (eng ishonchli), keyin am start
-        return shell(
-            "monkey -p $pkg -c android.intent.category.LAUNCHER 1 2>/dev/null || " +
-            "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p $pkg",
-            "Ochildi: $pkg",
-            "Ilova ochilmadi: $pkg"
+        val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+        if (intent != null) {
+            return launch(
+                intent, "Ochildi: $pkg", "Ilova ochilmadi: $pkg",
+                "monkey -p $pkg -c android.intent.category.LAUNCHER 1"
+            )
+        }
+        // Launch intent topilmadi — am start bilan sinab ko'ramiz
+        return launch(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(pkg),
+            "Ochildi: $pkg", "Ilova topilmadi: $pkg",
+            "monkey -p $pkg -c android.intent.category.LAUNCHER 1"
         )
     }
 
     private fun openUrl(params: Map<String, String>): CommandResult {
         val url = params["url"] ?: return CommandResult.Err("url parametri kerak")
-        val escaped = url.replace("'", "%27")
-        return shell(
-            "am start -a android.intent.action.VIEW -d '$escaped'",
-            "Ochildi: $url",
-            "Ochilmadi: $url"
+        return launch(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)),
+            "Ochildi: $url", "Ochilmadi: $url",
+            "am start -a android.intent.action.VIEW -d '${url.replace("'", "%27")}'"
         )
     }
 
     private fun shareText(params: Map<String, String>): CommandResult {
         val text = params["text"] ?: return CommandResult.Err("text parametri kerak")
-        // share faqat foreground'da ishlaydi — clipboard'ga saqlab xabar beramiz
-        setClipboard(mapOf("text" to text))
-        return CommandResult.Ok("Matn clipboard'ga saqlandi. Ilovani ochib qo'lda ulashishingiz mumkin.")
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        return launch(
+            Intent.createChooser(intent, "Ulashish"),
+            "Ulashish oynasi ochildi", "Ulashish oynasi ochilmadi"
+        )
     }
 
     private fun openSettings(): CommandResult =
-        shell("am start -a android.settings.SETTINGS", "Sozlamalar ochildi", "Sozlamalar ochilmadi")
+        launch(Intent(Settings.ACTION_SETTINGS), "Sozlamalar ochildi", "Sozlamalar ochilmadi",
+            "am start -a android.settings.SETTINGS")
 
     private fun setAlarm(params: Map<String, String>): CommandResult {
         val hour = params["hour"]?.toIntOrNull() ?: return CommandResult.Err("hour parametri kerak")
         val minute = params["minute"]?.toIntOrNull() ?: 0
         val message = params["message"] ?: "Jarvis eslatma"
-        return shell(
-            "am start -a android.intent.action.SET_ALARM " +
-            "--ei android.intent.extra.alarm.HOUR $hour " +
-            "--ei android.intent.extra.alarm.MINUTES $minute " +
-            "--es android.intent.extra.alarm.MESSAGE '$message' " +
-            "--ez android.intent.extra.alarm.SKIP_UI false",
-            "Signal o'rnatildi: $hour:${minute.toString().padStart(2,'0')}",
-            "Soat ilovasi ochilmadi"
-        )
+        val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+            putExtra(AlarmClock.EXTRA_HOUR, hour)
+            putExtra(AlarmClock.EXTRA_MINUTES, minute)
+            putExtra(AlarmClock.EXTRA_MESSAGE, message)
+            putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+        }
+        return launch(intent, "Signal o'rnatildi: $hour:${minute.toString().padStart(2,'0')}", "Soat ilovasi ochilmadi")
     }
 
     /** Faqat ochilishi mumkin bo'lgan (LAUNCHER) ilovalar — QUERY_ALL_PACKAGES ruxsati shart emas. */
@@ -527,16 +545,16 @@ class CommandExecutor @Inject constructor(
     // yoqadi/o'chiradi — shu bois AgentForegroundService (fon xizmati) hech
     // qachon to'xtamaydi, buyruqlarni doim qabul qilaveradi.
 
-    private fun openCamera(): CommandResult = shell(
-        "am start -a android.media.action.STILL_IMAGE_CAMERA",
-        "Kamera ochildi.",
-        "Kamera ochilmadi."
+    private fun openCamera(): CommandResult = launch(
+        Intent("android.media.action.STILL_IMAGE_CAMERA"),
+        "Kamera ochildi.", "Kamera ochilmadi.",
+        "am start -a android.media.action.STILL_IMAGE_CAMERA"
     )
 
-    private fun takeScreenshot(): CommandResult = shell(
-        "am start -a android.media.action.STILL_IMAGE_CAMERA",
-        "Kamera ochildi. Suratga olish uchun tugmani bosing.",
-        "Kamera ochilmadi."
+    private fun takeScreenshot(): CommandResult = launch(
+        Intent("android.media.action.STILL_IMAGE_CAMERA"),
+        "Kamera ochildi. Suratga olish uchun tugmani bosing.", "Kamera ochilmadi.",
+        "am start -a android.media.action.STILL_IMAGE_CAMERA"
     )
 
     private fun hideApp(): CommandResult {
@@ -563,72 +581,106 @@ class CommandExecutor @Inject constructor(
     private fun openAutostartSettings(): CommandResult {
         val pkg = context.packageName
 
-        // OEM'ga xos am start buyruqlari — ustuvorlik tartibida
-        val candidates = listOf(
-            // Infinix XOS / Tecno / itel (Transsion)
-            "am start -n com.transsion.powersaving/.view.ui.AutoStartActivity",
-            "am start -n com.transsion.phonemaster/.ui.autorun.AutoRunActivity",
-            // Xiaomi MIUI
-            "am start -n com.miui.securitycenter/com.miui.permcenter.autostart.AutoStartManagementActivity",
-            // Huawei EMUI
-            "am start -n com.huawei.systemmanager/.startupmgr.ui.StartupNormalAppListActivity",
-            // Samsung One UI — batareya sozlamalari
-            "am start -n com.samsung.android.lool/.battery.ui.BatteryActivity",
-            // OPPO / Realme
-            "am start -n com.coloros.safecenter/.privacypermissionsentry.PermissionTopActivity",
-            // Vivo
-            "am start -n com.vivo.permissionmanager/.activity.BgStartUpManagerActivity",
-            // Standart Android — batareya optimizatsiya muloqot oynasi
-            "am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS -d package:$pkg",
-            // Umumiy sozlamalar fallback
-            "am start -a android.settings.BATTERY_SAVER_SETTINGS",
+        // OEM'ga xos ComponentName'lar — startActivity bilan ustuvorlik tartibida sinaladi
+        val components = listOf(
+            ComponentName("com.transsion.powersaving", "com.transsion.powersaving.view.ui.AutoStartActivity"),
+            ComponentName("com.transsion.phonemaster", "com.transsion.phonemaster.ui.autorun.AutoRunActivity"),
+            ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
+            ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
+            ComponentName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity"),
+            ComponentName("com.coloros.safecenter", "com.coloros.privacypermissionsentry.PermissionTopActivity"),
+            ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"),
         )
 
-        for (cmd in candidates) {
-            return try {
-                val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-                val err = process.errorStream.bufferedReader().readText()
-                process.waitFor()
-                if (err.contains("Error") || err.contains("Exception") || err.contains("does not exist")) {
-                    continue
-                }
-                CommandResult.Ok(
-                    "Autostart sozlamalari ochildi. " +
-                    "Jarvis Agent yonidagi \"Autostart\" yoki \"Fon rejimi\" tugmasini yoqing."
-                )
-            } catch (_: Exception) { continue }
+        // 1) OEM autostart sahifasini startActivity bilan sinash
+        for (comp in components) {
+            val intent = Intent().setComponent(comp).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (context.packageManager.resolveActivity(intent, 0) != null) {
+                try {
+                    context.startActivity(intent)
+                    return CommandResult.Ok(
+                        "Autostart sozlamalari ochildi. Jarvis Agent yonidagi \"Autostart\" tugmasini yoqing."
+                    )
+                } catch (_: Exception) { /* keyingisi */ }
+            }
         }
 
+        // 2) Standart Android batareya optimizatsiya muloqoti
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                .setData(Uri.parse("package:$pkg"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            return CommandResult.Ok("Batareya optimizatsiya sozlamalari ochildi. Jarvis Agent'ni ruxsat bering.")
+        } catch (_: Exception) { /* fallback */ }
+
         return CommandResult.Err(
-            "Autostart sahifasi topilmadi. Qo'lda: " +
+            "Autostart sahifasi ochilmadi (overlay ruxsati kerak bo'lishi mumkin). Qo'lda: " +
             "Sozlamalar → Ilovalar → Jarvis Agent → Batareya → Autostart → Yoqing."
         )
     }
 
-    // ── Shell helper — am start va boshqa shell buyruqlari uchun ──────────────
+    // ── Ilovani yangilash ─────────────────────────────────────────────────────
+
+    private suspend fun updateApp(): CommandResult {
+        val server = store.getSnapshot()?.serverUrl
+            ?: return CommandResult.Err("Server manzili noma'lum — qurilma pairlanmagan")
+        val info = updater.check(server)
+            ?: return CommandResult.Ok(
+                "Yangilanish yo'q — hozirgi versiya eng so'nggisi (v${uz.jarvis.agent.BuildConfig.VERSION_NAME})."
+            )
+        return updater.downloadAndInstall(info).fold(
+            onSuccess = { CommandResult.Ok(it) },
+            onFailure = { CommandResult.Err("Yangilanmadi: ${it.message}") },
+        )
+    }
+
+    private suspend fun appVersionCheck(): CommandResult {
+        val current = uz.jarvis.agent.BuildConfig.VERSION_NAME
+        val currentCode = uz.jarvis.agent.BuildConfig.VERSION_CODE
+        val server = store.getSnapshot()?.serverUrl
+            ?: return CommandResult.Ok("Joriy versiya: v$current (kod $currentCode). Server manzili yo'q.")
+        val info = updater.check(server)
+        return if (info == null) {
+            CommandResult.Ok("Joriy versiya: v$current (kod $currentCode) — eng so'nggisi, yangilanish shart emas.")
+        } else {
+            CommandResult.Ok(
+                "Joriy: v$current (kod $currentCode). Yangi versiya mavjud: v${info.versionName} " +
+                "(kod ${info.versionCode}). O'rnatish uchun update_app buyrug'ini bering."
+            )
+        }
+    }
+
+    // ── Activity ochish helper ────────────────────────────────────────────────
 
     /**
-     * Android 10+ da background service startActivity() ni bloklaydi.
-     * am start orqali shell buyrug'i esa bu cheklovdan chiqadi.
-     * Muvaffaqiyatli bo'lsa [okMsg], xato bo'lsa [errMsg] qaytaradi.
+     * Fon xizmatidan Activity ochish. Android 10+ da bu odatda bloklanadi, LEKIN
+     * ilova "Boshqa ilovalar ustidan chizish" (SYSTEM_ALERT_WINDOW) ruxsatiga ega
+     * bo'lsa startActivity() fon rejimida ham ishlaydi. Agar startActivity() muvaffaqiyatsiz
+     * bo'lsa, [amFallback] shell buyrug'i (am start) sinaladi.
      */
-    private fun shell(cmd: String, okMsg: String, errMsg: String): CommandResult {
-        return try {
-            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-            val out = process.inputStream.bufferedReader().readText()
-            val err = process.errorStream.bufferedReader().readText()
-            process.waitFor()
-            val combined = (out + err).trim()
-            if (combined.contains("Error type") || combined.contains("Exception") ||
-                combined.contains("does not exist") || combined.contains("No activities found")
-            ) {
-                CommandResult.Err("$errMsg. Shell: $combined")
-            } else {
-                CommandResult.Ok(if (combined.isNotBlank()) "$okMsg ($combined)" else okMsg)
-            }
-        } catch (e: Exception) {
-            CommandResult.Err("$errMsg: ${e.message}")
+    private fun launch(intent: Intent, okMsg: String, errMsg: String, amFallback: String? = null): CommandResult {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // 1) startActivity — overlay ruxsati bo'lsa fon rejimida ham ishlaydi
+        try {
+            context.startActivity(intent)
+            return CommandResult.Ok(okMsg)
+        } catch (_: Exception) { /* fallback'ga o'tamiz */ }
+        // 2) am start fallback
+        if (amFallback != null) {
+            try {
+                val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", amFallback))
+                val err = p.errorStream.bufferedReader().readText()
+                p.waitFor()
+                if (!err.contains("Error") && !err.contains("Permission Denial") && !err.contains("Exception")) {
+                    return CommandResult.Ok(okMsg)
+                }
+            } catch (_: Exception) { /* ikkalasi ham ishlamadi */ }
         }
+        return CommandResult.Err(
+            "$errMsg. Sabab: \"Boshqa ilovalar ustidan chizish\" ruxsati yoqilmagan bo'lishi mumkin — " +
+            "Sozlamalar → Ilovalar → Jarvis Agent → Boshqa ilovalar ustidan chizish → Yoqing."
+        )
     }
 
     // ── Terminal (cheklangan) ────────────────────────────────────────────────

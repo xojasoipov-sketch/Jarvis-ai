@@ -17,6 +17,9 @@ data class AutoPairRequest(
     @SerialName("model") val model: String,
     @SerialName("os_version") val osVersion: String,
     @SerialName("app_version") val appVersion: String,
+    // Barqaror qurilma ID'si — server shu bo'yicha mavjud yozuvni qayta ishlatadi
+    // (busiz har ulanishda dublikat qurilma yaratilardi).
+    @SerialName("hardware_id") val hardwareId: String,
 )
 
 @Serializable

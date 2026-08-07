@@ -28,6 +28,8 @@ const ALLOWED_ACTIONS = new Set([
   "hide_app", "show_app",
   // OEM batareya/autostart sozlamalarini ochish
   "open_autostart_settings",
+  // Ilovani o'zini yangilash
+  "update_app", "app_version_check",
 ]);
 
 // POST /api/devices/command — Dashboarddan qurilmaga buyruq yuborish (Jarvis Dashboard "Send command")

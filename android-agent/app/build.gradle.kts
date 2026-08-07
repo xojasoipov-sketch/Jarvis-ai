@@ -15,8 +15,11 @@ android {
         applicationId = "uz.jarvis.agent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI har buildda o'suvchi raqam beradi (GitHub run number) — avtomatik
+        // yangilanish shu raqamni solishtirib yangi versiyani aniqlaydi.
+        val ciVersion = (System.getenv("JARVIS_VERSION_CODE") ?: "1").toInt()
+        versionCode = ciVersion
+        versionName = "1.0.$ciVersion"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

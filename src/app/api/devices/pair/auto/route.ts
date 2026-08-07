@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPendingDevice, confirmDevice, queueCommand, listCommandHistory, type Platform } from "@/lib/device-store";
+import {
+  createPendingDevice, confirmDevice, queueCommand, listCommandHistory,
+  findDeviceByHardwareId, setHardwareId, type Platform,
+} from "@/lib/device-store";
 import { createDeviceToken, verifyAutoPairKey, autoPairConfigured } from "@/lib/device-auth";
 import { log } from "@/lib/logger";
 import { sendMessage } from "@/lib/telegram";
@@ -65,9 +68,12 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { name, platform, model, os_version, app_version } = body;
+  const { name, platform, model, os_version, app_version, hardware_id } = body;
 
-  const deviceId = await createPendingDevice();
+  // Ayni telefon oldin ulangan bo'lsa — YANGI qurilma yaratmaymiz, mavjudini
+  // qayta ishlatamiz. Busiz har ulanishda dashboard'da dublikat paydo bo'lardi.
+  const existing = hardware_id ? await findDeviceByHardwareId(String(hardware_id)) : null;
+  const deviceId = existing?.id ?? (await createPendingDevice());
   const deviceToken = await createDeviceToken(deviceId);
   const validPlatforms: Platform[] = ["android", "ios", "windows", "macos", "linux"];
   const osInfo = [model, os_version, app_version ? `app ${app_version}` : null].filter(Boolean).join(" / ");
@@ -84,7 +90,9 @@ export async function POST(req: NextRequest) {
 
   if (!device) return NextResponse.json({ error: "Qurilma yaratilmadi" }, { status: 500 });
 
-  log("info", "devices", `Auto-pair: ${device.name} (${deviceId})`);
+  if (hardware_id) await setHardwareId(deviceId, String(hardware_id));
+
+  log("info", "devices", `Auto-pair: ${device.name} (${deviceId})${existing ? " [mavjud qurilma qayta ishlatildi]" : " [yangi]"}`);
   notifyOwnerWhenReady(deviceId, device.name, osInfo);
   return NextResponse.json({ ok: true, device_id: deviceId, device_token: deviceToken, name: device.name, device });
 }
