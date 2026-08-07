@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProviders, type Provider } from "@/lib/providers";
+import { getProviders } from "@/lib/providers";
 import { log } from "@/lib/logger";
 import { ENV, envAny } from "@/lib/env";
+import { runToolLoop as sharedRunToolLoop, DEVICE_CONTROL_RULES, type ChatMessage as SharedChatMessage } from "@/lib/agentLoop";
 
 export const maxDuration = 60;
 
@@ -16,15 +17,11 @@ MUHIM QOIDALAR (buzsiz bajariladigan):
 6. Sen kuchli, mustaqil, proaktiv yordamchisan. Har doim biror narsa taklif qil yoki amalga oshir.
 
 USLUB: Jarvis kabi — qisqa, ishonchli, samarali. "Albatta", "Keling", "Mumkin" kabi so'zlar yo'q.
-Faqat haqiqiy tool va ulanishlardan foydalan.`;
+Faqat haqiqiy tool va ulanishlardan foydalan.
+${DEVICE_CONTROL_RULES}`;
 
 
-type ChatMessage = {
-  role: string;
-  content: string | null;
-  tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string } }[];
-  tool_call_id?: string;
-};
+type ChatMessage = SharedChatMessage;
 
 /** Inventory — hech qanday circular import yo'q */
 function buildInventoryReport(): string {
@@ -128,50 +125,9 @@ function textStream(text: string): Response {
   );
 }
 
-async function runToolLoop(provider: Provider, messages: ChatMessage[]): Promise<string> {
-  // Lazy import — circular dependency oldini olish
-  const { toolsAsOpenAIFunctionsAll, runAnyTool } = await import("@/lib/mcp-tools");
-  const tools = toolsAsOpenAIFunctionsAll();
-  const convo = [...messages];
-  for (let round = 0; round < 6; round++) {
-    const res = await fetch(provider.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${provider.key}`,
-        ...(provider.headers || {}),
-      },
-      body: JSON.stringify({
-        model: provider.model,
-        messages: convo,
-        tools,
-        tool_choice: "auto",
-        stream: false,
-      }),
-      signal: AbortSignal.timeout(35000),
-    });
-    if (!res.ok) throw new Error(`Provider ${res.status}`);
-    const data = await res.json();
-    const msg = data.choices?.[0]?.message;
-    if (!msg) throw new Error("Bo'sh javob");
-    if (!msg.tool_calls?.length) return msg.content || "";
-    convo.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
-    for (const call of msg.tool_calls) {
-      let result: unknown;
-      try {
-        result = await runAnyTool(call.function.name, JSON.parse(call.function.arguments || "{}"));
-      } catch (err) {
-        result = { error: (err as Error).message };
-      }
-      convo.push({
-        role: "tool",
-        tool_call_id: call.id,
-        content: JSON.stringify(result).slice(0, 10000),
-      });
-    }
-  }
-  return "Tool limit.";
-}
+// runToolLoop endi src/lib/agentLoop.ts'da — chat va ovoz (/api/voice) bir xil
+// AI+tool ziljasidan foydalanadi, shu jumladan qurilma boshqaruvi.
+const runToolLoop = sharedRunToolLoop;
 
 export async function POST(req: NextRequest) {
   const start = Date.now();

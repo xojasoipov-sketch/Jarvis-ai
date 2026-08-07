@@ -11,7 +11,7 @@ import {
   addTransaction, setBudget, budgetStatus, createGoal, contributeToGoal,
   addSubscription, addDebt, financeSummary,
 } from "@/lib/finance-store";
-import { queueCommand, listDevices } from "@/lib/device-store";
+import { queueCommand, listDevices, listCommandHistory } from "@/lib/device-store";
 import { AGENTS, callAI, type AgentId } from "@/lib/agents";
 import { runOrchestrator } from "@/lib/orchestrator";
 
@@ -863,17 +863,57 @@ export const BUILTIN_TOOLS: ToolDef[] = [
   },
   {
     name: "device_command",
-    description: "Ulangan qurilmaga buyruq yuborish (battery_status, get_location, take_screenshot, send_notification, vibrate, open_camera, get_files, download_file, terminal_command)",
+    description:
+      "Pairlangan telefonga (Jarvis Agent ilovasi) buyruq yuboradi va natijani kutib qaytaradi (5 soniyagacha). " +
+      "action — device_status/battery_status/storage_status/ram_status/network_status/screen_info: holat so'rash. " +
+      "get_location: joylashuv. dial_number(payload.number): terish ekranini ochish. " +
+      "open_maps(payload.query)/search_web(payload.query): xarita/qidiruv ochish. " +
+      "send_notification(payload.title,message): bildirishnoma. vibrate(payload.duration_ms): tebranish. " +
+      "toggle_flashlight(payload.on): fonarcha. set_volume(payload.percent)/get_volume: tovush. " +
+      "get_files(payload.path)/get_file_info(payload.path)/read_text_file(payload.path): fayl bilan ishlash. " +
+      "write_text_file(payload.path,content)/delete_file(payload.path)/create_folder(payload.path): fayl yozish/o'chirish/yaratish. " +
+      "rename_file(payload.from,to)/copy_file(payload.from,to)/download_file(payload.url,filename): fayl ko'chirish. " +
+      "get_clipboard/set_clipboard(payload.text): bufer. " +
+      "open_app(payload.package)/open_url(payload.url)/share_text(payload.text)/open_settings: ilovalar. " +
+      "set_alarm(payload.hour,minute,message): signal qo'yish. list_installed_apps: o'rnatilgan ilovalar. " +
+      "terminal_command(payload.cmd): tayyor action mos kelmasa, ilova ega bo'lgan ruxsatlar doirasida " +
+      "erkin shell buyruq yozib bajarish uchun — faqat qaytarib bo'lmas/xavfli ish bo'lmasa ishlat.",
     parameters: {
       type: "object",
       properties: {
-        device_id: { type: "string" },
-        action: { type: "string", enum: ["device_status", "battery_status", "get_location", "take_screenshot", "send_notification", "vibrate", "open_camera", "get_files", "upload_file", "download_file", "terminal_command"] },
-        payload: { type: "object" },
+        device_id: { type: "string", description: "device_list orqali olingan qurilma ID'si" },
+        action: {
+          type: "string",
+          enum: [
+            "device_status", "battery_status", "storage_status", "ram_status", "network_status",
+            "screen_info", "app_version_info", "get_location", "dial_number", "open_maps", "search_web",
+            "send_notification", "vibrate", "toggle_flashlight", "set_volume", "get_volume",
+            "get_files", "get_file_info", "read_text_file", "write_text_file", "delete_file",
+            "create_folder", "rename_file", "copy_file", "download_file", "get_clipboard",
+            "set_clipboard", "open_app", "open_url", "share_text", "open_settings", "set_alarm",
+            "list_installed_apps", "open_camera", "take_screenshot", "terminal_command",
+          ],
+        },
+        payload: { type: "object", description: "action'ga mos parametrlar, masalan {\"number\":\"+998...\"}" },
       },
       required: ["device_id", "action"],
     },
-    run: async (args) => queueCommand(String(args.device_id), String(args.action), (args.payload as Record<string, unknown>) || {}),
+    run: async (args) => {
+      const deviceId = String(args.device_id);
+      const cmd = await queueCommand(deviceId, String(args.action), (args.payload as Record<string, unknown>) || {});
+      // Qurilma har ~1s so'rab turadi — natija kelguncha qisqa kutamiz, shunda AI
+      // "yuborildi" demasdan HAQIQIY natijani (masalan batareya foizi) ayta oladi.
+      const deadline = Date.now() + 5000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 500));
+        const history = await listCommandHistory(deviceId, 5);
+        const found = history.find((c) => c.id === cmd.id);
+        if (found && (found.status === "done" || found.status === "error")) {
+          return { command_id: cmd.id, status: found.status, result: found.result };
+        }
+      }
+      return { command_id: cmd.id, status: "pending", note: "Qurilma hali javob bermadi — offline yoki fon xizmati ishlamayotgan bo'lishi mumkin." };
+    },
   },
 
   // ─── AI Agents / Orchestration ─────────────────────────────────────────────

@@ -16,7 +16,7 @@ export async function runToolLoop(provider: Provider, messages: ChatMessage[]): 
   const tools = toolsAsOpenAIFunctions();
   const convo = [...messages];
 
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 8; i++) {
     const res = await fetch(provider.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.key}` },

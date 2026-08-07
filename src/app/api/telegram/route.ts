@@ -9,6 +9,7 @@ import { loadSession, getSession, updateSession, addToHistory, clearHistory } fr
 import { classifyFast, normalizeUzbek } from "@/lib/fatosat";
 import { getProviders } from "@/lib/providers";
 import { runToolLoop, type ChatMessage } from "@/lib/toolloop";
+import { DEVICE_CONTROL_RULES } from "@/lib/agentLoop";
 import { log } from "@/lib/logger";
 import { portfolioTelegramSummary, guestStartText, SADIPRIME } from "@/lib/sadiprime";
 import { isOwnerTelegram, checkGuestTelegramLimit, consumeGuestTelegram, OWNER } from "@/lib/owner";
@@ -20,7 +21,8 @@ QOIDALAR (buzsiz):
 - Buyruq kelsa → darhol bajar. Noaniq bo'lsa → eng mantiqiy talqin qil.
 - Tool kerak bo'lsa → CHAQIR, so'rama: get_business_overview, list_services, create_task, knowledge_search, web_search va boshqalar.
 - Javob: qisqa, aniq, o'zbek tilida. Markdown yo'q — Telegram oddiy matn.
-- Jarvis uslubi: ishonchli, tez, konkret. "Bajarildi." "Tayyor." "Topildi:"`;
+- Jarvis uslubi: ishonchli, tez, konkret. "Bajarildi." "Tayyor." "Topildi:"
+${DEVICE_CONTROL_RULES}`;
 
 
 // RAILWAY_STATIC_URL always reflects the real deployed domain — prioritize it

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProviders } from "@/lib/providers";
 import { ownerSystemBlock, OWNER } from "@/lib/owner";
-import { parseDeviceIntent } from "@/lib/device-commands";
+import { runToolLoopWithFallback, DEVICE_CONTROL_RULES } from "@/lib/agentLoop";
+import { log } from "@/lib/logger";
 
 // Lazy getters — always read env vars at call time (no stale module-level cache)
 const getElevenLabsKey = () => process.env.ELEVENLABS_API_KEY || "";
@@ -128,27 +129,27 @@ async function tryGemini(audioBuffer: Buffer, mimeType: string): Promise<{ trans
   return null;
 }
 
+/**
+ * Ovozli buyruqni to'liq AI+tool sikliga yuboradi — chat va Telegram matn bilan
+ * bir xil miya, shu jumladan device_list/device_command (haqiqiy pari_devices
+ * tizimi). Shu tufayli "Infinix'da fonarni yoq" kabi erkin gap ham to'g'ri
+ * qurilmani topib, to'g'ri buyruqni bajaradi — qattiq regex shart emas.
+ */
 async function askPariText(transcript: string): Promise<string> {
-  const providers = getProviders();
-  const messages = [
-    { role: "system", content: PARI_SYSTEM },
-    { role: "user", content: transcript },
-  ];
-  for (const p of providers) {
-    try {
-      const res = await fetch(p.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}`, ...(p.headers || {}) },
-        body: JSON.stringify({ model: p.model, messages, stream: false }),
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const text = data.choices?.[0]?.message?.content || "";
-      if (text.trim()) return text.trim();
-    } catch { continue; }
+  const providers = getProviders().filter((p) => p.supportsTools && p.key !== "dummy");
+  if (!providers.length) return "Kechirasiz, tool bilan ishlaydigan AI sozlanmagan.";
+  try {
+    return await runToolLoopWithFallback(
+      providers,
+      [
+        { role: "system", content: PARI_SYSTEM + "\n" + DEVICE_CONTROL_RULES },
+        { role: "user", content: transcript },
+      ],
+      (name, err) => log("warn", "voice-api", `tool-loop fail ${name}: ${String(err)}`)
+    );
+  } catch {
+    return "Kechirasiz, tushunmadim.";
   }
-  return "Kechirasiz, tushunmadim.";
 }
 
 export async function POST(req: NextRequest) {
@@ -173,48 +174,10 @@ export async function POST(req: NextRequest) {
       transcript = await transcribeElevenLabs(buf, mimeType);
     }
 
-    // 3. If we have a transcript, check for device commands first
+    // 3. Transcript bo'lsa — to'liq AI+tool sikliga yuboramiz (qurilma buyruqlari
+    // ham shu yerda, tool sifatida, haqiqiy natija bilan bajariladi).
     if (transcript && transcript.trim().length > 1) {
       const clean = transcript.trim();
-      const intent = parseDeviceIntent(clean);
-
-      if (intent) {
-        // Forward to device API and get acknowledgement
-        try {
-          const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-          if (intent.type === "phone") {
-            // Find first online phone device
-            const devRes = await fetch(`${base}/api/phones`);
-            const devData = await devRes.json() as { devices?: { id: string; status: string }[] };
-            const phone = devData.devices?.find(d => d.status === "online");
-            if (phone) {
-              await fetch(`${base}/api/phones?action=cmd`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ device_id: phone.id, action: intent.action, payload: intent.payload }),
-              });
-              const reply = `Telefonga ${intent.action} buyrug'i yuborildi.`;
-              return NextResponse.json({ transcript: clean, reply, device_action: intent });
-            }
-          } else if (intent.type === "computer") {
-            const devRes = await fetch(`${base}/api/computer?action=devices`);
-            const devData = await devRes.json() as { computers?: { id: string; status: string }[] };
-            const pc = devData.computers?.find(d => d.status === "online");
-            if (pc) {
-              await fetch(`${base}/api/computer`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ device_id: pc.id, action: intent.action, payload: intent.payload }),
-              });
-              const reply = `Kompyuterga ${intent.action} buyrug'i yuborildi.`;
-              return NextResponse.json({ transcript: clean, reply, device_action: intent });
-            }
-          }
-        } catch {
-          // Device routing failed — fall through to AI reply
-        }
-      }
-
       const reply = await askPariText(clean);
       return NextResponse.json({ transcript: clean, reply });
     }

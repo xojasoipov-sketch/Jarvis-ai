@@ -2,11 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { queueCommand, listCommandHistory } from "@/lib/device-store";
 import { log } from "@/lib/logger";
 
-// Spetsifikatsiyada qo'llab-quvvatlanadigan buyruqlar ro'yxati
+// Ruxsat etilgan buyruqlar — android-agent/CommandExecutor.kt'dagi whitelist bilan bir xil
+// bo'lishi shart. Yangi buyruq qo'shsangiz ikkalasiga ham qo'shing.
 const ALLOWED_ACTIONS = new Set([
-  "device_status", "battery_status", "get_location", "take_screenshot",
-  "send_notification", "vibrate", "open_camera", "get_files",
-  "upload_file", "download_file", "terminal_command",
+  // Qurilma holati
+  "device_status", "battery_status", "storage_status", "ram_status",
+  "network_status", "screen_info", "app_version_info",
+  // Joylashuv va aloqa
+  "get_location", "dial_number", "open_maps", "search_web",
+  // Bildirishnoma / signal
+  "send_notification", "vibrate", "toggle_flashlight",
+  // Ovoz
+  "set_volume", "get_volume",
+  // Fayllar
+  "get_files", "get_file_info", "read_text_file", "write_text_file",
+  "delete_file", "create_folder", "rename_file", "copy_file", "download_file",
+  // Buferga almashish
+  "get_clipboard", "set_clipboard", "clipboard_sync",
+  // Ilovalar
+  "open_app", "open_url", "share_text", "open_settings", "set_alarm",
+  "list_installed_apps",
+  // Kamera / xotira / terminal
+  "open_camera", "take_screenshot", "terminal_command",
 ]);
 
 // POST /api/devices/command — Dashboarddan qurilmaga buyruq yuborish (Jarvis Dashboard "Send command")
