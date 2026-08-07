@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import uz.jarvis.agent.data.repository.AgentRepositoryImpl
+import uz.jarvis.agent.receiver.BootReceiver
 import uz.jarvis.agent.ui.MainActivity
 import uz.jarvis.agent.util.CommandExecutor
 import javax.inject.Inject
@@ -144,8 +145,12 @@ class AgentForegroundService : Service() {
      * orqali xizmatni bir necha soniyadan keyin majburan qayta ishga tushiramiz.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val restartIntent = Intent(applicationContext, AgentForegroundService::class.java)
-        val pendingIntent = PendingIntent.getService(
+        // getService() emas, getBroadcast() — jarayon butunlay o'ldirilgandan keyin ham
+        // ishonchli ishlaydigan yagona usul (BootReceiver o'zi startForegroundService
+        // chaqiradi, bu BroadcastReceiver kontekstida cheklovsiz ruxsat etilgan).
+        val restartIntent = Intent(applicationContext, BootReceiver::class.java)
+            .setAction(BootReceiver.ACTION_RESTART_AGENT)
+        val pendingIntent = PendingIntent.getBroadcast(
             applicationContext, 2, restartIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
