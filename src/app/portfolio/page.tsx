@@ -3,94 +3,54 @@
 import { useState, type FormEvent } from "react";
 import { motion, type Variants } from "framer-motion";
 import {
-  Globe, Smartphone, Brain, Zap, Database, Megaphone,
-  ArrowRight, Menu, X, Mail, MapPin, Phone as PhoneIcon, Send,
-  Code2, Server, Palette, GitBranch, Bot,
+  Globe, Send, Sparkles, Settings2, TrendingUp,
+  ArrowRight, ArrowUpRight, Menu, X, Mail, MapPin,
+  Play, ChevronLeft, ChevronRight, Plus,
   Search, ClipboardCheck, Rocket, Headphones,
-  ShoppingCart, BarChart3, ChevronRight, ExternalLink,
+  Folder, Users, Award, Camera,
   type LucideIcon,
 } from "lucide-react";
+import { SADIPRIME, SERVICES as SERVICES_RAW, STATS } from "@/lib/sadiprime";
 
 /* ═══════════════════════════════════════════════════════════════
-   DATA
+   THEME — dark + gold, matching the reference design 1:1
    ═══════════════════════════════════════════════════════════════ */
 
-const R = "#e84040";
+const GOLD = "#d9a95c";
+const BG = "#0a0a0d";
+const PANEL = "#111116";
+const BORDER = "rgba(255,255,255,0.08)";
 
 const NAV = [
   { label: "Bosh sahifa", href: "#hero" },
   { label: "Xizmatlar", href: "#services" },
   { label: "Portfolio", href: "#projects" },
   { label: "Jarayon", href: "#process" },
-  { label: "Texnologiyalar", href: "#tech" },
+  { label: "Narxlar", href: "#narxlar" },
+  { label: "Blog", href: "#blog" },
+  { label: "Biz haqimizda", href: "#about" },
 ];
 
-const SERVICES: { icon: LucideIcon; title: string; desc: string }[] = [
-  { icon: Globe, title: "Veb-saytlar", desc: "Zamonaviy va responsive veb-saytlar yaratamiz" },
-  { icon: Smartphone, title: "Telegram Mini App", desc: "Telegram ichida ishlaydigan kuchli mini ilovalar" },
-  { icon: Brain, title: "AI Yechimlar", desc: "AI agentlar, chatbotlar va avtomatlashgan tizimlar" },
-  { icon: Zap, title: "Avtomatlashtirish", desc: "Biznes jarayonlarini tamomila avtomatlashtirish" },
-  { icon: Database, title: "CRM & ERP", desc: "Maxsus CRM, ERP tizimlar orqali biznesni boshqarish" },
-  { icon: Megaphone, title: "Marketing", desc: "SMM, Target, SEO va boshqa marketing xizmatlari" },
-];
+const SERVICE_ICONS: LucideIcon[] = [Globe, Send, Sparkles, Settings2, TrendingUp];
+const SERVICE_ORDER = ["Veb-saytlar", "Telegram Mini App", "AI Yechimlar", "Avtomatlashtirish", "Marketing"];
+const SERVICES = SERVICE_ORDER.map((title, i) => ({
+  ...SERVICES_RAW.find((s) => s.title === title)!,
+  Icon: SERVICE_ICONS[i],
+}));
 
 interface Project {
   title: string;
-  type: string;
-  desc: string;
-  features: string[];
-  tech: string[];
+  tag: string;
   gradient: string;
-  icon: LucideIcon;
 }
-
 const PROJECTS: Project[] = [
-  {
-    title: "DLI Shop",
-    type: "Telegram Mini App",
-    desc: "Premium Telegram Mini App elektron tijorat platformasi",
-    features: ["Mahsulot katalogi", "Admin Panel", "Buyurtma boshqaruvi", "To'lov integratsiyasi", "Telegram Login", "Responsive interfeys"],
-    tech: ["TypeScript", "React", "Telegram Mini Apps SDK", "Supabase", "Vercel"],
-    gradient: "from-orange-400 to-red-500",
-    icon: ShoppingCart,
-  },
-  {
-    title: "TG SMM AI",
-    type: "AI Platforma",
-    desc: "Telegram ichida ishlovchi AI SMM yordamchisi",
-    features: ["AI Content Generator", "Post va Reels g'oyalari", "Kontent kalendari", "Marketing yordamchisi", "Telegram integratsiyasi"],
-    tech: ["Next.js", "AI Models", "Telegram API", "Supabase"],
-    gradient: "from-violet-500 to-purple-600",
-    icon: BarChart3,
-  },
-  {
-    title: "Pari AI",
-    type: "AI Assistant",
-    desc: "Premium AI Assistant — suhbat, topshiriqlar va avtomatlashtirish",
-    features: ["Voice Assistant", "AI Chat", "Obsidian Graph UI", "Premium animatsiyalar", "Zamonaviy UI/UX"],
-    tech: ["Next.js", "Multi-model AI", "Supabase", "Railway"],
-    gradient: "from-indigo-500 to-blue-600",
-    icon: Bot,
-  },
-  {
-    title: "Premium Service Website",
-    type: "Veb-sayt",
-    desc: "Xizmatlarni taqdim etuvchi zamonaviy landing va portfolio sayti",
-    features: ["Responsive dizayn", "Premium animatsiyalar", "Portfolio sahifalari", "Buyurtma tizimi", "Zamonaviy UI"],
-    tech: ["Next.js", "Tailwind CSS", "Vercel", "React"],
-    gradient: "from-emerald-400 to-teal-500",
-    icon: Globe,
-  },
+  { title: "DLI SHOP", tag: "Telegram Mini App", gradient: "linear-gradient(150deg,#1a1410 0%,#3a2410 55%,#1a1410 100%)" },
+  { title: "SADIPRIME AI", tag: "AI Platforma", gradient: "linear-gradient(150deg,#0b1220 0%,#12233d 55%,#0b1220 100%)" },
+  { title: "Real Estate Platform", tag: "Veb-sayt", gradient: "linear-gradient(150deg,#171512 0%,#3a3226 55%,#171512 100%)" },
+  { title: "CRM Boshqaruv", tag: "Tizim", gradient: "linear-gradient(150deg,#0c1013 0%,#1a2a2e 55%,#0c1013 100%)" },
 ];
 
-const SKILLS: Record<string, { icon: LucideIcon; items: string[] }> = {
-  Frontend: { icon: Code2, items: ["HTML5", "CSS3", "JavaScript", "TypeScript", "React", "Next.js", "Tailwind CSS", "Responsive Design"] },
-  Backend: { icon: Server, items: ["API Integration", "Authentication", "Database Integration", "Supabase", "PostgreSQL", "Railway"] },
-  AI: { icon: Brain, items: ["OpenAI API", "Anthropic", "Gemini", "Groq", "Prompt Engineering", "AI Automation", "LLM Integrations"] },
-  Telegram: { icon: Send, items: ["Telegram Bot API", "Telegram Mini Apps", "Telegram WebApp", "Bot Development"] },
-  DevOps: { icon: GitBranch, items: ["Git", "GitHub", "Vercel", "Railway", "Deployment", "CI/CD"] },
-  Dizayn: { icon: Palette, items: ["Figma", "UI/UX Design", "Premium Interface Design", "Design Systems", "Branding"] },
-};
+const STAT_ICONS: LucideIcon[] = [Folder, Users, Award, TrendingUp, Headphones];
 
 const STEPS = [
   { n: "01", title: "Tahlil", desc: "Sizning biznesingizni o'rganamiz va analiz qilamiz", icon: Search },
@@ -107,11 +67,23 @@ const fadeUp: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } },
 };
-
 const stagger: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.07 } },
 };
+
+/* ═══════════════════════════════════════════════════════════════
+   LOGO MARK
+   ═══════════════════════════════════════════════════════════════ */
+
+function LogoMark({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2 L22 12 L12 22 L2 12 Z" stroke={GOLD} strokeWidth="1.4" fill="none" />
+      <path d="M12 7 L17 12 L12 17 L7 12 Z" stroke={GOLD} strokeWidth="1.4" fill="none" />
+    </svg>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════════
    NAVBAR
@@ -120,37 +92,46 @@ const stagger: Variants = {
 function Navbar() {
   const [open, setOpen] = useState(false);
   return (
-    <nav className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+    <nav className="fixed top-0 inset-x-0 z-50" style={{ background: "rgba(10,10,13,0.85)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${BORDER}` }}>
       <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
         <a href="#hero" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: R }}>
-            <span className="text-white font-bold text-sm">S</span>
-          </div>
-          <span className="font-bold text-lg">
-            <span style={{ color: R }}>SADI</span>PRIME
+          <LogoMark />
+          <span className="font-semibold text-[15px] tracking-wide text-white">
+            <span style={{ color: GOLD }}>SADI</span>PRIME
           </span>
         </a>
-        <div className="hidden md:flex items-center gap-8">
-          {NAV.map((l) => (
-            <a key={l.href} href={l.href} className="text-sm text-gray-500 hover:text-gray-900 transition-colors">{l.label}</a>
+        <div className="hidden lg:flex items-center gap-7">
+          {NAV.map((l, i) => (
+            <a
+              key={l.href}
+              href={l.href}
+              className="text-[13px] transition-colors"
+              style={{ color: i === 0 ? GOLD : "rgba(255,255,255,0.55)" }}
+            >
+              {l.label}
+            </a>
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <a href="#contact" className="hidden sm:inline-flex items-center gap-2 text-white text-sm font-semibold px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity" style={{ background: R }}>
-            Bog{"'"}lanish <ArrowRight size={14} />
+          <a
+            href="#contact"
+            className="hidden sm:inline-flex items-center gap-2 text-[13px] font-semibold px-5 py-2.5 rounded-full transition-opacity hover:opacity-90"
+            style={{ background: GOLD, color: "#1a1408" }}
+          >
+            Buyurtma berish <ArrowRight size={14} />
           </a>
-          <button type="button" onClick={() => setOpen(!open)} className="md:hidden p-2 text-gray-700" aria-label="Menyu">
+          <button type="button" onClick={() => setOpen(!open)} className="lg:hidden p-2 text-white" aria-label="Menyu">
             {open ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
       </div>
       {open && (
-        <div className="md:hidden bg-white border-t border-gray-100 px-5 py-4 space-y-1">
+        <div className="lg:hidden px-5 py-4 space-y-1" style={{ background: BG, borderTop: `1px solid ${BORDER}` }}>
           {NAV.map((l) => (
-            <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="block py-3 text-gray-700 hover:text-gray-900">{l.label}</a>
+            <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="block py-3 text-white/70 hover:text-white">{l.label}</a>
           ))}
-          <a href="#contact" onClick={() => setOpen(false)} className="mt-3 flex items-center justify-center gap-2 text-white font-semibold px-5 py-3 rounded-full" style={{ background: R }}>
-            Bog{"'"}lanish <ArrowRight size={14} />
+          <a href="#contact" onClick={() => setOpen(false)} className="mt-3 flex items-center justify-center gap-2 font-semibold px-5 py-3 rounded-full" style={{ background: GOLD, color: "#1a1408" }}>
+            Buyurtma berish <ArrowRight size={14} />
           </a>
         </div>
       )}
@@ -162,48 +143,102 @@ function Navbar() {
    HERO
    ═══════════════════════════════════════════════════════════════ */
 
+function HeroVisual() {
+  return (
+    <div className="relative w-full aspect-square max-w-[420px] mx-auto">
+      {/* orbit ring */}
+      <div className="absolute inset-[6%] rounded-full" style={{ border: `1px solid rgba(217,169,92,0.18)` }} />
+      {/* small orbiting spheres */}
+      <div className="absolute rounded-full" style={{ width: 10, height: 10, top: "8%", left: "48%", background: "radial-gradient(circle at 35% 30%, #444, #111)" }} />
+      <div className="absolute rounded-full" style={{ width: 7, height: 7, bottom: "10%", right: "6%", background: "radial-gradient(circle at 35% 30%, #444, #111)" }} />
+      {/* rock cluster glow */}
+      <div className="absolute inset-[10%] rounded-[38%] blur-2xl opacity-70" style={{ background: `radial-gradient(circle at 55% 45%, ${GOLD}55, transparent 60%)` }} />
+      <div
+        className="absolute inset-[12%] rounded-[42%_38%_44%_36%/40%_44%_36%_42%]"
+        style={{
+          background: "linear-gradient(155deg, #26221f 0%, #17140f 45%, #0c0a08 100%)",
+          boxShadow: `inset 0 0 60px rgba(0,0,0,0.6), 0 0 80px ${GOLD}22`,
+        }}
+      >
+        {/* glowing cracks */}
+        <div className="absolute inset-0 rounded-[inherit] opacity-80" style={{
+          background: `radial-gradient(ellipse 60% 40% at 60% 55%, ${GOLD}66 0%, transparent 55%)`,
+        }} />
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" fill="none">
+          <path d="M20 55 L45 40 L55 60 L80 35" stroke={GOLD} strokeWidth="0.6" opacity="0.7" />
+          <path d="M30 70 L50 58 L48 80" stroke={GOLD} strokeWidth="0.5" opacity="0.5" />
+        </svg>
+      </div>
+      {/* gold triangle logo, centered */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <svg width="34%" height="34%" viewBox="0 0 100 100" fill="none">
+          <path d="M50 10 L88 75 L12 75 Z" stroke={GOLD} strokeWidth="2.5" fill="none" strokeLinejoin="round" />
+        </svg>
+      </div>
+      {/* floating "7+ Yillik tajriba" */}
+      <div className="absolute bottom-[6%] right-0 text-right">
+        <div className="text-3xl font-bold text-white leading-none">7+</div>
+        <div className="text-[11px] text-white/40 mt-1">Yillik tajriba</div>
+      </div>
+    </div>
+  );
+}
+
 function Hero() {
   return (
-    <section id="hero" className="pt-28 pb-16 md:pt-36 md:pb-24 relative overflow-hidden">
-      <div className="absolute top-20 right-0 w-[500px] h-[500px] rounded-full blur-[120px] -z-10" style={{ background: `${R}08` }} />
-      <div className="absolute bottom-0 left-0 w-[300px] h-[300px] rounded-full blur-[80px] -z-10" style={{ background: `${R}06` }} />
+    <section id="hero" className="pt-32 pb-16 md:pt-40 md:pb-20 relative overflow-hidden" style={{ background: BG }}>
+      {/* left-edge social rail */}
+      <div className="hidden lg:flex flex-col items-center gap-4 fixed left-6 top-1/2 -translate-y-1/2 z-40">
+        <a href="https://t.me/xojasoipov" target="_blank" rel="noopener noreferrer" className="text-white/40 hover:text-white transition-colors"><Send size={16} /></a>
+        <a href="#" className="text-white/40 hover:text-white transition-colors"><Camera size={16} /></a>
+        <span className="text-white/40 text-[11px] font-semibold">Be</span>
+        <div className="w-px h-16 bg-white/15" />
+      </div>
+
       <div className="max-w-6xl mx-auto px-5">
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <motion.div initial="hidden" animate="visible" variants={stagger}>
-            <motion.div variants={fadeUp} className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-6" style={{ background: `${R}0d`, color: R }}>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: R }} />
-              Raqamli yechimlar agentligi
+            <motion.div
+              variants={fadeUp}
+              className="inline-flex items-center gap-2 text-[11px] font-medium px-3 py-1.5 rounded-full mb-6 uppercase tracking-wider"
+              style={{ border: `1px solid ${BORDER}`, color: GOLD }}
+            >
+              SADIPRIME — raqamli yechimlar agentligi
             </motion.div>
-            <motion.h1 variants={fadeUp} className="text-4xl md:text-5xl lg:text-[3.4rem] font-bold leading-[1.1] tracking-tight mb-6">
-              Biz g{"'"}oyalarni <span style={{ color: R }}>raqamli muvaffaqiyatga</span> aylantiramiz
+            <motion.h1 variants={fadeUp} className="text-4xl md:text-5xl lg:text-[3.3rem] font-bold leading-[1.15] tracking-tight mb-6 text-white">
+              Biz g{"'"}oyalarni<br />
+              <span style={{ color: GOLD }}>raqamli muvaffaqiyatga</span><br />
+              aylantiramiz
             </motion.h1>
-            <motion.p variants={fadeUp} className="text-gray-500 text-lg leading-relaxed mb-8 max-w-lg">
+            <motion.p variants={fadeUp} className="text-white/45 text-base leading-relaxed mb-8 max-w-md">
               Veb-saytlar, ilovalar, AI yechimlar, avtomatlashtirish va marketing — biz biznesingizni keyingi bosqichga olib chiqamiz.
             </motion.p>
-            <motion.div variants={fadeUp} className="flex flex-wrap gap-3">
-              <a href="#services" className="inline-flex items-center gap-2 text-white font-semibold px-6 py-3 rounded-full hover:opacity-90 transition-opacity" style={{ background: R }}>
+            <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-4 mb-10">
+              <a href="#services" className="inline-flex items-center gap-2 font-semibold px-6 py-3 rounded-full transition-opacity hover:opacity-90" style={{ background: GOLD, color: "#1a1408" }}>
                 Xizmatlarimiz bilan tanishing <ArrowRight size={16} />
               </a>
-              <a href="#projects" className="inline-flex items-center gap-2 border border-gray-200 text-gray-700 font-medium px-6 py-3 rounded-full hover:border-gray-300 transition-colors">
+              <a href="#projects" className="inline-flex items-center gap-2 font-medium px-6 py-3 rounded-full text-white transition-colors" style={{ border: `1px solid ${BORDER}` }}>
                 Portfolio ko{"'"}rish <ChevronRight size={16} />
               </a>
             </motion.div>
+            <motion.div variants={fadeUp} className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="Showreelni tomosha qilish"
+                className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ border: `1px solid ${BORDER}`, background: PANEL }}
+              >
+                <Play size={14} className="text-white ml-0.5" fill="currentColor" />
+              </button>
+              <div className="text-sm">
+                <div className="text-white/80 font-medium leading-tight">Showreel</div>
+                <div className="text-white/35 text-xs leading-tight">Tomosha qiling</div>
+              </div>
+            </motion.div>
           </motion.div>
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.3 }} className="hidden md:flex justify-center relative">
-            <div className="w-72 h-72 lg:w-80 lg:h-80 rounded-full flex items-center justify-center relative" style={{ background: `${R}0a` }}>
-              <div className="w-56 h-56 lg:w-64 lg:h-64 rounded-full bg-gradient-to-br from-white to-gray-50 border border-gray-100 shadow-2xl flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center" style={{ background: R }}>
-                    <span className="text-white text-2xl font-bold">S</span>
-                  </div>
-                  <div className="text-xs text-gray-400 font-medium tracking-wider">SADIPRIME</div>
-                </div>
-              </div>
-              <div className="absolute -right-2 top-1/4 bg-white border border-gray-100 rounded-2xl shadow-lg px-4 py-3">
-                <div className="text-2xl font-bold">99%</div>
-                <div className="text-[10px] text-gray-400">Mijozlar qoniqishi</div>
-              </div>
-            </div>
+
+          <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.25 }}>
+            <HeroVisual />
           </motion.div>
         </div>
       </div>
@@ -217,16 +252,25 @@ function Hero() {
 
 function ServicesSection() {
   return (
-    <section id="services" className="py-20 bg-[#f8f9fc]">
+    <section id="services" className="py-14" style={{ background: BG }}>
       <div className="max-w-6xl mx-auto px-5">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <motion.div
+          initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}
+          className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4"
+        >
           {SERVICES.map((s) => (
-            <motion.div key={s.title} variants={fadeUp} className="bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-lg hover:border-gray-200 transition-all duration-300 group">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-colors duration-300" style={{ background: `${R}0d` }}>
-                <s.icon size={22} style={{ color: R }} strokeWidth={1.75} />
+            <motion.div
+              key={s.title}
+              variants={fadeUp}
+              className="relative rounded-2xl p-5 group transition-colors"
+              style={{ background: PANEL, border: `1px solid ${BORDER}` }}
+            >
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ background: `${GOLD}1a` }}>
+                <s.Icon size={18} style={{ color: GOLD }} strokeWidth={1.75} />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-1.5">{s.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{s.desc}</p>
+              <h3 className="font-semibold text-white text-[15px] mb-1.5">{s.title}</h3>
+              <p className="text-[13px] text-white/40 leading-relaxed pr-4">{s.desc}</p>
+              <ArrowUpRight size={14} className="absolute bottom-5 right-5 text-white/25 group-hover:text-white/60 transition-colors" />
             </motion.div>
           ))}
         </motion.div>
@@ -241,40 +285,43 @@ function ServicesSection() {
 
 function ProjectsSection() {
   return (
-    <section id="projects" className="py-20">
+    <section id="projects" className="py-16" style={{ background: BG }}>
       <div className="max-w-6xl mx-auto px-5">
         <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
-          <motion.div variants={fadeUp} className="mb-12">
-            <span className="text-xs font-semibold tracking-widest uppercase mb-3 block" style={{ color: R }}>Portfolio</span>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">Ishlarimiz bilan tanishing</h2>
-            <p className="text-gray-500 max-w-lg">Har bir loyiha — bu bizning sifat, ijod va natijaga bo{"'"}lgan yondashuvimiz.</p>
-          </motion.div>
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
+            <motion.div variants={fadeUp}>
+              <div className="inline-flex items-center text-[11px] font-medium px-3 py-1 rounded-full mb-4 uppercase tracking-wider" style={{ border: `1px solid ${BORDER}`, color: GOLD }}>
+                Portfolio
+              </div>
+              <h2 className="text-3xl md:text-[2.6rem] font-bold tracking-tight text-white leading-[1.1]">
+                Tanlangan<br />ishlarimiz
+              </h2>
+              <a href="#projects" className="inline-flex items-center gap-2 mt-5 text-sm font-medium px-5 py-2.5 rounded-full text-white transition-colors" style={{ border: `1px solid ${BORDER}` }}>
+                Barcha loyihalar <ArrowRight size={14} />
+              </a>
+            </motion.div>
+            <motion.div variants={fadeUp} className="hidden md:flex items-center gap-2">
+              <button type="button" aria-label="Oldingi" className="w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" style={{ border: `1px solid ${BORDER}` }}>
+                <ChevronLeft size={16} />
+              </button>
+              <button type="button" aria-label="Keyingi" className="w-10 h-10 rounded-full flex items-center justify-center transition-opacity hover:opacity-90" style={{ background: GOLD, color: "#1a1408" }}>
+                <ChevronRight size={16} />
+              </button>
+            </motion.div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {PROJECTS.map((p) => (
-              <motion.div key={p.title} variants={fadeUp} className="bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-xl hover:border-gray-200 transition-all duration-300 group">
-                <div className={`h-48 bg-gradient-to-br ${p.gradient} flex items-center justify-center relative`}>
-                  <p.icon size={48} className="text-white/80" strokeWidth={1.25} />
-                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm text-[11px] font-medium text-gray-700 px-3 py-1 rounded-full">{p.type}</div>
+              <motion.div key={p.title} variants={fadeUp} className="relative rounded-2xl overflow-hidden aspect-[3/4] group cursor-pointer">
+                <div className="absolute inset-0" style={{ background: p.gradient }} />
+                <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 45%)" }} />
+                <div className="absolute inset-0 flex items-center justify-center px-4 text-center">
+                  <span className="text-white/90 font-semibold text-sm leading-tight">{p.title}</span>
                 </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-bold mb-2">{p.title}</h3>
-                  <p className="text-gray-500 text-sm mb-4 leading-relaxed">{p.desc}</p>
-                  <div className="mb-4">
-                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Bajarilgan ishlar</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {p.features.map((f) => (
-                        <span key={f} className="text-xs bg-gray-50 text-gray-600 px-2.5 py-1 rounded-md border border-gray-100">{f}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Texnologiyalar</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {p.tech.map((t) => (
-                        <span key={t} className="text-xs font-medium px-2.5 py-1 rounded-md" style={{ background: `${R}0d`, color: R }}>{t}</span>
-                      ))}
-                    </div>
-                  </div>
+                <div className="absolute bottom-3 left-3">
+                  <span className="text-[10px] font-medium px-2.5 py-1 rounded-full text-white/80" style={{ background: "rgba(0,0,0,0.5)", border: `1px solid ${BORDER}` }}>
+                    {p.tag}
+                  </span>
                 </div>
               </motion.div>
             ))}
@@ -290,22 +337,26 @@ function ProjectsSection() {
    ═══════════════════════════════════════════════════════════════ */
 
 function StatsSection() {
-  const stats = [
-    { value: "4+", label: "Asosiy loyihalar" },
-    { value: "6+", label: "Xizmat turlari" },
-    { value: "15+", label: "Texnologiyalar" },
-    { value: "24/7", label: "Qo'llab-quvvatlash" },
-  ];
   return (
-    <section className="py-16 bg-[#f8f9fc]">
+    <section className="py-10" style={{ background: BG }}>
       <div className="max-w-6xl mx-auto px-5">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger} className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {stats.map((s) => (
-            <motion.div key={s.label} variants={fadeUp} className="text-center">
-              <div className="text-3xl md:text-4xl font-bold mb-1" style={{ color: R }}>{s.value}</div>
-              <div className="text-sm text-gray-500">{s.label}</div>
-            </motion.div>
-          ))}
+        <motion.div
+          initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}
+          className="rounded-2xl grid grid-cols-2 md:grid-cols-5 divide-x"
+          style={{ background: PANEL, border: `1px solid ${BORDER}`, borderColor: BORDER }}
+        >
+          {STATS.map((s, i) => {
+            const Icon = STAT_ICONS[i];
+            return (
+              <motion.div key={s.label} variants={fadeUp} className="flex items-center gap-3 px-5 py-6" style={{ borderColor: BORDER }}>
+                <Icon size={18} style={{ color: GOLD }} strokeWidth={1.75} />
+                <div>
+                  <div className="text-xl font-bold text-white leading-none">{s.value}</div>
+                  <div className="text-[11px] text-white/40 mt-1 leading-tight">{s.label}</div>
+                </div>
+              </motion.div>
+            );
+          })}
         </motion.div>
       </div>
     </section>
@@ -313,67 +364,48 @@ function StatsSection() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   PROCESS
+   PROCESS + CTA
    ═══════════════════════════════════════════════════════════════ */
 
 function ProcessSection() {
   return (
-    <section id="process" className="py-20">
+    <section id="process" className="py-16" style={{ background: BG }}>
       <div className="max-w-6xl mx-auto px-5">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
-          <motion.div variants={fadeUp} className="mb-12">
-            <span className="text-xs font-semibold tracking-widest uppercase mb-3 block" style={{ color: R }}>Jarayon</span>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">Oddiy qadamlar, kuchli natijalar</h2>
-            <p className="text-gray-500 max-w-lg">Bizning jarayonimiz shaffof va samarali.</p>
-          </motion.div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {STEPS.map((s) => (
-              <motion.div key={s.n} variants={fadeUp} className="bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-lg transition-all duration-300 relative">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-xs font-bold text-white w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: R }}>{s.n}</span>
-                  <s.icon size={20} className="text-gray-400" strokeWidth={1.75} />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2">{s.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{s.desc}</p>
-              </motion.div>
-            ))}
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger} className="grid lg:grid-cols-[1fr_320px] gap-8 items-start">
+          <div>
+            <motion.div variants={fadeUp} className="mb-8">
+              <div className="inline-flex items-center text-[11px] font-medium px-3 py-1 rounded-full mb-4 uppercase tracking-wider" style={{ border: `1px solid ${BORDER}`, color: GOLD }}>
+                Jarayon
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white leading-tight">
+                Oddiy qadamlar,<br />kuchli natijalar
+              </h2>
+            </motion.div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {STEPS.map((s) => (
+                <motion.div key={s.n} variants={fadeUp} className="rounded-2xl p-5" style={{ background: PANEL, border: `1px solid ${BORDER}` }}>
+                  <div className="text-xs font-semibold mb-3" style={{ color: GOLD }}>{s.n}</div>
+                  <h3 className="font-semibold text-white text-sm mb-1.5">{s.title}</h3>
+                  <p className="text-[12px] text-white/40 leading-relaxed">{s.desc}</p>
+                </motion.div>
+              ))}
+            </div>
           </div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
 
-/* ═══════════════════════════════════════════════════════════════
-   TECH / SKILLS
-   ═══════════════════════════════════════════════════════════════ */
-
-function TechSection() {
-  return (
-    <section id="tech" className="py-20 bg-[#f8f9fc]">
-      <div className="max-w-6xl mx-auto px-5">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
-          <motion.div variants={fadeUp} className="mb-12">
-            <span className="text-xs font-semibold tracking-widest uppercase mb-3 block" style={{ color: R }}>Ko{"'"}nikmalar</span>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">Texnologiyalar va ko{"'"}nikmalar</h2>
+          <motion.div variants={fadeUp} className="rounded-2xl p-7" style={{ background: PANEL, border: `1px solid ${BORDER}` }}>
+            <h3 className="text-lg font-bold text-white mb-2 leading-snug">Loyihangizni boshlashga tayyormisiz?</h3>
+            <p className="text-[13px] text-white/40 leading-relaxed mb-6">
+              Bepul konsultatsiya oling va biznesingiz uchun eng yaxshi yechimni toping.
+            </p>
+            <div className="flex items-center gap-3">
+              <a href="#contact" className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-full transition-opacity hover:opacity-90" style={{ background: GOLD, color: "#1a1408" }}>
+                Buyurtma berish <ArrowRight size={14} />
+              </a>
+              <a href="#contact" aria-label="Bog'lanish" className="w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors flex-shrink-0" style={{ border: `1px solid ${BORDER}` }}>
+                <Plus size={16} />
+              </a>
+            </div>
           </motion.div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {Object.entries(SKILLS).map(([cat, { icon: Icon, items }]) => (
-              <motion.div key={cat} variants={fadeUp} className="bg-white border border-gray-100 rounded-2xl p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${R}0d` }}>
-                    <Icon size={20} style={{ color: R }} strokeWidth={1.75} />
-                  </div>
-                  <h3 className="font-semibold">{cat}</h3>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {items.map((t) => (
-                    <span key={t} className="text-xs bg-gray-50 text-gray-600 px-2.5 py-1 rounded-md border border-gray-100">{t}</span>
-                  ))}
-                </div>
-              </motion.div>
-            ))}
-          </div>
         </motion.div>
       </div>
     </section>
@@ -404,68 +436,47 @@ function ContactSection() {
     setLoading(false);
   }
 
-  const inputCls = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-transparent transition-all";
+  const inputCls = "w-full text-white text-sm rounded-xl px-4 py-3 focus:outline-none transition-all placeholder:text-white/30";
+  const inputStyle = { background: PANEL, border: `1px solid ${BORDER}` };
 
   return (
-    <section id="contact" className="py-20">
+    <section id="contact" className="py-20" style={{ background: BG }}>
       <div className="max-w-6xl mx-auto px-5">
         <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
           <motion.div variants={fadeUp} className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-              Keling, keyingi <span style={{ color: R }}>muvaffaqiyat</span> hikoyasini birga yozamiz
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3 text-white">
+              Keling, keyingi <span style={{ color: GOLD }}>muvaffaqiyat</span> hikoyasini birga yozamiz
             </h2>
-            <p className="text-gray-500 max-w-lg mx-auto">G{"'"}oyangizni biz bilan amalga oshiring.</p>
+            <p className="text-white/40 max-w-lg mx-auto">G{"'"}oyangizni biz bilan amalga oshiring.</p>
           </motion.div>
 
           {sent ? (
-            <motion.div variants={fadeUp} className="max-w-md mx-auto text-center bg-green-50 border border-green-200 rounded-2xl p-8">
+            <motion.div variants={fadeUp} className="max-w-md mx-auto text-center rounded-2xl p-8" style={{ background: PANEL, border: `1px solid ${GOLD}44` }}>
               <div className="text-4xl mb-3">✅</div>
-              <h3 className="text-xl font-bold text-green-800 mb-2">Arizangiz qabul qilindi!</h3>
-              <p className="text-green-600 text-sm">Tez orada siz bilan bog{"'"}lanamiz.</p>
+              <h3 className="text-xl font-bold mb-2" style={{ color: GOLD }}>Arizangiz qabul qilindi!</h3>
+              <p className="text-white/50 text-sm">Tez orada siz bilan bog{"'"}lanamiz.</p>
             </motion.div>
           ) : (
             <motion.form variants={fadeUp} onSubmit={handleSubmit} className="max-w-lg mx-auto space-y-4">
               <div className="grid sm:grid-cols-2 gap-4">
-                <input
-                  required
-                  placeholder="Ismingiz"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className={inputCls}
-                />
-                <input
-                  required
-                  placeholder="Telefon yoki @telegram"
-                  value={form.contact}
-                  onChange={(e) => setForm({ ...form, contact: e.target.value })}
-                  className={inputCls}
-                />
+                <input required placeholder="Ismingiz" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} style={inputStyle} />
+                <input required placeholder="Telefon yoki @telegram" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} className={inputCls} style={inputStyle} />
               </div>
-              <select
-                value={form.service}
-                onChange={(e) => setForm({ ...form, service: e.target.value })}
-                className={inputCls}
-              >
+              <select value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} className={inputCls} style={inputStyle}>
                 <option value="">Xizmat turini tanlang</option>
                 {SERVICES.map((s) => <option key={s.title} value={s.title}>{s.title}</option>)}
               </select>
-              <textarea
-                placeholder="Loyihangiz haqida qisqacha..."
-                rows={4}
-                value={form.message}
-                onChange={(e) => setForm({ ...form, message: e.target.value })}
-                className={inputCls + " resize-none"}
-              />
+              <textarea placeholder="Loyihangiz haqida qisqacha..." rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} className={inputCls + " resize-none"} style={inputStyle} />
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3.5 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
-                style={{ background: R }}
+                className="w-full flex items-center justify-center gap-2 font-semibold py-3.5 rounded-xl transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ background: GOLD, color: "#1a1408" }}
               >
                 {loading ? "Yuborilmoqda..." : <>Yuborish <ArrowRight size={16} /></>}
               </button>
               <div className="text-center">
-                <a href="https://t.me/xojasoipov" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+                <a href="https://t.me/xojasoipov" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-white/40 hover:text-white/70 transition-colors">
                   <Send size={14} /> Telegram orqali yozish
                 </a>
               </div>
@@ -483,48 +494,42 @@ function ContactSection() {
 
 function Footer() {
   return (
-    <footer className="border-t border-gray-100 bg-white py-12">
+    <footer className="py-12" style={{ background: BG, borderTop: `1px solid ${BORDER}` }}>
       <div className="max-w-6xl mx-auto px-5">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-10">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: R }}>
-                <span className="text-white font-bold text-xs">S</span>
-              </div>
-              <span className="font-bold"><span style={{ color: R }}>SADI</span>PRIME</span>
+              <LogoMark size={20} />
+              <span className="font-semibold text-white"><span style={{ color: GOLD }}>SADI</span>PRIME</span>
             </div>
-            <p className="text-sm text-gray-500 leading-relaxed">Raqamli yechimlar orqali biznesingizni keyingi bosqichga olib chiqamiz.</p>
+            <p className="text-sm text-white/40 leading-relaxed">Raqamli yechimlar orqali biznesingizni keyingi bosqichga olib chiqamiz.</p>
           </div>
           <div>
-            <h4 className="font-semibold text-sm mb-3">Xizmatlar</h4>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li>Veb-saytlar</li>
-              <li>Telegram Mini App</li>
-              <li>AI Yechimlar</li>
-              <li>Avtomatlashtirish</li>
-              <li>Marketing</li>
+            <h4 className="font-semibold text-sm mb-3 text-white">Xizmatlar</h4>
+            <ul className="space-y-2 text-sm text-white/40">
+              {SERVICES.map((s) => <li key={s.title}>{s.title}</li>)}
             </ul>
           </div>
           <div>
-            <h4 className="font-semibold text-sm mb-3">Kompaniya</h4>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li><a href="#projects" className="hover:text-gray-700">Portfolio</a></li>
-              <li><a href="#process" className="hover:text-gray-700">Jarayon</a></li>
-              <li><a href="#tech" className="hover:text-gray-700">Texnologiyalar</a></li>
+            <h4 className="font-semibold text-sm mb-3 text-white">Kompaniya</h4>
+            <ul className="space-y-2 text-sm text-white/40">
+              <li><a href="#projects" className="hover:text-white/70 transition-colors">Portfolio</a></li>
+              <li><a href="#process" className="hover:text-white/70 transition-colors">Jarayon</a></li>
+              <li><a href="#about" className="hover:text-white/70 transition-colors">Biz haqimizda</a></li>
             </ul>
           </div>
           <div>
-            <h4 className="font-semibold text-sm mb-3">Aloqa</h4>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li className="flex items-center gap-2"><Mail size={14} /> xojasoipov@gmail.com</li>
-              <li className="flex items-center gap-2"><Send size={14} /> @xojasoipov</li>
-              <li className="flex items-center gap-2"><MapPin size={14} /> Andijon, O{"'"}zbekiston</li>
+            <h4 className="font-semibold text-sm mb-3 text-white">Aloqa</h4>
+            <ul className="space-y-2 text-sm text-white/40">
+              <li className="flex items-center gap-2"><Mail size={14} /> {SADIPRIME.email}</li>
+              <li className="flex items-center gap-2"><Send size={14} /> @{SADIPRIME.telegram}</li>
+              <li className="flex items-center gap-2"><MapPin size={14} /> {SADIPRIME.location}</li>
             </ul>
           </div>
         </div>
-        <div className="border-t border-gray-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} SADIPRIME. Barcha huquqlar himoyalangan.</p>
-          <p className="text-xs text-gray-400">Made with ❤️ in Uzbekistan</p>
+        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3" style={{ borderTop: `1px solid ${BORDER}` }}>
+          <p className="text-xs text-white/30">&copy; {new Date().getFullYear()} SADIPRIME. Barcha huquqlar himoyalangan.</p>
+          <p className="text-xs text-white/30">Made with ❤️ in Uzbekistan</p>
         </div>
       </div>
     </footer>
@@ -537,7 +542,7 @@ function Footer() {
 
 export default function PortfolioPage() {
   return (
-    <div className="min-h-screen bg-white text-gray-900 antialiased" style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div className="min-h-screen antialiased" style={{ background: BG, color: "#fff", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <Navbar />
       <main>
         <Hero />
@@ -545,7 +550,6 @@ export default function PortfolioPage() {
         <ProjectsSection />
         <StatsSection />
         <ProcessSection />
-        <TechSection />
         <ContactSection />
       </main>
       <Footer />
