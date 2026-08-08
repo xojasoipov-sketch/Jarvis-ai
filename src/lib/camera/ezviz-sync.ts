@@ -6,7 +6,7 @@
 //   3. Mavjudlarini yangilaydi (nom, status)
 //   4. O'chirilganlarini disabled qiladi
 
-import { fetchEzvizDevices, type EzvizDevice } from "./providers/ezviz-provider";
+import { fetchEzvizDevices, EzvizError, type EzvizDevice } from "./providers/ezviz-provider";
 import {
   listCameras, createCamera, updateCamera,
   setCameraCredentials, getCameraCredentials,
@@ -71,7 +71,7 @@ export async function syncEzvizAccount(appKey: string, appSecret: string): Promi
   } catch (e) {
     return {
       imported: 0, updated: 0, offline: 0, total: 0, cameras: [],
-      error: e instanceof Error ? e.message : "EZVIZ ulanish xatosi",
+      error: e instanceof EzvizError ? e.message : (e instanceof Error ? e.message : "EZVIZ ulanish xatosi"),
     };
   }
 
