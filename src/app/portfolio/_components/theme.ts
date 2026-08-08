@@ -22,13 +22,59 @@ export const TEXT = "#FFFFFF";
 export const TEXT_DIM = "#A0A0A0";
 export const TEXT_FAINT = "rgba(255,255,255,0.45)";
 
-/** Gold at a given alpha — avoids scattering `${GOLD}33` string math around. */
-export function gold(alpha: number): string {
-  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
+/**
+ * Any hex colour at a given alpha — avoids scattering `${GOLD}33` string math
+ * around. `gold()` below is the same thing pinned to the brand colour.
+ */
+export function alpha(hex: string, a: number): string {
+  const clamped = Math.round(Math.max(0, Math.min(1, a)) * 255)
     .toString(16)
     .padStart(2, "0");
-  return `${GOLD}${a}`;
+  return `${hex}${clamped}`;
 }
+
+/** Gold at a given alpha — avoids scattering `${GOLD}33` string math around. */
+export function gold(a: number): string {
+  return alpha(GOLD, a);
+}
+
+/* ── Content accents ──────────────────────────────────────────────────────── */
+
+/**
+ * Gold stays the single brand/CTA colour (buttons, links, section labels) —
+ * that's what makes the site feel like one studio, not a rainbow. These four
+ * live ONLY on content that classifies itself (a project's category, a
+ * service's domain): they give the page visual variety that actually means
+ * something, instead of every card/badge repeating the same gold.
+ */
+export const VIOLET = "#9B87F5";   // AI / avtomatlashtirilgan mantiq
+export const CYAN = "#5FC9E8";     // Telegram / real-time platforma
+export const ROSE = "#E893A6";     // Branding / marketing / ijodiy ish
+export const EMERALD = "#52D9A6";  // CRM / backend / infratuzilma
+
+export type ProjectCategoryName =
+  | "Web-saytlar" | "Telegram Mini App" | "AI" | "Branding" | "CRM";
+
+/** Loyiha kategoriyasidan aksent rangini oladi — kartalar, teglar, detal sahifada. */
+export const CATEGORY_ACCENT: Record<ProjectCategoryName, string> = {
+  "Web-saytlar": GOLD,
+  "Telegram Mini App": CYAN,
+  "AI": VIOLET,
+  "Branding": ROSE,
+  "CRM": EMERALD,
+};
+
+/** Xizmat slug'idan aksent rangini oladi — xizmatlar sahifasidagi ikonka plitkalari. */
+export const SERVICE_ACCENT: Record<string, string> = {
+  "web-saytlar": GOLD,
+  "telegram-mini-app": CYAN,
+  "ai-yechimlar": VIOLET,
+  "avtomatlashtirish": EMERALD,
+  "marketing": ROSE,
+  "ui-ux": ROSE,
+  "chatbotlar": VIOLET,
+  "crm": EMERALD,
+};
 
 /* ── Layout ───────────────────────────────────────────────────────────────── */
 
@@ -83,6 +129,15 @@ export const goldButtonStyle = {
   color: "#140F07",
   boxShadow: `0 10px 30px -12px ${gold(0.7)}`,
 } as const;
+
+/** Same treatment as goldButtonStyle but for a content accent — category filter pills. */
+export function accentButtonStyle(color: string) {
+  return {
+    background: `linear-gradient(180deg, ${color} 0%, ${alpha(color, 0.75)} 100%)`,
+    color: "#0A0A0A",
+    boxShadow: `0 10px 30px -12px ${alpha(color, 0.7)}`,
+  } as const;
+}
 
 export const ghostButtonStyle = {
   background: "rgba(255,255,255,0.03)",

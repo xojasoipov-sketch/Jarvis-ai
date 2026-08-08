@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import {
   GOLD, TEXT_DIM, BORDER, CONTAINER, RADIUS, SHADOW_LUXURY,
-  gold, glass, goldButtonStyle, ghostButtonStyle,
+  gold, alpha, glass, goldButtonStyle, ghostButtonStyle,
 } from "./theme";
 import { fadeUp, Reveal, TextReveal, Magnetic, Spotlight, Lift } from "./motion";
 
@@ -54,13 +54,13 @@ export function Section({
 
 /* ── Eyebrow label ────────────────────────────────────────────────────────── */
 
-export function SectionLabel({ children }: { children: ReactNode }) {
+export function SectionLabel({ children, color = GOLD }: { children: ReactNode; color?: string }) {
   return (
     <div
       className="inline-flex items-center gap-2 text-[11px] font-medium px-3.5 py-1.5 rounded-full uppercase tracking-[0.18em]"
-      style={{ border: `1px solid ${BORDER}`, color: GOLD, background: gold(0.05) }}
+      style={{ border: `1px solid ${alpha(color, 0.24)}`, color, background: alpha(color, 0.05) }}
     >
-      <span className="w-1 h-1 rounded-full" style={{ background: GOLD }} />
+      <span className="w-1 h-1 rounded-full" style={{ background: color }} />
       {children}
     </div>
   );
@@ -119,12 +119,15 @@ export function PageHero({
   highlight,
   subtitle,
   children,
+  accent = GOLD,
 }: {
   label?: string;
   title: string;
   highlight?: string;
   subtitle?: string;
   children?: ReactNode;
+  /** Defaults to gold; pages with a strong topical identity (AI, xizmatlar) can pass their own. */
+  accent?: string;
 }) {
   return (
     <section className="relative pt-40 pb-14 md:pt-48 md:pb-20 overflow-hidden">
@@ -132,13 +135,13 @@ export function PageHero({
       <div
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-[460px] pointer-events-none"
-        style={{ background: `radial-gradient(ellipse 55% 100% at 50% 0%, ${gold(0.09)}, transparent 70%)` }}
+        style={{ background: `radial-gradient(ellipse 55% 100% at 50% 0%, ${alpha(accent, 0.09)}, transparent 70%)` }}
       />
       <Container>
         <Reveal className="relative">
           {label && (
             <motion.div variants={fadeUp} className="mb-6">
-              <SectionLabel>{label}</SectionLabel>
+              <SectionLabel color={accent}>{label}</SectionLabel>
             </motion.div>
           )}
           <TextReveal
@@ -199,15 +202,24 @@ export function GlassCard({
 
 /* ── Icon tile ────────────────────────────────────────────────────────────── */
 
-export function IconTile({ children, size = 44 }: { children: ReactNode; size?: number }) {
+export function IconTile({
+  children,
+  size = 44,
+  color = GOLD,
+}: {
+  children: ReactNode;
+  size?: number;
+  /** Defaults to gold; pass a category/service accent to break the monotone look. */
+  color?: string;
+}) {
   return (
     <div
       className="rounded-2xl flex items-center justify-center flex-shrink-0"
       style={{
         width: size,
         height: size,
-        background: `linear-gradient(150deg, ${gold(0.16)}, ${gold(0.04)})`,
-        border: `1px solid ${gold(0.2)}`,
+        background: `linear-gradient(150deg, ${alpha(color, 0.16)}, ${alpha(color, 0.04)})`,
+        border: `1px solid ${alpha(color, 0.2)}`,
       }}
     >
       {children}

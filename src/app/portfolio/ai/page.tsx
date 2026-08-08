@@ -5,7 +5,7 @@ import {
   Bot, Mic, Eye, Sparkles, Workflow, Search, Plug, Users, MessageCircle, GitBranch,
   type LucideIcon,
 } from "lucide-react";
-import { GOLD, TEXT_DIM, SURFACE, gold } from "../_components/theme";
+import { VIOLET, TEXT_DIM, SURFACE, alpha } from "../_components/theme";
 import {
   Section, PageHero, GlassCard, CtaBand, fadeUp, Reveal, Floating,
 } from "../_components/ui";
@@ -21,6 +21,7 @@ export default function AiShowcasePage() {
         title="AI yechimlarimiz"
         highlight="yechimlarimiz"
         subtitle="Biznesingizga real foyda keltiradigan sun'iy intellekt imkoniyatlari — namoyish emas, ishlaydigan mahsulot."
+        accent={VIOLET}
       />
 
       <Section top={false}>
@@ -34,12 +35,12 @@ export default function AiShowcasePage() {
                     <div
                       className="w-[68px] h-[68px] rounded-full flex items-center justify-center"
                       style={{
-                        background: `radial-gradient(circle at 50% 36%, ${gold(0.24)}, ${SURFACE} 72%)`,
-                        border: `1px solid ${gold(0.28)}`,
-                        boxShadow: `0 0 40px -12px ${gold(0.6)}`,
+                        background: `radial-gradient(circle at 50% 36%, ${alpha(VIOLET, 0.24)}, ${SURFACE} 72%)`,
+                        border: `1px solid ${alpha(VIOLET, 0.28)}`,
+                        boxShadow: `0 0 40px -12px ${alpha(VIOLET, 0.6)}`,
                       }}
                     >
-                      <Icon size={22} style={{ color: GOLD }} strokeWidth={1.5} />
+                      <Icon size={22} style={{ color: VIOLET }} strokeWidth={1.5} />
                     </div>
                   </Floating>
                   <h2 className="font-semibold text-[15px] mt-6 mb-2.5">{cap.title}</h2>

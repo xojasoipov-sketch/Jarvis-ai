@@ -6,7 +6,7 @@ import {
   Globe, Send, Gem, Settings2, TrendingUp, Palette, Bot, Database,
   ArrowUpRight, Check, type LucideIcon,
 } from "lucide-react";
-import { GOLD, TEXT_DIM, BG_ALT, gold } from "../_components/theme";
+import { GOLD, VIOLET, CYAN, EMERALD, TEXT_DIM, BG_ALT, gold, alpha, SERVICE_ACCENT } from "../_components/theme";
 import {
   Section, SectionHeading, PageHero, GlassCard, IconTile, CtaBand,
   fadeUp, Reveal,
@@ -25,10 +25,10 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 const TECH_STACK = [
-  { group: "Frontend", items: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Framer Motion"] },
-  { group: "Backend", items: ["Node.js", "PostgreSQL", "Supabase", "REST API", "Redis"] },
-  { group: "AI", items: ["OpenAI", "Anthropic", "Gemini", "Groq", "RAG", "MCP"] },
-  { group: "Platforma", items: ["Telegram Mini Apps", "Railway", "Vercel", "Cloudflare"] },
+  { group: "Frontend", color: GOLD, items: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Framer Motion"] },
+  { group: "Backend", color: EMERALD, items: ["Node.js", "PostgreSQL", "Supabase", "REST API", "Redis"] },
+  { group: "AI", color: VIOLET, items: ["OpenAI", "Anthropic", "Gemini", "Groq", "RAG", "MCP"] },
+  { group: "Platforma", color: CYAN, items: ["Telegram Mini Apps", "Railway", "Vercel", "Cloudflare"] },
 ];
 
 const BENEFITS = [
@@ -53,16 +53,17 @@ export default function XizmatlarPage() {
         <Reveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {SERVICES.map((s) => {
             const Icon = ICONS[s.slug] ?? Globe;
+            const accent = SERVICE_ACCENT[s.slug] ?? GOLD;
             return (
               <motion.div key={s.slug} variants={fadeUp} id={s.slug} className="scroll-mt-28">
                 <GlassCard className="p-7 flex flex-col">
-                  <IconTile><Icon size={20} style={{ color: GOLD }} strokeWidth={1.6} /></IconTile>
+                  <IconTile color={accent}><Icon size={20} style={{ color: accent }} strokeWidth={1.6} /></IconTile>
                   <h2 className="font-semibold text-[16px] mt-6 mb-3">{s.title}</h2>
                   <p className="text-[13px] leading-relaxed flex-1" style={{ color: TEXT_DIM }}>{s.desc}</p>
                   <Link
                     href="/portfolio/aloqa"
                     className="inline-flex items-center gap-1.5 text-[12px] font-medium mt-6"
-                    style={{ color: GOLD }}
+                    style={{ color: accent }}
                   >
                     Batafsil <ArrowUpRight size={12} />
                   </Link>
@@ -88,11 +89,11 @@ export default function XizmatlarPage() {
             {TECH_STACK.map((g) => (
               <motion.div key={g.group} variants={fadeUp}>
                 <GlassCard className="p-7 h-full">
-                  <h3 className="font-semibold text-[15px] mb-5" style={{ color: GOLD }}>{g.group}</h3>
+                  <h3 className="font-semibold text-[15px] mb-5" style={{ color: g.color }}>{g.group}</h3>
                   <ul className="space-y-2.5">
                     {g.items.map((t) => (
                       <li key={t} className="text-[13px] flex items-center gap-2.5" style={{ color: TEXT_DIM }}>
-                        <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: gold(0.7) }} />
+                        <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: alpha(g.color, 0.7) }} />
                         {t}
                       </li>
                     ))}

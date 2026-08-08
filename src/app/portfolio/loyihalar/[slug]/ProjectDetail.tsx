@@ -4,7 +4,8 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
 import {
-  GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold, SHADOW_LUXURY, goldButtonStyle,
+  GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold, alpha, SHADOW_LUXURY, goldButtonStyle,
+  CATEGORY_ACCENT, type ProjectCategoryName,
 } from "../../_components/theme";
 import {
   Container, Section, SectionLabel, SectionHeading, GlassCard, CtaBand,
@@ -12,14 +13,19 @@ import {
 } from "../../_components/ui";
 import type { Project } from "@/lib/portfolio-store";
 
+function categoryAccent(cat: string): string {
+  return CATEGORY_ACCENT[cat as ProjectCategoryName] ?? GOLD;
+}
+
 /** Device mockups standing in for project screenshots — no image assets needed. */
 function ProjectShowcase({ project }: { project: Project }) {
+  const accent = categoryAccent(project.category);
   return (
     <PointerTilt intensity={7} className="relative w-full aspect-[4/3] max-w-[520px] mx-auto">
       <div
         aria-hidden="true"
         className="absolute inset-[6%] blur-3xl"
-        style={{ background: `radial-gradient(circle at 50% 45%, ${gold(0.28)}, transparent 66%)` }}
+        style={{ background: `radial-gradient(circle at 50% 45%, ${alpha(accent, 0.28)}, transparent 66%)` }}
       />
       {[
         { left: "8%", top: "16%", rot: -9, scale: 0.84, z: 1, delay: 0.4 },
@@ -44,7 +50,7 @@ function ProjectShowcase({ project }: { project: Project }) {
                 aspectRatio: "9 / 19",
                 borderRadius: 26,
                 background: project.gradient,
-                border: `1px solid ${gold(0.22)}`,
+                border: `1px solid ${alpha(accent, 0.22)}`,
                 boxShadow: "0 30px 70px -18px rgba(0,0,0,0.85)",
               }}
             >
@@ -52,7 +58,7 @@ function ProjectShowcase({ project }: { project: Project }) {
                 <div className="w-9 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.22)" }} />
               </div>
               <div className="absolute inset-x-4 top-12 space-y-2.5">
-                <div className="h-2 rounded-full" style={{ width: "72%", background: gold(0.5) }} />
+                <div className="h-2 rounded-full" style={{ width: "72%", background: alpha(accent, 0.5) }} />
                 <div className="h-1.5 rounded-full" style={{ width: "48%", background: "rgba(255,255,255,0.16)" }} />
               </div>
               <div className="absolute inset-x-4 top-28 grid grid-cols-2 gap-2">
@@ -79,6 +85,8 @@ export default function ProjectDetail({
   project: Project;
   next: Project;
 }) {
+  const accent = categoryAccent(project.category);
+  const nextAccent = categoryAccent(next.category);
   return (
     <>
       {/* ── Hero ── */}
@@ -86,7 +94,7 @@ export default function ProjectDetail({
         <div
           aria-hidden="true"
           className="absolute inset-x-0 top-0 h-[560px] pointer-events-none"
-          style={{ background: `radial-gradient(ellipse 60% 100% at 60% 5%, ${gold(0.1)}, transparent 68%)` }}
+          style={{ background: `radial-gradient(ellipse 60% 100% at 60% 5%, ${alpha(accent, 0.1)}, transparent 68%)` }}
         />
         <Container className="relative">
           <Reveal>
@@ -103,7 +111,7 @@ export default function ProjectDetail({
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div>
                 <motion.div variants={fadeUp} className="mb-6">
-                  <SectionLabel>{project.category}</SectionLabel>
+                  <SectionLabel color={accent}>{project.category}</SectionLabel>
                 </motion.div>
                 <TextReveal
                   as="h1"
@@ -196,12 +204,12 @@ export default function ProjectDetail({
                 className="p-8 md:p-10 h-full"
                 style={{
                   borderRadius: 24,
-                  background: `linear-gradient(165deg, ${gold(0.12)}, rgba(18,18,18,0.85))`,
-                  border: `1px solid ${gold(0.26)}`,
+                  background: `linear-gradient(165deg, ${alpha(accent, 0.12)}, rgba(18,18,18,0.85))`,
+                  border: `1px solid ${alpha(accent, 0.26)}`,
                   boxShadow: SHADOW_LUXURY,
                 }}
               >
-                <span className="text-[11px] uppercase tracking-[0.18em]" style={{ color: GOLD }}>Yechimimiz</span>
+                <span className="text-[11px] uppercase tracking-[0.18em]" style={{ color: accent }}>Yechimimiz</span>
                 <p className="text-[15px] leading-relaxed mt-5" style={{ color: "rgba(255,255,255,0.85)" }}>
                   {project.solution}
                 </p>
@@ -233,13 +241,13 @@ export default function ProjectDetail({
                         Keyingi loyiha
                       </span>
                       <h2 className="text-2xl md:text-3xl font-bold mt-3">{next.title}</h2>
-                      <span className="text-[13px] mt-2 block" style={{ color: GOLD }}>{next.tagline}</span>
+                      <span className="text-[13px] mt-2 block" style={{ color: nextAccent }}>{next.tagline}</span>
                     </div>
                     <span
                       className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 transition-transform group-hover:translate-x-1"
-                      style={{ border: `1px solid ${gold(0.3)}`, background: gold(0.1) }}
+                      style={{ border: `1px solid ${alpha(nextAccent, 0.3)}`, background: alpha(nextAccent, 0.1) }}
                     >
-                      <ArrowRight size={18} style={{ color: GOLD }} />
+                      <ArrowRight size={18} style={{ color: nextAccent }} />
                     </span>
                   </div>
                 </div>

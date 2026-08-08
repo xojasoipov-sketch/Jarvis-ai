@@ -10,8 +10,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
-  GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold, glass,
-  SHADOW_LUXURY, goldButtonStyle, REVEAL_EASE,
+  GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold, alpha, glass,
+  SHADOW_LUXURY, goldButtonStyle, REVEAL_EASE, CATEGORY_ACCENT, SERVICE_ACCENT,
 } from "./_components/theme";
 import {
   Container, Section, SectionHeading, SectionLabel, GlassCard, IconTile,
@@ -135,16 +135,17 @@ function ServicesSection() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {SERVICES.slice(0, 5).map((s) => {
             const Icon = SERVICE_ICONS[s.slug] ?? Globe;
+            const accent = SERVICE_ACCENT[s.slug] ?? GOLD;
             return (
               <motion.div key={s.slug} variants={fadeUp}>
                 <Link href={`/portfolio/xizmatlar#${s.slug}`} className="block h-full">
                   <GlassCard className="p-8 flex flex-col">
-                    <IconTile><Icon size={20} style={{ color: GOLD }} strokeWidth={1.6} /></IconTile>
+                    <IconTile color={accent}><Icon size={20} style={{ color: accent }} strokeWidth={1.6} /></IconTile>
                     <h3 className="font-semibold text-[17px] mt-6 mb-3">{s.title}</h3>
                     <p className="text-sm leading-relaxed flex-1" style={{ color: TEXT_DIM }}>{s.short}</p>
                     <span
                       className="inline-flex items-center gap-1.5 text-[13px] font-medium mt-6"
-                      style={{ color: GOLD }}
+                      style={{ color: accent }}
                     >
                       Batafsil <ArrowUpRight size={13} />
                     </span>
@@ -232,6 +233,7 @@ function StackCard({
   // Orqadagi kartalar sal kichrayadi — ustma-ust turgan taassurot beradi.
   const targetScale = 1 - (total - 1 - index) * 0.03;
   const scale = useTransform(progress, [index / total, 1], [1, targetScale]);
+  const accent = CATEGORY_ACCENT[project.category] ?? GOLD;
 
   return (
     <div className="sticky" style={{ top: `${index * 26 + 104}px` }}>
@@ -242,12 +244,12 @@ function StackCard({
         <div className="grid md:grid-cols-2 gap-0 items-stretch">
           <div className="p-8 md:p-11 flex flex-col justify-center">
             <div className="flex items-center gap-3 mb-5">
-              <span className="text-[11px] font-mono" style={{ color: GOLD }}>
+              <span className="text-[11px] font-mono" style={{ color: accent }}>
                 {String(index + 1).padStart(2, "0")}
               </span>
               <span
                 className="text-[10px] font-medium px-2.5 py-1 rounded-full"
-                style={{ border: `1px solid ${gold(0.22)}`, color: GOLD }}
+                style={{ border: `1px solid ${alpha(accent, 0.22)}`, color: accent }}
               >
                 {project.category}
               </span>
@@ -278,7 +280,7 @@ function StackCard({
               <Link
                 href={`/portfolio/loyihalar/${project.slug}`}
                 className="inline-flex items-center gap-2 text-[13px] font-semibold transition hover:gap-3"
-                style={{ color: GOLD }}
+                style={{ color: accent }}
               >
                 Batafsil <ArrowRight size={14} />
               </Link>
@@ -312,7 +314,7 @@ function StackCard({
             <ArrowUpRight
               size={18}
               className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ color: GOLD }}
+              style={{ color: accent }}
             />
           </Link>
         </div>
