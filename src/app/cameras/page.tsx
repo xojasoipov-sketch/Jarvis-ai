@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import {
-  Camera, Wifi, WifiOff, RefreshCw, Plus, Trash2, Activity,
-  Eye, AlertTriangle, Clock, MapPin, Zap, ChevronRight, X,
-  Shield, Video, Image, Settings,
+  Camera, Wifi, WifiOff, RefreshCw, Plus, Activity,
+  Eye, Clock, MapPin, ChevronRight, X, Video, Image,
+  Play, AlertCircle, ExternalLink, Settings, Zap,
 } from "lucide-react";
+import Link from "next/link";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 type CamStatus = "online" | "offline" | "error" | "unknown";
 
 type CameraRow = {
@@ -16,6 +18,10 @@ type CameraRow = {
   provider: string;
   status: CamStatus;
   last_seen: string | null;
+  serial?: string;
+  capabilities?: {
+    live: boolean; snapshot: boolean; ptz: boolean; audio: boolean;
+  };
 };
 
 type EventRow = {
@@ -29,127 +35,216 @@ type EventRow = {
   objects: { type: string; confidence: number }[];
 };
 
-type AddForm = { name: string; provider: string; location: string; serial: string; rtsp_url: string; app_key: string; app_secret: string };
+type AnalysisResult = {
+  snapshot?: { url: string };
+  analysis?: { summary: string; objects: { type: string; confidence: number }[]; risk: string };
+};
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const STATUS_COLOR: Record<CamStatus, string> = {
-  online: "#22c55e",
-  offline: "#ef4444",
-  error: "#f59e0b",
-  unknown: "#6b7280",
+  online: "#22c55e", offline: "#ef4444", error: "#f59e0b", unknown: "#6b7280",
 };
 
 const SEVERITY_COLOR: Record<string, string> = {
-  low: "#6b7280",
-  medium: "#f59e0b",
-  high: "#ef4444",
-  critical: "#dc2626",
+  low: "#6b7280", medium: "#f59e0b", high: "#ef4444", critical: "#dc2626",
 };
 
 const EVENT_ICON: Record<string, string> = {
-  person_detected: "👤",
-  vehicle_detected: "🚗",
-  animal_detected: "🐾",
-  motion_detected: "🌀",
-  camera_offline: "📵",
-  camera_online: "📡",
-  restricted_zone: "🚫",
-  suspicious_activity: "⚠️",
+  person_detected: "👤", vehicle_detected: "🚗", animal_detected: "🐾",
+  motion_detected: "🌀", camera_offline: "📵", camera_online: "📡",
+  restricted_zone: "🚫", suspicious_activity: "⚠️", package_detected: "📦",
 };
 
 function timeSince(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60000) return `${Math.round(diff / 1000)}s`;
-  if (diff < 3600000) return `${Math.round(diff / 60000)}m`;
-  if (diff < 86400000) return `${Math.round(diff / 3600000)}h`;
-  return `${Math.round(diff / 86400000)}d`;
+  if (diff < 60000) return `${Math.round(diff / 1000)}s oldin`;
+  if (diff < 3600000) return `${Math.round(diff / 60000)}m oldin`;
+  if (diff < 86400000) return `${Math.round(diff / 3600000)}s oldin`;
+  return `${Math.round(diff / 86400000)}kun oldin`;
 }
 
-// ─── Add Camera Modal ─────────────────────────────────────────────────────────
-function AddCameraModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [form, setForm] = useState<AddForm>({ name: "", provider: "ezviz", location: "", serial: "", rtsp_url: "", app_key: "", app_secret: "" });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+// ─── Camera Detail Panel ──────────────────────────────────────────────────────
+function CameraDetail({ cam, onClose }: { cam: CameraRow; onClose: () => void }) {
+  const [snap, setSnap] = useState<string | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisResult["analysis"] | null>(null);
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [loading, setLoading] = useState<"snap" | "stream" | "analyze" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const submit = async () => {
-    if (!form.name || !form.location) { setError("Nom va joylashuv kerak"); return; }
-    setLoading(true); setError("");
-    const credentials: Record<string, string> = {};
-    if (form.app_key) credentials.app_key = form.app_key;
-    if (form.app_secret) credentials.app_secret = form.app_secret;
+  useEffect(() => {
+    fetch(`/api/cameras/events?camera_id=${cam.id}&limit=10`)
+      .then(r => r.json() as Promise<{ events: EventRow[] }>)
+      .then(d => setEvents(d.events || []))
+      .catch(() => {});
+  }, [cam.id]);
+
+  const doSnapshot = async () => {
+    setLoading("snap"); setError(null);
     try {
-      const res = await fetch("/api/cameras", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, provider: form.provider, location: form.location, serial: form.serial, rtsp_url: form.rtsp_url, credentials }),
-      });
-      if (!res.ok) { const d = await res.json() as { error?: string }; setError(d.error || "Xato"); setLoading(false); return; }
-      onAdded();
-    } catch (e) { setError(e instanceof Error ? e.message : "Xato"); setLoading(false); }
+      const res = await fetch(`/api/cameras/${cam.id}/snapshot`, { method: "POST" });
+      const d = await res.json() as { url?: string; error?: string };
+      if (!res.ok || d.error) { setError(d.error || "Snapshot olinmadi"); return; }
+      if (d.url) setSnap(d.url);
+    } catch (e) { setError(e instanceof Error ? e.message : "Xato"); }
+    finally { setLoading(null); }
+  };
+
+  const doStream = async () => {
+    setLoading("stream"); setError(null);
+    try {
+      const res = await fetch(`/api/cameras/${cam.id}/stream`);
+      const d = await res.json() as { hls_url?: string; rtsp_url?: string; error?: string };
+      if (!res.ok || d.error) { setError(d.error || "Stream topilmadi"); return; }
+      setStreamUrl(d.hls_url || d.rtsp_url || null);
+    } catch (e) { setError(e instanceof Error ? e.message : "Xato"); }
+    finally { setLoading(null); }
+  };
+
+  const doAnalyze = async () => {
+    setLoading("analyze"); setError(null);
+    try {
+      const res = await fetch(`/api/cameras/${cam.id}/analyze`, { method: "POST" });
+      const d = await res.json() as AnalysisResult & { error?: string };
+      if (!res.ok || d.error) { setError(d.error || "Tahlil amalga oshmadi"); return; }
+      if (d.snapshot?.url) setSnap(d.snapshot.url);
+      if (d.analysis) setAnalysis(d.analysis);
+    } catch (e) { setError(e instanceof Error ? e.message : "Xato"); }
+    finally { setLoading(null); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#111] p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-white">Yangi kamera qo'shish</h2>
-          <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
-        </div>
+    <div className="fixed inset-0 z-40 flex items-end md:items-center justify-end bg-black/60" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full md:max-w-lg h-[92vh] md:h-full bg-[#0c0c0c] border-l border-white/8 flex flex-col overflow-hidden md:rounded-none rounded-t-3xl">
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
-
-        {[
-          { label: "Kamera nomi *", key: "name", placeholder: "Darvoza kamerasi" },
-          { label: "Joylashuv *", key: "location", placeholder: "gate / yard / garage" },
-          { label: "Serial (EZVIZ uchun)", key: "serial", placeholder: "D12345678" },
-          { label: "RTSP URL (to'g'ridan-to'g'ri)", key: "rtsp_url", placeholder: "rtsp://..." },
-        ].map(f => (
-          <div key={f.key}>
-            <label className="text-xs text-white/50 mb-1 block">{f.label}</label>
-            <input
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
-              value={form[f.key as keyof AddForm]}
-              onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-              placeholder={f.placeholder}
-            />
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-white/8 flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${STATUS_COLOR[cam.status]}15` }}>
+            <Camera size={16} style={{ color: STATUS_COLOR[cam.status] }} />
           </div>
-        ))}
-
-        <div>
-          <label className="text-xs text-white/50 mb-1 block">Provider</label>
-          <select
-            className="w-full rounded-lg border border-white/10 bg-[#111] px-3 py-2 text-sm text-white focus:outline-none"
-            value={form.provider}
-            onChange={e => setForm(p => ({ ...p, provider: e.target.value }))}
-          >
-            {["ezviz", "rtsp", "onvif", "mock"].map(p => <option key={p} value={p}>{p.toUpperCase()}</option>)}
-          </select>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white truncate">{cam.name}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs" style={{ color: STATUS_COLOR[cam.status] }}>
+                {cam.status === "online" ? "● Online" : cam.status === "offline" ? "○ Offline" : `○ ${cam.status}`}
+              </span>
+              <span className="text-white/20">·</span>
+              <span className="text-xs text-white/30">{cam.location}</span>
+              {cam.serial && <span className="text-xs text-white/20">·{cam.serial.slice(-6)}</span>}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/30 hover:text-white p-1 transition"><X size={18} /></button>
         </div>
 
-        {form.provider === "ezviz" && (
-          <div className="space-y-3 border border-white/5 rounded-xl p-4 bg-white/2">
-            <p className="text-xs text-white/40">EZVIZ API credentials (open.ys7.com)</p>
-            {["app_key", "app_secret"].map(k => (
-              <div key={k}>
-                <label className="text-xs text-white/50 mb-1 block">{k}</label>
-                <input
-                  type="password"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none"
-                  value={form[k as keyof AddForm]}
-                  onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
-                  placeholder={`EZVIZ ${k}`}
+        <div className="flex-1 overflow-y-auto">
+          {/* Preview area */}
+          <div className="p-4">
+            {snap ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={snap} alt="Kamera snapshot" className="w-full rounded-2xl object-cover bg-black" style={{ aspectRatio: "16/9" }} />
+            ) : streamUrl ? (
+              <div className="w-full rounded-2xl bg-black border border-white/8 overflow-hidden" style={{ aspectRatio: "16/9" }}>
+                <video
+                  src={streamUrl}
+                  autoPlay muted playsInline controls
+                  className="w-full h-full object-cover"
                 />
               </div>
-            ))}
-          </div>
-        )}
+            ) : (
+              <div className="w-full rounded-2xl bg-white/2 border border-white/6 flex flex-col items-center justify-center" style={{ aspectRatio: "16/9" }}>
+                <Camera size={40} className="text-white/10 mb-3" />
+                <p className="text-xs text-white/30">Snapshot yoki Live stream tanlang</p>
+              </div>
+            )}
 
-        <button
-          onClick={submit}
-          disabled={loading}
-          className="w-full rounded-lg bg-[#ff6a1a] py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50 transition"
-        >
-          {loading ? "Qo'shilmoqda..." : "Kamera qo'shish"}
-        </button>
+            {streamUrl && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-white/40">
+                <Play size={10} />
+                <span className="truncate">HLS: {streamUrl.slice(0, 60)}...</span>
+                <a href={streamUrl} target="_blank" rel="noreferrer" className="text-[#ff6a1a] hover:underline flex-shrink-0">Ochish</a>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="px-4 grid grid-cols-3 gap-2 mb-4">
+            <button
+              onClick={doSnapshot}
+              disabled={loading !== null || cam.status !== "online"}
+              className="flex flex-col items-center gap-1.5 rounded-xl border border-white/8 bg-white/3 py-3 text-xs text-white/60 hover:bg-white/6 disabled:opacity-40 transition"
+            >
+              {loading === "snap" ? <RefreshCw size={14} className="animate-spin" /> : <Image size={14} />}
+              Snapshot
+            </button>
+            <button
+              onClick={doStream}
+              disabled={loading !== null || cam.status !== "online" || !cam.capabilities?.live}
+              className="flex flex-col items-center gap-1.5 rounded-xl border border-white/8 bg-white/3 py-3 text-xs text-white/60 hover:bg-white/6 disabled:opacity-40 transition"
+            >
+              {loading === "stream" ? <RefreshCw size={14} className="animate-spin" /> : <Video size={14} />}
+              Live
+            </button>
+            <button
+              onClick={doAnalyze}
+              disabled={loading !== null || cam.status !== "online"}
+              className="flex flex-col items-center gap-1.5 rounded-xl border border-[#ff6a1a]/20 bg-[#ff6a1a]/5 py-3 text-xs text-[#ff6a1a] hover:bg-[#ff6a1a]/10 disabled:opacity-40 transition"
+            >
+              {loading === "analyze" ? <RefreshCw size={14} className="animate-spin" /> : <Eye size={14} />}
+              AI Tahlil
+            </button>
+          </div>
+
+          {error && (
+            <div className="mx-4 mb-4 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 flex items-start gap-2 text-sm text-red-400">
+              <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+              {error}
+            </div>
+          )}
+
+          {/* AI analysis */}
+          {analysis && (
+            <div className="mx-4 mb-4 rounded-xl border border-white/8 bg-white/2 p-4 space-y-3">
+              <p className="text-xs text-white/40 uppercase tracking-wider">AI Tahlil</p>
+              <p className="text-sm text-white/80 leading-relaxed">{analysis.summary}</p>
+              {analysis.objects.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {analysis.objects.map((o, i) => (
+                    <span key={i} className="text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/8 text-white/60">
+                      {o.type} {Math.round(o.confidence * 100)}%
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-white/30">Risk:</span>
+                <span className="text-xs font-medium" style={{
+                  color: analysis.risk === "critical" ? "#dc2626" : analysis.risk === "high" ? "#ef4444" : analysis.risk === "medium" ? "#f59e0b" : "#6b7280",
+                }}>{analysis.risk}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Events */}
+          <div className="px-4 pb-6">
+            <p className="text-xs text-white/40 uppercase tracking-wider mb-3">So'nggi hodisalar</p>
+            {events.length === 0 ? (
+              <p className="text-sm text-white/25 py-4 text-center">Hodisalar yo'q</p>
+            ) : events.map(e => {
+              const icon = EVENT_ICON[e.event_type] || "📷";
+              const color = SEVERITY_COLOR[e.severity];
+              return (
+                <div key={e.id} className="flex items-start gap-3 py-3 border-b border-white/5 last:border-0">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{ background: `${color}18` }}>{icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-white/70">{e.event_type.replace(/_/g, " ")}</p>
+                    {e.ai_summary && <p className="text-xs text-white/35 mt-0.5 truncate">{e.ai_summary}</p>}
+                  </div>
+                  <span className="text-xs text-white/25 flex-shrink-0">{timeSince(e.started_at)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -160,176 +255,60 @@ function CameraCard({ cam, onClick }: { cam: CameraRow; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="group w-full text-left rounded-2xl border border-white/8 bg-white/3 p-5 hover:border-white/16 hover:bg-white/5 transition-all"
+      className="group w-full text-left rounded-2xl border border-white/8 bg-white/2 p-5 hover:border-white/14 hover:bg-white/4 transition-all"
     >
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${STATUS_COLOR[cam.status]}18` }}>
+          <div className="relative w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${STATUS_COLOR[cam.status]}12` }}>
             <Camera size={16} style={{ color: STATUS_COLOR[cam.status] }} />
+            {cam.status === "online" && (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-green-400 border border-[#0c0c0c]" />
+            )}
           </div>
           <div>
             <p className="text-sm font-medium text-white leading-tight">{cam.name}</p>
-            <p className="text-xs text-white/40 flex items-center gap-1 mt-0.5">
-              <MapPin size={10} /> {cam.location}
+            <p className="text-xs text-white/35 flex items-center gap-1 mt-0.5">
+              <MapPin size={9} />{cam.location}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: `${STATUS_COLOR[cam.status]}18`, color: STATUS_COLOR[cam.status] }}>
-          {cam.status === "online" ? <Wifi size={11} /> : <WifiOff size={11} />}
+        <span className="text-xs px-2 py-1 rounded-full" style={{
+          background: `${STATUS_COLOR[cam.status]}12`,
+          color: STATUS_COLOR[cam.status],
+        }}>
           {cam.status}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-white/25 uppercase tracking-wider">{cam.provider}</span>
+        <div className="flex items-center gap-3">
+          {cam.last_seen && (
+            <span className="text-xs text-white/25 flex items-center gap-1"><Clock size={9} /> {timeSince(cam.last_seen)}</span>
+          )}
+          <ChevronRight size={12} className="text-white/20 group-hover:text-white/40 transition" />
         </div>
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-white/30">
-        <span className="uppercase tracking-wider">{cam.provider}</span>
-        {cam.last_seen && (
-          <span className="flex items-center gap-1"><Clock size={10} /> {timeSince(cam.last_seen)}</span>
-        )}
-      </div>
-
-      <div className="mt-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition text-xs text-white/40">
-        <span>Ko'rish</span><ChevronRight size={12} />
       </div>
     </button>
   );
 }
 
-// ─── Event Item ───────────────────────────────────────────────────────────────
-function EventItem({ evt, cameras }: { evt: EventRow; cameras: CameraRow[] }) {
+// ─── Event Row ────────────────────────────────────────────────────────────────
+function EventRow({ evt, cameras }: { evt: EventRow; cameras: CameraRow[] }) {
   const cam = cameras.find(c => c.id === evt.camera_id);
   const icon = EVENT_ICON[evt.event_type] || "📷";
   const color = SEVERITY_COLOR[evt.severity];
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-white/5 last:border-0">
-      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{ background: `${color}18` }}>
-        {icon}
-      </div>
+    <div className="flex items-start gap-3 px-5 py-3.5 border-b border-white/5 last:border-0 hover:bg-white/2 transition">
+      <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-sm" style={{ background: `${color}15` }}>{icon}</div>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-white/80">
           {evt.event_type.replace(/_/g, " ")}
-          {cam && <span className="text-white/40 ml-2">— {cam.name}</span>}
+          {cam && <span className="text-white/35 ml-2">— {cam.name}</span>}
         </p>
-        {evt.ai_summary && <p className="text-xs text-white/40 mt-0.5 truncate">{evt.ai_summary}</p>}
+        {evt.ai_summary && <p className="text-xs text-white/35 mt-0.5 truncate">{evt.ai_summary}</p>}
       </div>
-      <span className="text-xs text-white/30 flex-shrink-0">{timeSince(evt.started_at)}</span>
-    </div>
-  );
-}
-
-// ─── Camera Detail Panel ──────────────────────────────────────────────────────
-function CameraDetail({ cam, onClose }: { cam: CameraRow; onClose: () => void }) {
-  const [snapshot, setSnapshot] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<{ summary: string; objects: { type: string; confidence: number }[] } | null>(null);
-  const [events, setEvents] = useState<EventRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/cameras/events?camera_id=${cam.id}&limit=10`)
-      .then(r => r.json() as Promise<{ events: EventRow[] }>)
-      .then(d => setEvents(d.events || []))
-      .catch(() => {});
-  }, [cam.id]);
-
-  const takeSnap = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/cameras/${cam.id}/snapshot`, { method: "POST" });
-      const d = await res.json() as { url?: string };
-      if (d.url) setSnapshot(d.url);
-    } finally { setLoading(false); }
-  };
-
-  const doAnalyze = async () => {
-    setAnalyzing(true);
-    try {
-      const res = await fetch(`/api/cameras/${cam.id}/analyze`, { method: "POST" });
-      const d = await res.json() as { snapshot?: { url: string }; analysis?: typeof analysis };
-      if (d.snapshot?.url) setSnapshot(d.snapshot.url);
-      if (d.analysis) setAnalysis(d.analysis);
-    } finally { setAnalyzing(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-end bg-black/50">
-      <div className="w-full max-w-md h-full bg-[#0d0d0d] border-l border-white/8 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: `${STATUS_COLOR[cam.status]}18` }}>
-              <Camera size={14} style={{ color: STATUS_COLOR[cam.status] }} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-white">{cam.name}</p>
-              <p className="text-xs text-white/40">{cam.location}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Snapshot */}
-          <div>
-            {snapshot ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={snapshot} alt="Snapshot" className="w-full rounded-xl object-cover" style={{ aspectRatio: "16/9" }} />
-            ) : (
-              <div className="w-full rounded-xl bg-white/3 border border-white/8 flex items-center justify-center" style={{ aspectRatio: "16/9" }}>
-                <Camera size={32} className="text-white/20" />
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={takeSnap}
-              disabled={loading}
-              className="flex items-center gap-2 justify-center rounded-xl border border-white/10 py-2.5 text-sm text-white/70 hover:bg-white/5 disabled:opacity-50 transition"
-            >
-              <Image size={14} /> {loading ? "..." : "Snapshot"}
-            </button>
-            <button
-              onClick={doAnalyze}
-              disabled={analyzing}
-              className="flex items-center gap-2 justify-center rounded-xl bg-[#ff6a1a]/10 border border-[#ff6a1a]/20 py-2.5 text-sm text-[#ff6a1a] hover:bg-[#ff6a1a]/20 disabled:opacity-50 transition"
-            >
-              <Eye size={14} /> {analyzing ? "Tahlil..." : "AI Tahlil"}
-            </button>
-          </div>
-
-          {/* Analysis result */}
-          {analysis && (
-            <div className="rounded-xl border border-white/8 bg-white/2 p-4 space-y-3">
-              <p className="text-xs text-white/40 uppercase tracking-wider">AI Tahlil natijasi</p>
-              <p className="text-sm text-white/80">{analysis.summary}</p>
-              {analysis.objects.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {analysis.objects.map((o, i) => (
-                    <span key={i} className="text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/60">
-                      {o.type} {Math.round(o.confidence * 100)}%
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Recent events */}
-          <div>
-            <p className="text-xs text-white/40 uppercase tracking-wider mb-3">So'nggi hodisalar</p>
-            {events.length === 0 ? (
-              <p className="text-sm text-white/30">Hodisalar yo'q</p>
-            ) : (
-              <div>
-                {events.map(e => (
-                  <EventItem key={e.id} evt={e} cameras={[cam as CameraRow]} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <span className="text-xs text-white/25 flex-shrink-0">{timeSince(evt.started_at)}</span>
     </div>
   );
 }
@@ -339,15 +318,16 @@ export default function CamerasPage() {
   const [cameras, setCameras] = useState<CameraRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selected, setSelected] = useState<CameraRow | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [tab, setTab] = useState<"cameras" | "events">("cameras");
+  const [syncMsg, setSyncMsg] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     const [camRes, evtRes] = await Promise.all([
       fetch("/api/cameras").then(r => r.json() as Promise<{ cameras: CameraRow[] }>).catch(() => ({ cameras: [] })),
-      fetch("/api/cameras/events?limit=30").then(r => r.json() as Promise<{ events: EventRow[] }>).catch(() => ({ events: [] })),
+      fetch("/api/cameras/events?limit=50").then(r => r.json() as Promise<{ events: EventRow[] }>).catch(() => ({ events: [] })),
     ]);
     setCameras(camRes.cameras || []);
     setEvents(evtRes.events || []);
@@ -356,116 +336,138 @@ export default function CamerasPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  // SSE for real-time events
-  useEffect(() => {
-    // TODO: WebSocket/SSE real-time updates — hozir polling
-    const iv = setInterval(() => {
-      fetch("/api/cameras/events?limit=5")
-        .then(r => r.json() as Promise<{ events: EventRow[] }>)
-        .then(d => {
-          if (d.events?.length) setEvents(prev => {
-            const existingIds = new Set(prev.map(e => e.id));
-            const newEvts = d.events.filter(e => !existingIds.has(e.id));
-            return newEvts.length ? [...newEvts, ...prev].slice(0, 100) : prev;
-          });
-        }).catch(() => {});
-    }, 15000);
-    return () => clearInterval(iv);
-  }, []);
+  const handleSync = async () => {
+    setSyncing(true); setSyncMsg("");
+    try {
+      const res = await fetch("/api/cameras/ezviz/sync", { method: "POST" });
+      const d = await res.json() as { ok: boolean; message?: string; error?: string; total?: number };
+      if (d.ok) {
+        setSyncMsg(`✓ ${d.total} ta kamera yangilandi`);
+        await load();
+      } else {
+        setSyncMsg(`✗ ${d.error || "Xato"}`);
+      }
+    } finally { setSyncing(false); }
+  };
 
   const online = cameras.filter(c => c.status === "online").length;
   const offline = cameras.filter(c => c.status !== "online" && c.status !== "unknown").length;
+  const noEzviz = cameras.every(c => c.provider !== "ezviz");
 
   return (
     <div className="min-h-screen bg-[#080808] text-white">
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-white flex items-center gap-3">
-              <Camera size={24} className="text-[#ff6a1a]" />
-              Kameralar
+            <h1 className="text-xl font-semibold text-white flex items-center gap-2.5">
+              <Camera size={20} className="text-[#ff6a1a]" /> Kameralar
             </h1>
-            <p className="text-sm text-white/40 mt-1">EZVIZ · RTSP · AI Vision Monitoring</p>
+            <p className="text-xs text-white/35 mt-0.5">AI Vision · EZVIZ · Real-time</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => void load()} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-sm text-white/60 hover:bg-white/5 transition">
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Yangilash
+          <div className="flex items-center gap-2">
+            <button onClick={() => void load()} disabled={loading} className="p-2 rounded-xl border border-white/8 text-white/40 hover:text-white hover:bg-white/5 disabled:opacity-30 transition">
+              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
             </button>
-            <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#ff6a1a] text-sm font-medium text-white hover:brightness-110 transition">
-              <Plus size={14} /> Kamera qo'shish
+            <button onClick={handleSync} disabled={syncing} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/8 text-xs text-white/50 hover:bg-white/5 disabled:opacity-40 transition">
+              <Zap size={12} className={syncing ? "animate-pulse" : ""} />
+              {syncing ? "Yangilanmoqda..." : "EZVIZ Sync"}
             </button>
+            <Link href="/cameras/connect" className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#ff6a1a]/10 border border-[#ff6a1a]/20 text-xs text-[#ff6a1a] hover:bg-[#ff6a1a]/20 transition">
+              <Settings size={12} /> Sozlash
+            </Link>
           </div>
         </div>
+
+        {syncMsg && (
+          <div className={`rounded-xl border px-4 py-2.5 text-sm ${syncMsg.startsWith("✓") ? "border-green-500/20 bg-green-500/5 text-green-400" : "border-red-500/20 bg-red-500/5 text-red-400"}`}>
+            {syncMsg}
+          </div>
+        )}
+
+        {/* No cameras */}
+        {!loading && cameras.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center">
+            <Camera size={40} className="text-white/10 mx-auto mb-4" />
+            <p className="text-white/40 mb-2">Hali kamera yo'q</p>
+            <p className="text-sm text-white/25 mb-5">EZVIZ accountingizni ulang va kameralar avtomatik import qilinadi</p>
+            <Link href="/cameras/connect" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff6a1a] text-sm font-medium text-white hover:brightness-110 transition">
+              EZVIZ ulash <ExternalLink size={13} />
+            </Link>
+          </div>
+        )}
+
+        {/* EZVIZ not configured warning */}
+        {!loading && cameras.length > 0 && noEzviz && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex items-center gap-3">
+            <AlertCircle size={14} className="text-amber-400 flex-shrink-0" />
+            <p className="text-sm text-amber-300">Faqat mock/RTSP kameralar bor. EZVIZ ulash uchun →
+              <Link href="/cameras/connect" className="underline underline-offset-2 ml-1">Sozlash</Link>
+            </p>
+          </div>
+        )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: "Jami", value: cameras.length, icon: Camera, color: "#6b7280" },
-            { label: "Online", value: online, icon: Wifi, color: "#22c55e" },
-            { label: "Offline", value: offline, icon: WifiOff, color: "#ef4444" },
-            { label: "Hodisalar", value: events.length, icon: Activity, color: "#ff6a1a" },
-          ].map(s => (
-            <div key={s.label} className="rounded-2xl border border-white/8 bg-white/2 p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <s.icon size={14} style={{ color: s.color }} />
-                <span className="text-xs text-white/40">{s.label}</span>
+        {cameras.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Jami", value: cameras.length, color: "#6b7280", icon: Camera },
+              { label: "Online", value: online, color: "#22c55e", icon: Wifi },
+              { label: "Offline", value: offline, color: "#ef4444", icon: WifiOff },
+              { label: "Hodisalar", value: events.length, color: "#ff6a1a", icon: Activity },
+            ].map(s => (
+              <div key={s.label} className="rounded-2xl border border-white/6 bg-white/2 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <s.icon size={13} style={{ color: s.color }} />
+                  <span className="text-xs text-white/35">{s.label}</span>
+                </div>
+                <p className="text-2xl font-semibold text-white">{s.value}</p>
               </div>
-              <p className="text-2xl font-semibold text-white">{s.value}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Tabs */}
-        <div className="flex gap-1 rounded-xl border border-white/8 bg-white/2 p-1 w-fit">
-          {(["cameras", "events"] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition ${tab === t ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}
-            >
-              {t === "cameras" ? "Kameralar" : "Hodisalar"}
-            </button>
-          ))}
-        </div>
+        {cameras.length > 0 && (
+          <div className="flex gap-1 w-fit rounded-xl border border-white/6 bg-white/2 p-1">
+            {(["cameras", "events"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-5 py-2 rounded-lg text-sm font-medium transition ${tab === t ? "bg-white/10 text-white" : "text-white/35 hover:text-white/60"}`}
+              >
+                {t === "cameras" ? `Kameralar (${cameras.length})` : `Hodisalar (${events.length})`}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* Content */}
-        {tab === "cameras" ? (
+        {/* Camera grid */}
+        {tab === "cameras" && cameras.length > 0 && (
           loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="rounded-2xl border border-white/5 bg-white/2 h-40 animate-pulse" />
-              ))}
-            </div>
-          ) : cameras.length === 0 ? (
-            <div className="text-center py-20">
-              <Camera size={48} className="text-white/10 mx-auto mb-4" />
-              <p className="text-white/30">Hali kamera qo'shilmagan</p>
-              <button onClick={() => setShowAdd(true)} className="mt-4 text-sm text-[#ff6a1a] hover:underline">
-                Birinchi kamerani qo'shish →
-              </button>
+              {[1, 2, 3].map(i => <div key={i} className="rounded-2xl border border-white/5 h-36 animate-pulse bg-white/2" />)}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {cameras.map(c => (
-                <CameraCard key={c.id} cam={c} onClick={() => setSelected(c)} />
-              ))}
+              {cameras.map(c => <CameraCard key={c.id} cam={c} onClick={() => setSelected(c)} />)}
             </div>
           )
-        ) : (
-          <div className="rounded-2xl border border-white/8 bg-white/2 divide-y divide-white/5">
-            {events.length === 0 ? (
-              <div className="py-16 text-center text-white/30 text-sm">Hodisalar yo'q</div>
-            ) : (
-              events.map(e => <EventItem key={e.id} evt={e} cameras={cameras} />)
-            )}
+        )}
+
+        {/* Events list */}
+        {tab === "events" && (
+          <div className="rounded-2xl border border-white/6 overflow-hidden">
+            {events.length === 0
+              ? <div className="py-16 text-center text-white/25 text-sm">Hodisalar yo'q</div>
+              : events.map(e => <EventRow key={e.id} evt={e} cameras={cameras} />)
+            }
           </div>
         )}
       </div>
 
-      {/* Modals */}
-      {showAdd && <AddCameraModal onClose={() => setShowAdd(false)} onAdded={() => { setShowAdd(false); void load(); }} />}
+      {/* Detail panel */}
       {selected && <CameraDetail cam={selected} onClose={() => setSelected(null)} />}
     </div>
   );
