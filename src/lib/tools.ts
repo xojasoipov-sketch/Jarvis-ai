@@ -1326,6 +1326,54 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       });
     },
   },
+  {
+    name: "camera_ptz_move",
+    description: "Kamerani berilgan yo'nalishga burish (faqat PTZ qo'llovchi kameralarda). 'Kamerani chapga bur' kabi.",
+    parameters: {
+      type: "object",
+      properties: {
+        camera_id: { type: "string" },
+        direction: { type: "string", description: "left | right | up | down | up_left | up_right | down_left | down_right" },
+        speed: { type: "number", description: "0-1 oralig'ida, ixtiyoriy" },
+      },
+      required: ["camera_id", "direction"],
+    },
+    run: async (args) => {
+      const { ptzMove } = await import("./camera/camera-service");
+      return ptzMove(String(args.camera_id), args.direction as never, args.speed ? Number(args.speed) : undefined);
+    },
+  },
+  {
+    name: "camera_ptz_stop",
+    description: "PTZ harakatini to'xtatish.",
+    parameters: { type: "object", properties: { camera_id: { type: "string" } }, required: ["camera_id"] },
+    run: async (args) => {
+      const { ptzStop } = await import("./camera/camera-service");
+      return ptzStop(String(args.camera_id));
+    },
+  },
+  {
+    name: "camera_ptz_home",
+    description: "Kamerani boshlang'ich (home) holatiga qaytarish.",
+    parameters: { type: "object", properties: { camera_id: { type: "string" } }, required: ["camera_id"] },
+    run: async (args) => {
+      const { ptzHome } = await import("./camera/camera-service");
+      return ptzHome(String(args.camera_id));
+    },
+  },
+  {
+    name: "camera_ptz_preset",
+    description: "Kamerani saqlangan preset pozitsiyaga o'tkazish. 'Kamerani darvozaga qaytar' kabi.",
+    parameters: {
+      type: "object",
+      properties: { camera_id: { type: "string" }, preset: { type: "string", description: "Preset nomi/raqami" } },
+      required: ["camera_id", "preset"],
+    },
+    run: async (args) => {
+      const { ptzPreset } = await import("./camera/camera-service");
+      return ptzPreset(String(args.camera_id), String(args.preset));
+    },
+  },
 ];
 
 export function toolsAsOpenAIFunctions() {

@@ -28,6 +28,24 @@ type TargetBody = {
   rtsp_url?: string;
 };
 
+type PtzBody = TargetBody & {
+  direction?: string;
+  speed?: number;
+  preset?: string;
+};
+
+// PTZ safety (50-band: agent o'z-o'zicha destructive/uzoq muddatli harakat
+// qilmasin) — bitta continuousMove buyrug'i shu muddatdan keyin avtomatik
+// to'xtaydi, doimiy aylanib turishning oldi olinadi.
+const PTZ_MOVE_DURATION_MS = 800;
+
+const PTZ_VECTORS: Record<string, { x: number; y: number }> = {
+  left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+  up: { x: 0, y: 1 }, down: { x: 0, y: -1 },
+  up_left: { x: -1, y: 1 }, up_right: { x: 1, y: 1 },
+  down_left: { x: -1, y: -1 }, down_right: { x: 1, y: -1 },
+};
+
 function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let data = "";
@@ -45,6 +63,30 @@ function connectOnvif(ip: string, username: string, password: string): Promise<C
     const cam = new Cam({ hostname: ip, username, password, port: 80, timeout: 8000 }, (err: Error | null) => {
       if (err) reject(err); else resolve(cam);
     });
+  });
+}
+
+function ptzContinuousMove(cam: Cam, x: number, y: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    cam.continuousMove({ x, y }, (err) => { if (err) reject(err); else resolve(); });
+  });
+}
+
+function ptzStopMove(cam: Cam): Promise<void> {
+  return new Promise((resolve, reject) => {
+    cam.stop({}, (err) => { if (err) reject(err); else resolve(); });
+  });
+}
+
+function ptzGotoHome(cam: Cam): Promise<void> {
+  return new Promise((resolve, reject) => {
+    cam.gotoHomePosition({}, (err) => { if (err) reject(err); else resolve(); });
+  });
+}
+
+function ptzGotoPreset(cam: Cam, preset: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    cam.gotoPreset({ preset }, (err) => { if (err) reject(err); else resolve(); });
   });
 }
 
@@ -174,6 +216,58 @@ export function startGatewayServer() {
           const body = await readBody(req) as TargetBody;
           if (body.camera_id) stopHlsSession(body.camera_id);
           return json(res, 200, { ok: true });
+        }
+
+        if (req.method === "POST" && req.url === "/ptz/move") {
+          const body = await readBody(req) as PtzBody;
+          if (!body.ip || !body.username || !body.password) return json(res, 400, { error: "ip, username, password kerak" });
+          const vec = body.direction ? PTZ_VECTORS[body.direction] : undefined;
+          if (!vec) return json(res, 400, { error: `Noma'lum direction: ${body.direction}` });
+          const speed = Math.min(Math.max(body.speed ?? 0.5, 0.1), 1);
+          try {
+            const cam = await connectOnvif(body.ip, body.username, body.password);
+            await ptzContinuousMove(cam, vec.x * speed, vec.y * speed);
+            setTimeout(() => { ptzStopMove(cam).catch(() => {}); }, PTZ_MOVE_DURATION_MS);
+            return json(res, 200, { ok: true });
+          } catch (e) {
+            return json(res, 502, { error: e instanceof Error ? e.message : "PTZ move xatosi" });
+          }
+        }
+
+        if (req.method === "POST" && req.url === "/ptz/stop") {
+          const body = await readBody(req) as PtzBody;
+          if (!body.ip || !body.username || !body.password) return json(res, 200, { ok: true }); // idempotent
+          try {
+            const cam = await connectOnvif(body.ip, body.username, body.password);
+            await ptzStopMove(cam);
+          } catch { /* stop — xato bo'lsa ham jim, kritik emas */ }
+          return json(res, 200, { ok: true });
+        }
+
+        if (req.method === "POST" && req.url === "/ptz/home") {
+          const body = await readBody(req) as PtzBody;
+          if (!body.ip || !body.username || !body.password) return json(res, 400, { error: "ip, username, password kerak" });
+          try {
+            const cam = await connectOnvif(body.ip, body.username, body.password);
+            await ptzGotoHome(cam);
+            return json(res, 200, { ok: true });
+          } catch (e) {
+            return json(res, 502, { error: e instanceof Error ? e.message : "PTZ home qo'llanmaydi" });
+          }
+        }
+
+        if (req.method === "POST" && req.url === "/ptz/preset") {
+          const body = await readBody(req) as PtzBody;
+          if (!body.ip || !body.username || !body.password || !body.preset) {
+            return json(res, 400, { error: "ip, username, password, preset kerak" });
+          }
+          try {
+            const cam = await connectOnvif(body.ip, body.username, body.password);
+            await ptzGotoPreset(cam, body.preset);
+            return json(res, 200, { ok: true });
+          } catch (e) {
+            return json(res, 502, { error: e instanceof Error ? e.message : `Preset "${body.preset}" topilmadi` });
+          }
         }
 
         json(res, 404, { error: "Not found" });

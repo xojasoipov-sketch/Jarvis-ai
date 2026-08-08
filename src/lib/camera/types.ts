@@ -115,6 +115,8 @@ export type HealthCheckResult = {
   checked_at: string;
 };
 
+export type PtzDirection = "left" | "right" | "up" | "down" | "up_left" | "up_right" | "down_left" | "down_right";
+
 // ─── Provider Interface ───────────────────────────────────────────────────────
 export interface ICameraProvider {
   readonly name: string;
@@ -125,4 +127,13 @@ export interface ICameraProvider {
   getSnapshot(camera: Camera, credentials: Record<string, string>): Promise<SnapshotResult | null>;
   getStreamInfo(camera: Camera, credentials: Record<string, string>): Promise<StreamInfo | null>;
   healthCheck(camera: Camera, credentials: Record<string, string>): Promise<HealthCheckResult>;
+
+  // PTZ — faqat camera.capabilities.ptz=true bo'lganda chaqiriladi (37-band:
+  // "faqat capability mavjud bo'lsa expose qil"). Provider ptz qo'llamasa
+  // bu metodlarni implement qilmasligi mumkin — chaqiruvchi tomon avval
+  // getCapabilities().ptz'ni tekshiradi.
+  ptzMove?(camera: Camera, credentials: Record<string, string>, direction: PtzDirection, speed?: number): Promise<void>;
+  ptzStop?(camera: Camera, credentials: Record<string, string>): Promise<void>;
+  ptzHome?(camera: Camera, credentials: Record<string, string>): Promise<void>;
+  ptzPreset?(camera: Camera, credentials: Record<string, string>, preset: string): Promise<void>;
 }

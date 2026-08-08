@@ -5,7 +5,7 @@ import {
   createEvent, listEvents, searchEvents, listZones, logHealth, saveSnapshot,
 } from "./camera-store";
 import { analyzeSnapshot, classifyEventSeverity } from "./vision/detector";
-import type { Camera, CameraEvent, EventType, SnapshotResult, StreamInfo } from "./types";
+import type { Camera, CameraEvent, EventType, PtzDirection, SnapshotResult, StreamInfo } from "./types";
 
 // ─── Rate limiting / cache ─────────────────────────────────────────────────────
 // UI 15s intervalda status so'raydi — har renderda EZVIZ'ga request yubormaslik
@@ -112,6 +112,53 @@ export async function healthCheckAll(): Promise<{ camera: Camera; status: string
     await updateCamera(cam.id, { status: result.status as Camera["status"], last_seen: result.checked_at });
     return { camera: cam, status: result.status, latency_ms: result.latency_ms ?? null };
   }));
+}
+
+// ─── PTZ ──────────────────────────────────────────────────────────────────────
+// Har chaqiruvda capability tekshiriladi — 37/43-band: "faqat capability
+// mavjud bo'lsa expose qil", mavjud bo'lmasa aniq PTZ_UNSUPPORTED xatosi.
+async function requirePtz(camera_id: string) {
+  const cam = await getCamera(camera_id);
+  if (!cam) throw new Error(`Kamera topilmadi: ${camera_id}`);
+  if (!cam.capabilities?.ptz) {
+    const err = new Error(`${cam.name} PTZ'ni qo'llamaydi (PTZ_UNSUPPORTED)`);
+    err.name = "PTZ_UNSUPPORTED";
+    throw err;
+  }
+  const provider = getProvider(cam.provider);
+  if (!provider.ptzMove) {
+    const err = new Error(`${cam.provider} provider PTZ'ni implement qilmagan (PTZ_UNSUPPORTED)`);
+    err.name = "PTZ_UNSUPPORTED";
+    throw err;
+  }
+  const creds = await getCameraCredentials(camera_id);
+  return { cam, provider, creds };
+}
+
+export async function ptzMove(camera_id: string, direction: PtzDirection, speed?: number) {
+  const { cam, provider, creds } = await requirePtz(camera_id);
+  await provider.ptzMove!(cam, creds, direction, speed);
+  return { camera: cam, direction };
+}
+
+export async function ptzStop(camera_id: string) {
+  const { cam, provider, creds } = await requirePtz(camera_id);
+  await provider.ptzStop?.(cam, creds);
+  return { camera: cam };
+}
+
+export async function ptzHome(camera_id: string) {
+  const { cam, provider, creds } = await requirePtz(camera_id);
+  if (!provider.ptzHome) throw Object.assign(new Error("PTZ home qo'llanmaydi (PTZ_UNSUPPORTED)"), { name: "PTZ_UNSUPPORTED" });
+  await provider.ptzHome(cam, creds);
+  return { camera: cam };
+}
+
+export async function ptzPreset(camera_id: string, preset: string) {
+  const { cam, provider, creds } = await requirePtz(camera_id);
+  if (!provider.ptzPreset) throw Object.assign(new Error("PTZ preset qo'llanmaydi (PTZ_UNSUPPORTED)"), { name: "PTZ_UNSUPPORTED" });
+  await provider.ptzPreset(cam, creds, preset);
+  return { camera: cam, preset };
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────

@@ -14,5 +14,12 @@ declare module "onvif" {
       options: { protocol: "RTSP" | "HTTP" | "UDP" },
       callback: (err: Error | null, stream: { uri: string }) => void,
     ): void;
+    continuousMove(
+      options: { x: number; y: number; zoom?: number },
+      callback: (err: Error | null) => void,
+    ): void;
+    stop(options: Record<string, never>, callback: (err: Error | null) => void): void;
+    gotoHomePosition(options: Record<string, never>, callback: (err: Error | null) => void): void;
+    gotoPreset(options: { preset: string }, callback: (err: Error | null) => void): void;
   }
 }

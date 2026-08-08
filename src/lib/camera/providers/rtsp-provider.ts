@@ -7,13 +7,12 @@
 // o'zi uy tarmog'ida turadi va odatda to'g'ridan-to'g'ri internetga ochiq
 // bo'lmaydi (30-band) — shuning uchun bu URL amalda Cloudflare Tunnel /
 // Tailscale Funnel / ngrok kabi operator o'zi sozlagan tunnel manzili bo'lishi
-// kerak. Gateway'ning o'zi bu so'rovlarni qanday qabul qilishi (HTTP server)
-// hali yozilmagan — camera-gateway/README.md'da bu ochiq deb belgilangan.
+// kerak (gateway/README.md'ga qarang).
 //
 // CAMERA_GATEWAY_SECRET — cloud↔gateway o'rtasidagi shared-secret auth
 // (bearer token). Gateway HTTP server yozilganda shu tokenni tekshirishi shart.
 
-import type { Camera, CameraCapabilities, CameraStatus, HealthCheckResult, ICameraProvider, SnapshotResult, StreamInfo } from "../types";
+import type { Camera, CameraCapabilities, CameraStatus, HealthCheckResult, ICameraProvider, PtzDirection, SnapshotResult, StreamInfo } from "../types";
 
 const GATEWAY = process.env.CAMERA_GATEWAY_URL || "";
 const GATEWAY_SECRET = process.env.CAMERA_GATEWAY_SECRET || "";
@@ -120,5 +119,49 @@ export class RtspProvider implements ICameraProvider {
     const start = Date.now();
     const status = await this.getStatus(camera, creds);
     return { camera_id: camera.id, status, latency_ms: Date.now() - start, checked_at: new Date().toISOString() };
+  }
+
+  // ─── PTZ (faqat camera.capabilities.ptz=true bo'lganda chaqirilishi kerak) ──
+  async ptzMove(camera: Camera, creds: Record<string, string>, direction: PtzDirection, speed = 0.5): Promise<void> {
+    if (!GATEWAY) throw new Error("CAMERA_GATEWAY_URL sozlanmagan");
+    const target = gatewayTarget(camera, creds);
+    const res = await fetch(`${GATEWAY}/ptz/move`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ camera_id: camera.id, direction, speed, ...target }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error(`PTZ move muvaffaqiyatsiz: ${(await res.json().catch(() => ({ error: res.status }))).error}`);
+  }
+
+  async ptzStop(camera: Camera, creds: Record<string, string>): Promise<void> {
+    if (!GATEWAY) return;
+    const target = gatewayTarget(camera, creds);
+    await fetch(`${GATEWAY}/ptz/stop`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ camera_id: camera.id, ...target }),
+      signal: AbortSignal.timeout(8000),
+    }).catch(() => {});
+  }
+
+  async ptzHome(camera: Camera, creds: Record<string, string>): Promise<void> {
+    if (!GATEWAY) throw new Error("CAMERA_GATEWAY_URL sozlanmagan");
+    const target = gatewayTarget(camera, creds);
+    const res = await fetch(`${GATEWAY}/ptz/home`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ camera_id: camera.id, ...target }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error("PTZ home muvaffaqiyatsiz");
+  }
+
+  async ptzPreset(camera: Camera, creds: Record<string, string>, preset: string): Promise<void> {
+    if (!GATEWAY) throw new Error("CAMERA_GATEWAY_URL sozlanmagan");
+    const target = gatewayTarget(camera, creds);
+    const res = await fetch(`${GATEWAY}/ptz/preset`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ camera_id: camera.id, preset, ...target }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error(`PTZ preset "${preset}" topilmadi yoki muvaffaqiyatsiz`);
   }
 }
