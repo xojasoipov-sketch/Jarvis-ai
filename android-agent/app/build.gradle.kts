@@ -35,6 +35,24 @@ android {
         buildConfigField("String", "AUTO_PAIR_KEY", "\"$autoPairKey\"")
     }
 
+    // MUHIM: debug.keystore repoga qo'shilgan (app/debug.keystore) — Gradle'ning
+    // standart implicit debug keystore'i har CI runner'da (yoki har lokal
+    // mashinada ~/.android/debug.keystore bo'lmasa) TASODIFIY yangi kalit bilan
+    // yaratiladi. Bu degani: keshlanmagan CI'da har build boshqa imzoda chiqadi,
+    // Android buni "boshqa ilova" deb hisoblaydi — o'rnatish uchun eskisini
+    // o'chirish kerak bo'ladi, bu esa pairing sessiyasini va barcha berilgan
+    // ruxsatlarni (batareya, overlay, autostart) yo'qqa chiqaradi. Shu committed
+    // keystore bilan barcha build'lar (lokal ham, CI ham) bir xil imzoda chiqadi
+    // — yangi APK doim UPGRADE sifatida o'rnatiladi, hech narsa yo'qolmaydi.
+    signingConfigs {
+        create("debugStable") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -47,6 +65,7 @@ android {
         debug {
             isDebuggable = true
             applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debugStable")
         }
     }
 

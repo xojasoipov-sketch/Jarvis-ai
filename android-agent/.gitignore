@@ -10,4 +10,9 @@
 local.properties
 *.jks
 *.keystore
+# Debug keystore bundan mustasno — qasddan repoga qo'shilgan (barqaror imzo
+# uchun, build.gradle.kts'dagi izohga qarang). Faqat DEBUG build uchun,
+# hech qanday maxfiy/production kalit emas — parolI ham "android" (Android
+# SDK'ning standart ochiq debug paroli).
+!app/debug.keystore
 app/release/
