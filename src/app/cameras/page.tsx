@@ -374,8 +374,11 @@ export default function CamerasPage() {
               <Zap size={12} className={syncing ? "animate-pulse" : ""} />
               {syncing ? "Yangilanmoqda..." : "EZVIZ Sync"}
             </button>
-            <Link href="/cameras/connect" className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#ff6a1a]/10 border border-[#ff6a1a]/20 text-xs text-[#ff6a1a] hover:bg-[#ff6a1a]/20 transition">
+            <Link href="/cameras/connect" className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/8 text-xs text-white/50 hover:bg-white/5 transition">
               <Settings size={12} /> Sozlash
+            </Link>
+            <Link href="/cameras/pair" className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#ff6a1a]/10 border border-[#ff6a1a]/20 text-xs text-[#ff6a1a] hover:bg-[#ff6a1a]/20 transition">
+              <Plus size={12} /> Kamera qo'shish
             </Link>
           </div>
         </div>
@@ -391,10 +394,15 @@ export default function CamerasPage() {
           <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center">
             <Camera size={40} className="text-white/10 mx-auto mb-4" />
             <p className="text-white/40 mb-2">Hali kamera yo'q</p>
-            <p className="text-sm text-white/25 mb-5">EZVIZ accountingizni ulang va kameralar avtomatik import qilinadi</p>
-            <Link href="/cameras/connect" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff6a1a] text-sm font-medium text-white hover:brightness-110 transition">
-              EZVIZ ulash <ExternalLink size={13} />
-            </Link>
+            <p className="text-sm text-white/25 mb-5">Local kamerani QR orqali ulang yoki EZVIZ accountingizni sinxronlang</p>
+            <div className="flex items-center justify-center gap-3">
+              <Link href="/cameras/pair" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ff6a1a] text-sm font-medium text-white hover:brightness-110 transition">
+                <Plus size={13} /> Kamera qo'shish
+              </Link>
+              <Link href="/cameras/connect" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 text-sm text-white/60 hover:text-white transition">
+                EZVIZ ulash <ExternalLink size={13} />
+              </Link>
+            </div>
           </div>
         )}
 
