@@ -1147,6 +1147,185 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       return cfKvPut(String(args.namespace_id), String(args.key), String(args.value), args.ttl ? Number(args.ttl) : undefined);
     },
   },
+  // ─── Camera AI Tools ─────────────────────────────────────────────────────
+  {
+    name: "camera_list",
+    description: "Barcha kameralar ro'yxati va holati. 'Kameralarni ko'rsat', 'Qanday kameralar bor?' uchun.",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const { getCameraList } = await import("./camera/camera-service");
+      const cams = await getCameraList();
+      if (!cams.length) return { cameras: [], message: "Hech qanday kamera qo'shilmagan." };
+      return { cameras: cams.map(c => ({ id: c.id, name: c.name, status: c.status, location: c.location, provider: c.provider, last_seen: c.last_seen })), count: cams.length };
+    },
+  },
+  {
+    name: "camera_status",
+    description: "Bitta kameraning joriy holati va sog'ligini tekshirish.",
+    parameters: {
+      type: "object",
+      properties: { camera_id: { type: "string", description: "Kamera ID yoki nomi" } },
+      required: ["camera_id"],
+    },
+    run: async (args) => {
+      const { getCameraStatus } = await import("./camera/camera-service");
+      return getCameraStatus(String(args.camera_id));
+    },
+  },
+  {
+    name: "camera_snapshot",
+    description: "Kameradan hozirgi paytda rasm (snapshot) olish.",
+    parameters: {
+      type: "object",
+      properties: { camera_id: { type: "string", description: "Kamera ID" } },
+      required: ["camera_id"],
+    },
+    run: async (args) => {
+      const { takeSnapshot } = await import("./camera/camera-service");
+      return takeSnapshot(String(args.camera_id));
+    },
+  },
+  {
+    name: "camera_analyze",
+    description: "Kameradan snapshot olib AI tahlil qilish. 'Darvozada odam bormi?', 'Kamerani analiz qil' uchun.",
+    parameters: {
+      type: "object",
+      properties: { camera_id: { type: "string", description: "Kamera ID" } },
+      required: ["camera_id"],
+    },
+    run: async (args) => {
+      const { analyzeCamera } = await import("./camera/camera-service");
+      return analyzeCamera(String(args.camera_id));
+    },
+  },
+  {
+    name: "camera_stream",
+    description: "Kamera live stream URL'ini olish (HLS/RTSP).",
+    parameters: {
+      type: "object",
+      properties: { camera_id: { type: "string", description: "Kamera ID" } },
+      required: ["camera_id"],
+    },
+    run: async (args) => {
+      const { getStreamInfo } = await import("./camera/camera-service");
+      return getStreamInfo(String(args.camera_id));
+    },
+  },
+  {
+    name: "camera_events",
+    description: "Kamera hodisalari tarixi (motion, person, vehicle detections va hokazo).",
+    parameters: {
+      type: "object",
+      properties: {
+        camera_id: { type: "string", description: "Kamera ID (ixtiyoriy — bo'lmasa hammasi)" },
+        event_type: { type: "string", description: "Hodisa turi (person_detected, vehicle_detected, motion_detected, camera_offline ...)" },
+        from: { type: "string", description: "Boshlanish vaqti ISO8601" },
+        to: { type: "string", description: "Tugash vaqti ISO8601" },
+        limit: { type: "number", description: "Nechta hodisa (default 20)" },
+      },
+    },
+    run: async (args) => {
+      const { searchEvents } = await import("./camera/camera-service");
+      return searchEvents({
+        camera_id: args.camera_id ? String(args.camera_id) : undefined,
+        event_type: args.event_type as never,
+        from: args.from ? String(args.from) : undefined,
+        to: args.to ? String(args.to) : undefined,
+        limit: args.limit ? Number(args.limit) : 20,
+      });
+    },
+  },
+  {
+    name: "camera_health_check",
+    description: "Barcha kameralarning sog'ligini tekshirish. 'Qaysi kameralar offline?' uchun.",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const { healthCheckAll } = await import("./camera/camera-service");
+      const results = await healthCheckAll();
+      const online = results.filter(r => r.status === "online").length;
+      const offline = results.filter(r => r.status !== "online").length;
+      return { results, summary: `${online} ta online, ${offline} ta offline/xato.` };
+    },
+  },
+  {
+    name: "camera_zones",
+    description: "Kameradagi monitoring zonalarini ko'rish.",
+    parameters: {
+      type: "object",
+      properties: { camera_id: { type: "string", description: "Kamera ID" } },
+      required: ["camera_id"],
+    },
+    run: async (args) => {
+      const { listZones } = await import("./camera/camera-service");
+      return listZones(String(args.camera_id));
+    },
+  },
+  {
+    name: "camera_create_zone",
+    description: "Kameraga yangi monitoring zonasi qo'shish.",
+    parameters: {
+      type: "object",
+      properties: {
+        camera_id: { type: "string" },
+        name: { type: "string", description: "Zona nomi (masalan: darvoza, hovli)" },
+        zone_type: { type: "string", description: "normal | restricted | entry | exit" },
+        polygon: { type: "array", description: "Polygon koordinatalar [[x,y],...]" },
+      },
+      required: ["camera_id", "name", "zone_type"],
+    },
+    run: async (args) => {
+      const { createZone } = await import("./camera/camera-store");
+      return createZone({
+        camera_id: String(args.camera_id),
+        name: String(args.name),
+        zone_type: (args.zone_type as never) || "normal",
+        polygon: (args.polygon as [number, number][]) || [],
+        enabled: true,
+      });
+    },
+  },
+  {
+    name: "camera_rules",
+    description: "Kamera automation qoidalarini ko'rish.",
+    parameters: {
+      type: "object",
+      properties: { camera_id: { type: "string" } },
+    },
+    run: async (args) => {
+      const { listRules } = await import("./camera/camera-store");
+      return listRules(args.camera_id ? String(args.camera_id) : undefined);
+    },
+  },
+  {
+    name: "camera_create_rule",
+    description: "Kamera uchun yangi automation qoidasi yaratish. 'Agar darvozada odam bo'lsa xabar ber' kabi.",
+    parameters: {
+      type: "object",
+      properties: {
+        camera_id: { type: "string", description: "Kamera ID (null = hammasi)" },
+        name: { type: "string", description: "Qoida nomi" },
+        trigger_type: { type: "string", description: "object_detected | zone_enter | zone_exit | schedule | camera_offline" },
+        trigger_config: { type: "object", description: '{"object": "person", "zone": "gate"}' },
+        action_type: { type: "string", description: "telegram_alert | record | snapshot | webhook" },
+        action_config: { type: "object" },
+        schedule: { type: "object", description: '{"start": "23:00", "end": "06:00"}' },
+      },
+      required: ["name", "trigger_type", "action_type"],
+    },
+    run: async (args) => {
+      const { createRule } = await import("./camera/camera-store");
+      return createRule({
+        camera_id: args.camera_id ? String(args.camera_id) : null,
+        name: String(args.name),
+        trigger_type: args.trigger_type as never,
+        trigger_config: (args.trigger_config as Record<string, unknown>) || {},
+        action_type: args.action_type as never,
+        action_config: (args.action_config as Record<string, unknown>) || {},
+        schedule: (args.schedule as never) || null,
+        enabled: true,
+      });
+    },
+  },
 ];
 
 export function toolsAsOpenAIFunctions() {
