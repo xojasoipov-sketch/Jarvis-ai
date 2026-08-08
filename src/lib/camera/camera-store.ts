@@ -1,5 +1,6 @@
 // ─── Camera Store — Supabase CRUD ─────────────────────────────────────────────
 import { supabase, dbConfigured } from "@/lib/supabase";
+import { encryptSecret, decryptSecret } from "./crypto";
 import type { Camera, CameraEvent, CameraRule, CameraZone, EventType } from "./types";
 
 type CameraCredentials = Record<string, string>;
@@ -36,19 +37,41 @@ export async function deleteCamera(id: string): Promise<void> {
   await supabase.from("cameras").delete().eq("id", id);
 }
 
-// ─── Credentials (plain text saqlanadi — production'da vault kerak) ───────────
+// ─── Credentials (AES-256-GCM bilan shifrlanadi — EZVIZ_TOKEN_ENC_KEY orqali) ─
 export async function getCameraCredentials(camera_id: string): Promise<CameraCredentials> {
   if (!dbConfigured || !supabase) return {};
   const { data } = await supabase.from("camera_credentials").select("secret_json").eq("camera_id", camera_id).single();
   if (!data) return {};
-  try { return JSON.parse(data.secret_json as string) as CameraCredentials; }
-  catch { return {}; }
+  try {
+    const decrypted = decryptSecret(data.secret_json as string);
+    return JSON.parse(decrypted) as CameraCredentials;
+  } catch { return {}; }
 }
 
 export async function setCameraCredentials(camera_id: string, creds: CameraCredentials): Promise<void> {
   if (!dbConfigured || !supabase) return;
+  const encrypted = encryptSecret(JSON.stringify(creds));
   await supabase.from("camera_credentials").upsert({
-    camera_id, secret_json: JSON.stringify(creds), updated_at: new Date().toISOString(),
+    camera_id, secret_json: encrypted, updated_at: new Date().toISOString(),
+  });
+}
+
+// ─── EZVIZ token cache (persist — server restart'da qayta login talab qilmaslik) ─
+export async function getCachedEzvizToken(app_key: string): Promise<{ token: string; expiresAt: number } | null> {
+  if (!dbConfigured || !supabase) return null;
+  const { data } = await supabase.from("ezviz_token_cache").select("token_enc, expires_at").eq("app_key", app_key).single();
+  if (!data) return null;
+  try {
+    const token = decryptSecret(data.token_enc as string);
+    return { token, expiresAt: Number(data.expires_at) };
+  } catch { return null; }
+}
+
+export async function setCachedEzvizToken(app_key: string, token: string, expiresAt: number): Promise<void> {
+  if (!dbConfigured || !supabase) return;
+  const token_enc = encryptSecret(token);
+  await supabase.from("ezviz_token_cache").upsert({
+    app_key, token_enc, expires_at: expiresAt, updated_at: new Date().toISOString(),
   });
 }
 

@@ -16,6 +16,7 @@ import type {
   Camera, CameraCapabilities, CameraStatus,
   HealthCheckResult, ICameraProvider, SnapshotResult, StreamInfo,
 } from "../types";
+import { getCachedEzvizToken, setCachedEzvizToken } from "../camera-store";
 
 // ─── EZVIZ API Region URLs ────────────────────────────────────────────────────
 // China: https://open.ys7.com
@@ -118,15 +119,28 @@ async function fetchFreshToken(appKey: string, appSecret: string): Promise<strin
   const token = data.data.accessToken;
   const expiresAt = data.data.expireTime; // milliseconds timestamp
   tokenCache.set(appKey, { token, expiresAt });
+  // DB'ga ham persist qilamiz (shifrlangan) — server restart'da qayta login shart emas
+  setCachedEzvizToken(appKey, token, expiresAt).catch((e) => {
+    console.error("[EZVIZ token] DB persist xatosi (in-memory cache bilan davom etadi):", e instanceof Error ? e.message : e);
+  });
   return token;
 }
+
+const TOKEN_REFRESH_MARGIN_MS = 300_000; // 5 daqiqa oldin yangilash
 
 async function getToken(appKey: string, appSecret: string, forceRefresh = false): Promise<string> {
   if (!forceRefresh) {
     const cached = tokenCache.get(appKey);
-    // Token muddatidan 5 daqiqa oldin yangilash
-    if (cached && cached.expiresAt > Date.now() + 300_000) {
+    if (cached && cached.expiresAt > Date.now() + TOKEN_REFRESH_MARGIN_MS) {
       return cached.token;
+    }
+    // In-memory cache'da yo'q (masalan restart'dan keyin) — DB'dan tiklashga urinamiz
+    if (!cached) {
+      const persisted = await getCachedEzvizToken(appKey).catch(() => null);
+      if (persisted && persisted.expiresAt > Date.now() + TOKEN_REFRESH_MARGIN_MS) {
+        tokenCache.set(appKey, persisted);
+        return persisted.token;
+      }
     }
   } else {
     tokenCache.delete(appKey);

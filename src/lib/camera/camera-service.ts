@@ -7,17 +7,33 @@ import {
 import { analyzeSnapshot, classifyEventSeverity } from "./vision/detector";
 import type { Camera, CameraEvent, EventType, SnapshotResult, StreamInfo } from "./types";
 
+// ─── Rate limiting / cache ─────────────────────────────────────────────────────
+// UI 15s intervalda status so'raydi — har renderda EZVIZ'ga request yubormaslik
+// uchun qisqa TTL kesh. Live stream/snapshot kabi "haqiqiy vaqt" kerak bo'lgan
+// so'rovlar kesh qilinmaydi.
+const STATUS_CACHE_TTL_MS = 10_000;
+const statusCache = new Map<string, { status: Camera["status"]; at: number }>();
+
 // ─── Camera list + status ─────────────────────────────────────────────────────
 export async function getCameraList() {
   return listCameras();
 }
 
-export async function getCameraStatus(camera_id: string) {
+export async function getCameraStatus(camera_id: string, opts: { force?: boolean } = {}) {
   const cam = await getCamera(camera_id);
   if (!cam) throw new Error(`Kamera topilmadi: ${camera_id}`);
+
+  if (!opts.force) {
+    const cached = statusCache.get(camera_id);
+    if (cached && Date.now() - cached.at < STATUS_CACHE_TTL_MS) {
+      return { camera: { ...cam, status: cached.status }, status: cached.status };
+    }
+  }
+
   const creds = await getCameraCredentials(camera_id);
   const provider = getProvider(cam.provider);
   const status = await provider.getStatus(cam, creds);
+  statusCache.set(camera_id, { status, at: Date.now() });
   await updateCamera(camera_id, { status, last_seen: status === "online" ? new Date().toISOString() : cam.last_seen });
   return { camera: cam, status };
 }
