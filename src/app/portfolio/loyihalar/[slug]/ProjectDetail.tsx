@@ -8,7 +8,7 @@ import {
   CATEGORY_ACCENT, type ProjectCategoryName,
 } from "../../_components/theme";
 import {
-  Container, Section, SectionLabel, SectionHeading, GlassCard, CtaBand,
+  Container, Section, SectionLabel, SectionHeading, GlassCard, CtaBand, GhostButton,
   fadeUp, Reveal, TextReveal, Counter, Lift, PointerTilt, Floating,
 } from "../../_components/ui";
 import type { Project } from "@/lib/portfolio-store";
@@ -155,9 +155,13 @@ export default function ProjectDetail({
                   ))}
                 </motion.div>
 
-                {/* Loyiha ochiq bo'lsa — to'g'ridan-to'g'ri havola */}
-                {project.link && (
-                  <motion.div variants={fadeUp} className="mt-8">
+                {/*
+                  Manba kodi/repo havolasi bu yerda ko'rsatilmaydi — mehmonni
+                  repoga emas, aloqa formasiga yo'naltiramiz. Faqat haqiqiy
+                  jonli sayt (demo) bo'lganda tashqi havola ham qo'shiladi.
+                */}
+                <motion.div variants={fadeUp} className="mt-8 flex flex-wrap gap-3">
+                  {project.link && (
                     <a
                       href={project.link}
                       target="_blank"
@@ -165,11 +169,14 @@ export default function ProjectDetail({
                       className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-[13px] font-semibold transition hover:brightness-110"
                       style={goldButtonStyle}
                     >
-                      Loyihani ko{"'"}rish
+                      Jonli saytni ko{"'"}rish
                       <ExternalLink size={14} />
                     </a>
-                  </motion.div>
-                )}
+                  )}
+                  <GhostButton href="/portfolio/aloqa">
+                    Shunga o{"'"}xshash loyiha buyurtma qilish <ArrowRight size={14} />
+                  </GhostButton>
+                </motion.div>
               </div>
 
               <motion.div variants={fadeUp}>

@@ -335,11 +335,11 @@ function Editor({
             />
           </Field>
 
-          <Field label="Havola" hint="sayt yoki repo — bo'sh qoldirsa ko'rsatilmaydi">
+          <Field label="Havola" hint="FAQAT jonli sayt/demo — repo havolasi emas (mehmonlar kodga kirmasin)">
             <input
               value={draft.link}
               onChange={(e) => set("link", e.target.value)}
-              placeholder="https://github.com/…"
+              placeholder="https://loyiha-nomi.uz"
               className={inputClass}
             />
           </Field>
