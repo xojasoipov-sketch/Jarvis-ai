@@ -43,6 +43,7 @@ function sanitize(body: Record<string, unknown>): ProjectInput | { error: string
     summary: String(body.summary ?? "").trim(),
     gradient: String(body.gradient ?? "").trim() ||
       "linear-gradient(150deg,#0b1220 0%,#12233d 55%,#0b1220 100%)",
+    cover_url: String(body.cover_url ?? "").trim() || null,
     tech,
     link: link || null,
     metrics,

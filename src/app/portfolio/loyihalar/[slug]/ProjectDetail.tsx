@@ -20,6 +20,23 @@ function categoryAccent(cat: string): string {
 /** Device mockups standing in for project screenshots — no image assets needed. */
 function ProjectShowcase({ project }: { project: Project }) {
   const accent = categoryAccent(project.category);
+
+  // Haqiqiy mavzuga mos grafika bo'lsa shuni ko'rsatamiz — bo'lmasa pastdagi
+  // abstrakt telefon-mockup fallback ishlaydi.
+  if (project.cover_url) {
+    return (
+      <PointerTilt intensity={5} className="relative w-full max-w-[560px] mx-auto">
+        <div
+          className="relative overflow-hidden aspect-[16/10]"
+          style={{ borderRadius: 28, border: `1px solid ${alpha(accent, 0.24)}`, boxShadow: SHADOW_LUXURY }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={project.cover_url} alt={project.title} className="h-full w-full object-cover" />
+        </div>
+      </PointerTilt>
+    );
+  }
+
   return (
     <PointerTilt intensity={7} className="relative w-full aspect-[4/3] max-w-[520px] mx-auto">
       <div

@@ -26,8 +26,10 @@ export interface Project {
   category: Exclude<ProjectCategory, "Barchasi">;
   tagline: string;
   summary: string;
-  /** Card cover — CSS gradient, so no image files are required. */
+  /** Card cover — CSS gradient, used as fallback when cover_url is empty. */
   gradient: string;
+  /** Topic-relevant illustration (Supabase Storage). Null renders the gradient instead. */
+  cover_url: string | null;
   tech: string[];
   /** Live site or repository; null when the work isn't public. */
   link: string | null;

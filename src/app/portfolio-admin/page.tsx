@@ -28,6 +28,7 @@ type Project = {
   tagline: string;
   summary: string;
   gradient: string;
+  cover_url: string | null;
   tech: string[];
   link: string | null;
   metrics: Metric[];
@@ -39,24 +40,28 @@ type Project = {
 };
 
 /** Formadagi ko'rinish: input'lar null qabul qilmagani uchun matn maydonlari doim string. */
-type Draft = Omit<Project, "id" | "tech" | "link" | "problem" | "solution"> & {
+type Draft = Omit<Project, "id" | "tech" | "link" | "problem" | "solution" | "cover_url"> & {
   id?: string;
   tech: string;
   link: string;
   problem: string;
   solution: string;
+  cover_url: string;
 };
 
 function emptyDraft(nextOrder: number): Draft {
   return {
     slug: "", title: "", category: "AI", tagline: "", summary: "",
-    gradient: GRADIENTS[0].value, tech: "", link: "", metrics: [],
+    gradient: GRADIENTS[0].value, cover_url: "", tech: "", link: "", metrics: [],
     problem: "", solution: "", featured: false, published: true, sort_order: nextOrder,
   };
 }
 
 function toDraft(p: Project): Draft {
-  return { ...p, tech: p.tech.join(", "), link: p.link ?? "", problem: p.problem ?? "", solution: p.solution ?? "" };
+  return {
+    ...p, tech: p.tech.join(", "), link: p.link ?? "", problem: p.problem ?? "",
+    solution: p.solution ?? "", cover_url: p.cover_url ?? "",
+  };
 }
 
 export default function PortfolioAdminPage() {
@@ -175,11 +180,20 @@ export default function PortfolioAdminPage() {
                 className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4 hover:border-white/20 transition"
               >
                 <GripVertical size={16} className="text-white/20 shrink-0" />
-                <div
-                  className="h-12 w-12 shrink-0 rounded-xl border border-white/10"
-                  style={{ background: p.gradient }}
-                  aria-hidden="true"
-                />
+                {p.cover_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={p.cover_url}
+                    alt=""
+                    className="h-12 w-12 shrink-0 rounded-xl border border-white/10 object-cover"
+                  />
+                ) : (
+                  <div
+                    className="h-12 w-12 shrink-0 rounded-xl border border-white/10"
+                    style={{ background: p.gradient }}
+                    aria-hidden="true"
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold truncate">{p.title}</span>
@@ -339,7 +353,24 @@ function Editor({
             />
           </Field>
 
-          <Field label="Karta rangi">
+          <Field label="Rasm URL" hint="bo'sh qoldirsa quyidagi rang gradienti ko'rsatiladi">
+            <input
+              value={draft.cover_url}
+              onChange={(e) => set("cover_url", e.target.value)}
+              placeholder="https://…/portfolio-media/projects/loyiha.png"
+              className={inputClass}
+            />
+            {draft.cover_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={draft.cover_url}
+                alt=""
+                className="mt-2 h-24 w-full rounded-lg border border-white/10 object-cover"
+              />
+            )}
+          </Field>
+
+          <Field label="Karta rangi" hint="rasm bo'lmaganda yoki yuklanmasa shu ko'rsatiladi">
             <div className="flex flex-wrap gap-2">
               {GRADIENTS.map((g) => (
                 <button

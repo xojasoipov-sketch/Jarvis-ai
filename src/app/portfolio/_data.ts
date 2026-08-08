@@ -143,7 +143,11 @@ export interface Post {
   date: string;
   readMinutes: number;
   featured?: boolean;
+  /** Supabase Storage'dagi mavzuga mos abstrakt grafika. Bo'lmasa kartada gradient qoladi. */
+  cover?: string;
 }
+
+const MEDIA = "https://tomkxsdkerpbvlumubbg.supabase.co/storage/v1/object/public/portfolio-media/blog";
 
 export const POSTS: Post[] = [
   {
@@ -154,6 +158,7 @@ export const POSTS: Post[] = [
     date: "2026-07-28",
     readMinutes: 6,
     featured: true,
+    cover: `${MEDIA}/ai-kelajagi.png`,
   },
   {
     slug: "telegram-mini-app-nima",
@@ -161,6 +166,7 @@ export const POSTS: Post[] = [
     excerpt: "Mini App'lar oddiy botdan nimasi bilan farq qiladi va qaysi biznesga mos keladi.",
     date: "2026-07-14",
     readMinutes: 4,
+    cover: `${MEDIA}/telegram-mini-app-nima.png`,
   },
   {
     slug: "smm-avtomatlashtirish",
@@ -168,6 +174,7 @@ export const POSTS: Post[] = [
     excerpt: "Kontent rejasi, avtomatik chop etish va analitika — qo'lda ishlashni kamaytirish yo'llari.",
     date: "2026-06-30",
     readMinutes: 5,
+    cover: `${MEDIA}/smm-avtomatlashtirish.png`,
   },
   {
     slug: "veb-sayt-tezligi",
@@ -175,6 +182,7 @@ export const POSTS: Post[] = [
     excerpt: "Bir soniya kechikish konversiyani qancha kamaytiradi va buni qanday tuzatish mumkin.",
     date: "2026-06-12",
     readMinutes: 7,
+    cover: `${MEDIA}/veb-sayt-tezligi.png`,
   },
   {
     slug: "crm-tanlash",
@@ -182,6 +190,7 @@ export const POSTS: Post[] = [
     excerpt: "Har bir yondashuvning kuchli va zaif tomonlari, hamda tanlov mezonlari.",
     date: "2026-05-29",
     readMinutes: 6,
+    // Canva kvotasi tugagani sababli hozircha rasm yo'q — gradient qoladi.
   },
 ];
 

@@ -303,10 +303,19 @@ function StackCard({
             className="relative min-h-[220px] md:min-h-[380px] group overflow-hidden"
             aria-label={project.title}
           >
-            <div
-              className="absolute inset-0 transition-transform duration-700 group-hover:scale-105"
-              style={{ background: project.gradient }}
-            />
+            {project.cover_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={project.cover_url}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+            ) : (
+              <div
+                className="absolute inset-0 transition-transform duration-700 group-hover:scale-105"
+                style={{ background: project.gradient }}
+              />
+            )}
             <div
               className="absolute inset-0"
               style={{ background: "linear-gradient(to top, rgba(0,0,0,0.55) 4%, transparent 55%)" }}
@@ -442,10 +451,15 @@ function BlogPreview() {
                     className="aspect-[16/10] relative overflow-hidden"
                     style={{ background: "linear-gradient(150deg,#141210 0%,#2b2114 60%,#100e0c 100%)" }}
                   >
-                    <div
-                      className="absolute inset-0"
-                      style={{ background: `radial-gradient(ellipse 55% 50% at 55% 40%, ${gold(0.2)}, transparent 68%)` }}
-                    />
+                    {p.cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                    ) : (
+                      <div
+                        className="absolute inset-0"
+                        style={{ background: `radial-gradient(ellipse 55% 50% at 55% 40%, ${gold(0.2)}, transparent 68%)` }}
+                      />
+                    )}
                   </div>
                   <div className="p-7 flex flex-col flex-1">
                     <div className="flex items-center gap-3.5 text-[11px] mb-3" style={{ color: TEXT_DIM }}>

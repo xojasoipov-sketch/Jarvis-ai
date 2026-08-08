@@ -64,10 +64,19 @@ export default function BlogPage() {
                       className="relative aspect-[16/10] lg:aspect-auto lg:min-h-[380px] overflow-hidden"
                       style={{ background: "linear-gradient(150deg,#0b1220 0%,#1a2c46 55%,#0b1220 100%)" }}
                     >
-                      <div
-                        className="absolute inset-0 transition-transform duration-700 group-hover:scale-105"
-                        style={{ background: `radial-gradient(ellipse 55% 50% at 55% 42%, ${gold(0.24)}, transparent 68%)` }}
-                      />
+                      {featured.cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={featured.cover}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div
+                          className="absolute inset-0 transition-transform duration-700 group-hover:scale-105"
+                          style={{ background: `radial-gradient(ellipse 55% 50% at 55% 42%, ${gold(0.24)}, transparent 68%)` }}
+                        />
+                      )}
                     </div>
                     <div className="p-9 md:p-12 flex flex-col justify-center" style={{ background: "rgba(18,18,18,0.72)" }}>
                       <span
@@ -145,10 +154,15 @@ export default function BlogPage() {
                     className="aspect-[16/10] relative overflow-hidden"
                     style={{ background: "linear-gradient(150deg,#141210 0%,#2b2114 60%,#100e0c 100%)" }}
                   >
-                    <div
-                      className="absolute inset-0"
-                      style={{ background: `radial-gradient(ellipse 55% 50% at 55% 40%, ${gold(0.18)}, transparent 68%)` }}
-                    />
+                    {p.cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                    ) : (
+                      <div
+                        className="absolute inset-0"
+                        style={{ background: `radial-gradient(ellipse 55% 50% at 55% 40%, ${gold(0.18)}, transparent 68%)` }}
+                      />
+                    )}
                   </div>
                   <div className="p-7 flex flex-col flex-1">
                     <div className="flex items-center gap-3.5 text-[11px] mb-3" style={{ color: TEXT_DIM }}>
