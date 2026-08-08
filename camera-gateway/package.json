@@ -1,0 +1,21 @@
+{
+  "name": "jarvis-camera-gateway",
+  "version": "0.1.0",
+  "description": "Jarvis Camera Gateway — uy tarmog'ida ishlaydigan local bridge. ONVIF discovery, RTSP snapshot, Jarvis Cloud bilan pairing/report.",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "node dist/index.js",
+    "pair": "node dist/index.js --pair"
+  },
+  "dependencies": {
+    "onvif": "^0.7.1",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}
