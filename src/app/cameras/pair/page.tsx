@@ -235,9 +235,12 @@ export default function CameraPairPage() {
           </div>
         )}
 
-        <div className="text-center">
+        <div className="text-center flex items-center justify-center gap-4">
           <Link href="/cameras/connect" className="text-xs text-white/30 hover:text-white/60 underline underline-offset-2">
             Buning o'rniga EZVIZ Cloud orqali ulash
+          </Link>
+          <Link href="/cameras/gateways" className="text-xs text-white/30 hover:text-white/60 underline underline-offset-2">
+            Gateway xavfsizligi
           </Link>
         </div>
       </div>

@@ -1,10 +1,12 @@
 // POST /api/cameras/pairing/gateway/report — Gateway ONVIF/RTSP discovery natijasini yuboradi.
 // Body: { pairingId, gatewayId, cameras: [{ localDeviceId, name, manufacturer, model, ip, protocols }] }
 //
-// Gateway faqat o'zi claim qilgan pairing_id uchun report yubora oladi — boshqa
-// sessionlarga yozib bo'lmaydi (gateway_id moslik tekshiriladi).
+// Bu so'rov Ed25519 bilan imzolangan bo'lishi shart (claim paytida ro'yxatdan
+// o'tgan public key bilan tekshiriladi) — gateway_id shunchaki body ichida
+// aytilgan qiymat emas, imzo orqali isbotlangan identity (gateway-auth.ts).
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, dbConfigured } from "@/lib/supabase";
+import { verifyGatewayRequest } from "@/lib/camera/gateway-auth";
 
 type DiscoveredCamera = {
   localDeviceId: string;
@@ -20,11 +22,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Supabase sozlanmagan" }, { status: 500 });
   }
 
-  const body = await req.json() as { pairingId?: string; gatewayId?: string; cameras?: DiscoveredCamera[] };
-  const { pairingId, gatewayId, cameras } = body;
+  const rawBody = await req.text();
+  const auth = await verifyGatewayRequest(req, rawBody);
+  if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
 
-  if (!pairingId || !gatewayId || !Array.isArray(cameras)) {
-    return NextResponse.json({ ok: false, error: "pairingId, gatewayId, cameras kerak" }, { status: 400 });
+  const body = JSON.parse(rawBody) as { pairingId?: string; gatewayId?: string; cameras?: DiscoveredCamera[] };
+  const { pairingId, cameras } = body;
+  const gatewayId = auth.gatewayId; // imzo orqali tasdiqlangan — body.gatewayId'ga ishonmaymiz
+
+  if (!pairingId || !Array.isArray(cameras)) {
+    return NextResponse.json({ ok: false, error: "pairingId, cameras kerak" }, { status: 400 });
   }
 
   const { data: pairing } = await supabase.from("camera_pairings").select("*").eq("id", pairingId).single();
@@ -51,7 +58,6 @@ export async function POST(req: NextRequest) {
 
   await supabase.from("camera_discovery_results").insert(rows);
   await supabase.from("camera_pairings").update({ status: "cameras_found" }).eq("id", pairingId);
-  await supabase.from("camera_gateways").update({ status: "online", last_seen: new Date().toISOString() }).eq("id", gatewayId);
 
   return NextResponse.json({ ok: true, found: rows.length });
 }
