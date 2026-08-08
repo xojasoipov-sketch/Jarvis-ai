@@ -8,7 +8,7 @@ export const SADIPRIME = {
   email: "xojasoipov@gmail.com",
   location: "Andijan, O'zbekiston",
   telegram: "xojasoipov",
-  phone: "+998 90 123 45 67",
+  phone: "+998 91 069 67 77",
   hero: "Biz g'oyalarni raqamli muvaffaqiyatga aylantiramiz",
 };
 
@@ -101,13 +101,6 @@ export const TECH = {
   Platformalar: ["Telegram Mini Apps", "GitHub", "Vercel", "Railway"],
 };
 
-export const STATS = [
-  { value: "120+", label: "Tugatilgan loyihalar" },
-  { value: "85+", label: "Mamnun mijozlar" },
-  { value: "7+", label: "Yillik tajriba" },
-  { value: "99%", label: "Muvaffaqiyat" },
-  { value: "24/7", label: "Qo'llab-quvvatlash" },
-];
 
 /** Telegram mehmon matnlari */
 export function guestStartText(firstName: string): string {

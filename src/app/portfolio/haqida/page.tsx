@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { ShieldCheck, Lightbulb, Handshake, Target, Compass, Eye, type LucideIcon } from "lucide-react";
-import { SADIPRIME, STATS } from "@/lib/sadiprime";
+import { SADIPRIME } from "@/lib/sadiprime";
 import { GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold } from "../_components/theme";
 import {
   Section, SectionHeading, PageHero, GlassCard, IconTile, CtaBand,
@@ -98,20 +98,6 @@ export default function HaqidaPage() {
               </p>
             </GlassCard>
           </motion.div>
-        </Reveal>
-      </Section>
-
-      {/* ── Stats ── */}
-      <Section>
-        <Reveal className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {STATS.map((s) => (
-            <motion.div key={s.label} variants={fadeUp}>
-              <GlassCard className="p-7">
-                <Counter value={s.value} className="block text-3xl md:text-4xl font-bold tracking-[-0.02em]" />
-                <span className="block text-[12px] mt-2.5" style={{ color: TEXT_DIM }}>{s.label}</span>
-              </GlassCard>
-            </motion.div>
-          ))}
         </Reveal>
       </Section>
 

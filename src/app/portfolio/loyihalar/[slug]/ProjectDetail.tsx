@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
 import {
-  GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold, SHADOW_LUXURY,
+  GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold, SHADOW_LUXURY, goldButtonStyle,
 } from "../../_components/theme";
 import {
   Container, Section, SectionLabel, SectionHeading, GlassCard, CtaBand,
   fadeUp, Reveal, TextReveal, Counter, Lift, PointerTilt, Floating,
 } from "../../_components/ui";
-import type { Project } from "../../_data";
+import type { Project } from "@/lib/portfolio-store";
 
 /** Device mockups standing in for project screenshots — no image assets needed. */
 function ProjectShowcase({ project }: { project: Project }) {
@@ -129,6 +129,22 @@ export default function ProjectDetail({
                     </span>
                   ))}
                 </motion.div>
+
+                {/* Loyiha ochiq bo'lsa — to'g'ridan-to'g'ri havola */}
+                {project.link && (
+                  <motion.div variants={fadeUp} className="mt-8">
+                    <a
+                      href={project.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-[13px] font-semibold transition hover:brightness-110"
+                      style={goldButtonStyle}
+                    >
+                      Loyihani ko{"'"}rish
+                      <ExternalLink size={14} />
+                    </a>
+                  </motion.div>
+                )}
               </div>
 
               <motion.div variants={fadeUp}>
@@ -139,7 +155,8 @@ export default function ProjectDetail({
         </Container>
       </section>
 
-      {/* ── Results ── */}
+      {/* ── Results — faqat haqiqiy o'lchangan raqamlar bo'lsa ── */}
+      {project.metrics.length > 0 && (
       <Section top={false}>
         <Reveal>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -158,8 +175,10 @@ export default function ProjectDetail({
           </div>
         </Reveal>
       </Section>
+      )}
 
-      {/* ── Problem / Solution ── */}
+      {/* ── Problem / Solution — ikkalasi ham yozilgan bo'lsa ── */}
+      {project.problem && project.solution && (
       <Section style={{ background: BG_ALT }}>
         <Reveal>
           <SectionHeading label="Loyiha haqida" title="Muammo va yechim" highlight="yechim" className="mb-12" />
@@ -191,6 +210,7 @@ export default function ProjectDetail({
           </div>
         </Reveal>
       </Section>
+      )}
 
       {/* ── Next project ── */}
       <Section>
