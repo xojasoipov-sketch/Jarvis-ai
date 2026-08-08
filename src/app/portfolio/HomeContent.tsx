@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import {
   GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold, glass,
-  SHADOW_LUXURY, goldButtonStyle,
+  SHADOW_LUXURY, goldButtonStyle, REVEAL_EASE,
 } from "./_components/theme";
 import {
   Container, Section, SectionHeading, SectionLabel, GlassCard, IconTile,
@@ -19,7 +19,7 @@ import {
   fadeUp, Reveal, TextReveal, Counter, Magnetic, Spotlight, Lift,
 } from "./_components/ui";
 import HeroObject from "./_components/HeroObject";
-import { SERVICES, STEPS, PLANS, POSTS, FAQS } from "./_data";
+import { SERVICES, STEPS, POSTS, FAQS } from "./_data";
 import type { Project } from "@/lib/portfolio-store";
 
 const SERVICE_ICONS: Record<string, LucideIcon> = {
@@ -101,7 +101,7 @@ function Hero() {
           <motion.div
             initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 1, delay: 0.2, ease: REVEAL_EASE }}
           >
             <HeroObject />
           </motion.div>
@@ -381,7 +381,7 @@ function ProcessSection() {
             initial={{ scaleX: 0 }}
             whileInView={{ scaleX: 1 }}
             viewport={{ once: true }}
-            transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 1.4, ease: REVEAL_EASE }}
           />
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -413,81 +413,6 @@ function ProcessSection() {
 /* ═══════════════════════════════════════════════════════════════
    PRICING PREVIEW
    ═══════════════════════════════════════════════════════════════ */
-
-function PricingPreview() {
-  return (
-    <Section>
-      <Reveal>
-        <SectionHeading
-          label="Narxlar"
-          title="Shaffof narxlar, yashirin to'lovlarsiz"
-          highlight="yashirin to'lovlarsiz"
-          align="center"
-          className="mb-14"
-        />
-
-        <div className="grid md:grid-cols-3 gap-5 items-start">
-          {PLANS.map((plan) => (
-            <motion.div key={plan.name} variants={fadeUp} className={plan.featured ? "md:-mt-5" : ""}>
-              <Lift className="h-full">
-                <div
-                  className="relative h-full p-8 flex flex-col"
-                  style={{
-                    borderRadius: 24,
-                    ...(plan.featured
-                      ? {
-                          background: `linear-gradient(165deg, ${gold(0.13)}, rgba(18,18,18,0.85))`,
-                          border: `1px solid ${gold(0.34)}`,
-                          boxShadow: `0 30px 80px -30px ${gold(0.45)}`,
-                        }
-                      : { ...glass, boxShadow: SHADOW_LUXURY }),
-                  }}
-                >
-                  {plan.featured && (
-                    <span
-                      className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-semibold px-3.5 py-1.5 rounded-full whitespace-nowrap"
-                      style={goldButtonStyle}
-                    >
-                      Eng ommabop
-                    </span>
-                  )}
-                  <h3 className="font-semibold text-lg">{plan.name}</h3>
-                  <div className="flex items-end gap-1.5 mt-4">
-                    <Counter
-                      value={plan.price}
-                      className="text-[2.75rem] font-bold leading-none tracking-[-0.02em]"
-                      style={{ color: plan.featured ? GOLD : "#fff" }}
-                    />
-                  </div>
-                  <p className="text-[13px] mt-3 mb-7" style={{ color: TEXT_DIM }}>{plan.note}</p>
-
-                  <ul className="space-y-3.5 flex-1 mb-8">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-start gap-3 text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>
-                        <Check size={15} style={{ color: GOLD }} strokeWidth={2.5} className="flex-shrink-0 mt-0.5" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-
-                  {plan.featured ? (
-                    <GoldButton href="/portfolio/narxlar" className="w-full justify-center">
-                      Boshlash <ArrowRight size={14} />
-                    </GoldButton>
-                  ) : (
-                    <GhostButton href="/portfolio/narxlar" className="w-full justify-center">
-                      Boshlash <ArrowRight size={14} />
-                    </GhostButton>
-                  )}
-                </div>
-              </Lift>
-            </motion.div>
-          ))}
-        </div>
-      </Reveal>
-    </Section>
-  );
-}
 
 /* ═══════════════════════════════════════════════════════════════
    BLOG PREVIEW
@@ -594,7 +519,6 @@ export default function HomeContent({ projects }: { projects: Project[] }) {
       <ServicesSection />
       <FeaturedProjects projects={projects} />
       <ProcessSection />
-      <PricingPreview />
       <BlogPreview />
       <FaqPreview />
       <CtaBand

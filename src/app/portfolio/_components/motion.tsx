@@ -26,13 +26,13 @@ import {
   animate,
   type Variants,
 } from "framer-motion";
-import { gold, RADIUS } from "./theme";
+import { gold, RADIUS, REVEAL_EASE, REVEAL_DURATION } from "./theme";
 
 /* ── Scroll reveal ────────────────────────────────────────────────────────── */
 
 export const fadeUp: Variants = {
   hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
+  visible: { opacity: 1, y: 0, transition: { duration: REVEAL_DURATION, ease: REVEAL_EASE } },
 };
 
 export const stagger: Variants = {
@@ -53,12 +53,53 @@ export function Reveal({
     <motion.div
       initial="hidden"
       whileInView="visible"
-      viewport={{ once: true, margin: "-80px" }}
+      viewport={{ once: true, margin: "50px" }}
       variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08, delayChildren: delay } } }}
       className={className}
     >
       {children}
     </motion.div>
+  );
+}
+
+/**
+ * Shablondagi FadeIn bilan bir xil ishlaydigan yakka element wrapper —
+ * stagger kerak bo'lmagan joylarda (masalan bitta sarlavha) Reveal o'rniga
+ * shuni ishlating. Xatti-harakati aynan bir xil: bir marta ko'ringanda
+ * ko'tarilib chiqadi, sahifa oldindan yuklangan bo'lsa ham darhol ishga tushadi.
+ */
+export function FadeIn({
+  children,
+  as: Tag = "div",
+  delay = 0,
+  duration = REVEAL_DURATION,
+  x = 0,
+  y = 30,
+  className,
+  style,
+}: {
+  children: ReactNode;
+  as?: ElementType;
+  delay?: number;
+  duration?: number;
+  x?: number;
+  y?: number;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const reduce = useReducedMotion();
+  const MotionTag = motion.create(Tag);
+  return (
+    <MotionTag
+      initial={reduce ? undefined : { opacity: 0, x, y }}
+      whileInView={{ opacity: 1, x: 0, y: 0 }}
+      viewport={{ once: true, margin: "50px" }}
+      transition={{ delay, duration, ease: REVEAL_EASE }}
+      className={className}
+      style={style}
+    >
+      {children}
+    </MotionTag>
   );
 }
 
@@ -114,7 +155,7 @@ export function TextReveal({
           <motion.span
             className="inline-block"
             variants={{ hidden: { y: "110%" }, visible: { y: 0 } }}
-            transition={{ duration: 0.7, delay: i * 0.055, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: REVEAL_DURATION, delay: i * 0.055, ease: REVEAL_EASE }}
             style={isHighlighted(word) ? { color: gold(1) } : undefined}
           >
             {word}
@@ -159,7 +200,7 @@ export function Counter({
 
     const controls = animate(0, target, {
       duration: 1.6,
-      ease: [0.16, 1, 0.3, 1],
+      ease: REVEAL_EASE,
       onUpdate: (v) => setDisplay(render(v)),
       // Land exactly on the source string so rounding never shows "119.99%".
       onComplete: () => setDisplay(value),

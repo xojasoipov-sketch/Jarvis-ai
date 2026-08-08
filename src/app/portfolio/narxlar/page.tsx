@@ -5,7 +5,7 @@ import { Check, Minus, ArrowRight } from "lucide-react";
 import { GOLD, TEXT_DIM, BORDER, BG_ALT, gold, glass, SHADOW_LUXURY, goldButtonStyle } from "../_components/theme";
 import {
   Section, SectionHeading, PageHero, GlassCard, GoldButton, GhostButton, CtaBand,
-  fadeUp, Reveal, Counter, Lift,
+  fadeUp, Reveal, Lift,
 } from "../_components/ui";
 import { PLANS, FAQS } from "../_data";
 
@@ -28,7 +28,7 @@ export default function NarxlarPage() {
         label="Narxlar"
         title="Siz uchun eng yaxshi paketni tanlang"
         highlight="paketni tanlang"
-        subtitle="Barcha paketlarga dizayn, ishlab chiqish va ishga tushirish kiradi. Yashirin to'lovlar yo'q."
+        subtitle="Har bir loyiha hajmi va vazifasi bo'yicha alohida hisoblanadi — tayyor narxlar emas, aniq smeta beramiz."
       />
 
       {/* ── Plans ── */}
@@ -60,11 +60,12 @@ export default function NarxlarPage() {
                       </span>
                     )}
                     <h2 className="font-semibold text-lg">{plan.name}</h2>
-                    <Counter
-                      value={plan.price}
-                      className="block text-[3rem] font-bold leading-none tracking-[-0.02em] mt-5"
-                      style={{ color: plan.featured ? GOLD : "#fff" }}
-                    />
+                    <span
+                      className="block text-[13px] font-medium mt-5 tracking-wide uppercase"
+                      style={{ color: plan.featured ? GOLD : "rgba(255,255,255,0.6)" }}
+                    >
+                      Narx — so&apos;rov asosida
+                    </span>
                     <p className="text-[13px] mt-4 mb-8" style={{ color: TEXT_DIM }}>{plan.note}</p>
 
                     <ul className="space-y-3.5 flex-1 mb-9">
@@ -78,11 +79,11 @@ export default function NarxlarPage() {
 
                     {plan.featured ? (
                       <GoldButton href="/portfolio/aloqa" className="w-full justify-center">
-                        Buyurtma berish <ArrowRight size={14} />
+                        Smeta so&apos;rash <ArrowRight size={14} />
                       </GoldButton>
                     ) : (
                       <GhostButton href="/portfolio/aloqa" className="w-full justify-center">
-                        Buyurtma berish <ArrowRight size={14} />
+                        Smeta so&apos;rash <ArrowRight size={14} />
                       </GhostButton>
                     )}
                   </div>
@@ -92,7 +93,7 @@ export default function NarxlarPage() {
           </div>
 
           <motion.p variants={fadeUp} className="text-center text-[13px] mt-10" style={{ color: TEXT_DIM }}>
-            Narxlar taxminiy — aniq narx loyiha hajmiga qarab belgilanadi.
+            Narx loyiha hajmi, muddati va funksiyalar ro&apos;yxatiga qarab hisoblanadi — bog&apos;lanib aniq smeta oling.
           </motion.p>
         </Reveal>
       </Section>

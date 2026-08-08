@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, HelpCircle } from "lucide-react";
-import { GOLD, TEXT_DIM, BORDER, gold, glass, SHADOW_LUXURY } from "../_components/theme";
+import { GOLD, TEXT_DIM, BORDER, gold, glass, SHADOW_LUXURY, REVEAL_EASE } from "../_components/theme";
 import {
   Section, PageHero, GoldButton, CtaBand,
   fadeUp, Reveal, Floating,
@@ -56,7 +56,7 @@ export default function FaqPage() {
                       </span>
                       <motion.span
                         animate={{ rotate: isOpen ? 180 : 0 }}
-                        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                        transition={{ duration: 0.25, ease: REVEAL_EASE }}
                         className="flex-shrink-0"
                       >
                         <ChevronDown size={17} style={{ color: isOpen ? GOLD : TEXT_DIM }} />
@@ -69,7 +69,7 @@ export default function FaqPage() {
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: "auto", opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                          transition={{ duration: 0.3, ease: REVEAL_EASE }}
                         >
                           <p
                             className="px-7 pb-7 pl-[52px] text-[14px] leading-relaxed"

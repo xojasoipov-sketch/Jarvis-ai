@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
-import { GOLD, TEXT_DIM, BORDER, gold, SHADOW_LUXURY, goldButtonStyle, ghostButtonStyle } from "../_components/theme";
+import { GOLD, TEXT_DIM, BORDER, gold, SHADOW_LUXURY, goldButtonStyle, ghostButtonStyle, REVEAL_EASE } from "../_components/theme";
 import { Section, Lift } from "../_components/ui";
 import { PROJECT_CATEGORIES, type Project, type ProjectCategory } from "@/lib/portfolio-store";
 
@@ -52,7 +52,7 @@ export default function ProjectsGrid({ projects }: { projects: Project[] }) {
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.35, ease: REVEAL_EASE }}
               >
                 <Link href={`/portfolio/loyihalar/${p.slug}`} className="block h-full">
                   <Lift className="h-full">

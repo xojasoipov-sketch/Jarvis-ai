@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { ShieldCheck, Lightbulb, Handshake, Target, Compass, Eye, type LucideIcon } from "lucide-react";
 import { SADIPRIME } from "@/lib/sadiprime";
-import { GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold } from "../_components/theme";
+import { GOLD, TEXT_DIM, BORDER, BG_ALT, SURFACE, gold, REVEAL_EASE } from "../_components/theme";
 import {
   Section, SectionHeading, PageHero, GlassCard, IconTile, CtaBand,
   fadeUp, Reveal, Counter, PointerTilt,
@@ -113,7 +113,7 @@ export default function HaqidaPage() {
               initial={{ scaleX: 0 }}
               whileInView={{ scaleX: 1 }}
               viewport={{ once: true }}
-              transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 1.5, ease: REVEAL_EASE }}
             />
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
               {TIMELINE.map((t) => (

@@ -5,7 +5,7 @@ import {
   Search, Microscope, Palette, Code2, TestTube2, Rocket, Headphones, TrendingUp,
   type LucideIcon,
 } from "lucide-react";
-import { GOLD, TEXT_DIM, BG_ALT, SURFACE, gold } from "../_components/theme";
+import { GOLD, TEXT_DIM, BG_ALT, SURFACE, gold, REVEAL_EASE } from "../_components/theme";
 import {
   Section, SectionHeading, PageHero, GlassCard, IconTile, CtaBand,
   fadeUp, Reveal,
@@ -42,7 +42,7 @@ export default function JarayonPage() {
               initial={{ scaleY: 0 }}
               whileInView={{ scaleY: 1 }}
               viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 1.8, ease: REVEAL_EASE }}
             />
 
             <div className="space-y-4">

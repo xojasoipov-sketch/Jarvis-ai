@@ -4,11 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence, useScroll, useMotionValueEvent } from "framer-motion";
-import { ArrowRight, Menu, X, Send, Mail, MapPin, Globe, Camera, Video, AtSign } from "lucide-react";
+import { ArrowRight, Menu, X, Send, Mail, MapPin, AtSign } from "lucide-react";
 import { SADIPRIME } from "@/lib/sadiprime";
 import {
   GOLD, TEXT_DIM, BG, BORDER, CONTAINER, gold, goldButtonStyle,
-  NAV_LINKS, FOOTER_COLUMNS,
+  NAV_LINKS, FOOTER_COLUMNS, REVEAL_EASE,
 } from "./theme";
 import { Magnetic } from "./motion";
 
@@ -124,7 +124,7 @@ export function SiteNav() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.28, ease: REVEAL_EASE }}
             className="lg:hidden overflow-hidden"
             style={{ background: BG, borderTop: `1px solid ${BORDER}` }}
           >
@@ -158,12 +158,11 @@ export function SiteNav() {
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 
+/* Faqat haqiqatan ishlaydigan kanallar — "#" ga bog'langan soxta ijtimoiy
+   tarmoq tugmalari ko'rsatilmaydi. */
 const SOCIALS = [
   { Icon: Send, href: `https://t.me/${SADIPRIME.telegram}`, label: "Telegram" },
-  { Icon: Camera, href: "#", label: "Instagram" },
-  { Icon: Video, href: "#", label: "YouTube" },
   { Icon: AtSign, href: `mailto:${SADIPRIME.email}`, label: "Email" },
-  { Icon: Globe, href: "#", label: "Veb-sayt" },
 ];
 
 export function SiteFooter() {

@@ -38,6 +38,17 @@ export const CONTAINER = "mx-auto w-full max-w-[1320px] px-6 md:px-10";
 export const RADIUS = 24;
 export const RADIUS_SM = 16;
 
+/* ── Motion ───────────────────────────────────────────────────────────────── */
+
+/**
+ * Bitta manba — butun saytdagi scroll-reveal animatsiyalari shu ikki qiymatga
+ * tayanadi (motion.tsx: fadeUp, Reveal, TextReveal). Bu yerni o'zgartirsangiz
+ * har bir sahifadagi kirish animatsiyasi bir vaqtda yangilanadi — "bitta
+ * shablon" degani shu: sahifalar alohida-alohida emas, shu joydan tarqaladi.
+ */
+export const REVEAL_EASE = [0.25, 0.1, 0.25, 1] as const;
+export const REVEAL_DURATION = 0.7;
+
 /* ── Elevation ────────────────────────────────────────────────────────────── */
 
 export const SHADOW_LUXURY = "0 24px 70px -20px rgba(0,0,0,0.8)";

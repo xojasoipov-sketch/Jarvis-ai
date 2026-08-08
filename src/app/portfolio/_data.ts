@@ -96,7 +96,7 @@ export const WORKFLOW: Step[] = [
 
 export interface Plan {
   name: string;
-  price: string;
+  /** Narx raqami emas — har loyiha bo'yicha alohida hisoblanadi. */
   note: string;
   features: string[];
   featured?: boolean;
@@ -105,13 +105,11 @@ export interface Plan {
 export const PLANS: Plan[] = [
   {
     name: "Starter",
-    price: "$499",
     note: "Kichik biznes va startaplar uchun",
     features: ["Web-sayt (3 sahifa)", "Responsive dizayn", "2 oy qo'llab-quvvatlash", "Asosiy SEO"],
   },
   {
     name: "Business",
-    price: "$999",
     note: "O'sayotgan bizneslar uchun",
     featured: true,
     features: [
@@ -124,7 +122,6 @@ export const PLANS: Plan[] = [
   },
   {
     name: "Enterprise",
-    price: "$1999",
     note: "Yirik loyihalar uchun",
     features: [
       "Cheksiz sahifa",
