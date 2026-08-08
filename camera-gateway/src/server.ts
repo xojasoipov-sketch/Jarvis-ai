@@ -8,11 +8,17 @@
 // (cloud tarafda CAMERA_GATEWAY_SECRET env orqali sozlanadi).
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createReadStream, existsSync, statSync } from "node:fs";
+import { join, extname } from "node:path";
 import { Cam } from "onvif";
 import { captureRtspSnapshot } from "./snapshot.js";
+import { startHlsSession, stopHlsSession, getSessionDir, touchSession, isValidToken } from "./hls.js";
 
 const PORT = Number(process.env.GATEWAY_PORT || 8787);
 const SECRET = process.env.CAMERA_GATEWAY_SECRET || "";
+// Cloud'ga ko'rinadigan manzil (tunnel domain) — CAMERA_GATEWAY_URL bilan
+// bir xil bo'lishi kerak, HLS playlist URL'ini shu asosda quramiz.
+const PUBLIC_URL = (process.env.GATEWAY_PUBLIC_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
 
 type TargetBody = {
   camera_id: string;
@@ -82,9 +88,50 @@ function checkAuth(req: IncomingMessage): boolean {
   return header === `Bearer ${SECRET}`;
 }
 
+// GET /hls/<cameraId>/<file>?token=... — segmentlarni brauzer/hls.js
+// to'g'ridan-to'g'ri so'raydi, shuning uchun CAMERA_GATEWAY_SECRET emas,
+// shu stream uchun generatsiya qilingan bir martalik token tekshiriladi
+// (secrets frontendga chiqmasligi shart qoidasi — 46-band).
+function serveHlsFile(req: IncomingMessage, res: ServerResponse) {
+  const url = new URL(req.url || "", `http://localhost`);
+  const parts = url.pathname.split("/").filter(Boolean); // ["hls", cameraId, file]
+  const cameraId = parts[1];
+  const file = parts[2];
+  const token = url.searchParams.get("token") || "";
+
+  if (!cameraId || !file || !/^(index\.m3u8|seg\d+\.ts)$/.test(file)) {
+    return json(res, 400, { error: "Noto'g'ri so'rov" });
+  }
+  if (!isValidToken(cameraId, token)) {
+    return json(res, 403, { error: "Token noto'g'ri yoki muddati tugagan" });
+  }
+
+  const dir = getSessionDir(cameraId);
+  if (!dir) return json(res, 404, { error: "Stream session topilmadi" });
+  touchSession(cameraId); // ko'rish davom etayotganini bildiradi — idle timeout qayta boshlanadi
+
+  const filePath = join(dir, file);
+  if (!existsSync(filePath)) return json(res, 404, { error: "Fayl topilmadi" });
+
+  const contentType = extname(file) === ".m3u8" ? "application/vnd.apple.mpegurl" : "video/mp2t";
+  res.writeHead(200, {
+    "Content-Type": contentType,
+    "Content-Length": statSync(filePath).size,
+    "Cache-Control": "no-cache",
+    "Access-Control-Allow-Origin": "*",
+  });
+  createReadStream(filePath).pipe(res);
+}
+
 export function startGatewayServer() {
   const server = createServer((req, res) => {
     void (async () => {
+      // HLS fayllari alohida (token-based) auth ishlatadi — control-plane
+      // bearer tekshiruvidan oldin ajratib olamiz.
+      if (req.method === "GET" && req.url?.startsWith("/hls/")) {
+        return serveHlsFile(req, res);
+      }
+
       if (!checkAuth(req)) return json(res, 401, { error: "Unauthorized" });
 
       try {
@@ -107,12 +154,25 @@ export function startGatewayServer() {
         }
 
         if (req.method === "POST" && req.url === "/stream/start") {
-          // HLS transkodlash (RTSP → HLS) hali yozilmagan — soxta URL qaytarish
-          // o'rniga aniq xato beramiz (Jarvis buni "stream olib bo'lmadi" deb ko'rsatadi).
-          return json(res, 501, { error: "Live HLS stream hali amalga oshirilmagan (gateway/README.md'ga qarang)" });
+          const body = await readBody(req) as TargetBody;
+          if (!body.camera_id) return json(res, 400, { error: "camera_id kerak" });
+          try {
+            const rtspUrl = await resolveRtspUrl(body);
+            const { token } = await startHlsSession(body.camera_id, rtspUrl);
+            return json(res, 200, {
+              hls_url: `${PUBLIC_URL}/hls/${encodeURIComponent(body.camera_id)}/index.m3u8?token=${token}`,
+              // Idle-timeout bilan mos: harakatsiz qolsa ~60s'dan keyin session yopiladi,
+              // lekin har playlist/segment so'rovi timerni qayta boshlaydi (touchSession)
+              expires_at: new Date(Date.now() + 55_000).toISOString(),
+            });
+          } catch (e) {
+            return json(res, 502, { error: e instanceof Error ? e.message : "HLS session boshlanmadi" });
+          }
         }
 
         if (req.method === "POST" && req.url === "/stream/stop") {
+          const body = await readBody(req) as TargetBody;
+          if (body.camera_id) stopHlsSession(body.camera_id);
           return json(res, 200, { ok: true });
         }
 
