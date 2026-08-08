@@ -8,12 +8,22 @@
 import { loadOrCreateState, GATEWAY_NAME, DISCOVERY_TIMEOUT_MS } from "./config.js";
 import { discoverOnvifDevices } from "./discovery.js";
 import { claimPairing, reportDiscovery, type QrPayload } from "./pairing-client.js";
+import { startGatewayServer } from "./server.js";
 
 async function main() {
   const args = process.argv.slice(2);
+
+  // --serve: doimiy ishlaydigan HTTP server (snapshot/status so'rovlariga javob beradi)
+  if (args.includes("--serve")) {
+    startGatewayServer();
+    return; // process ochiq qoladi, server.listen callback'i process'ni tirik ushlab turadi
+  }
+
   const pairIdx = args.indexOf("--pair");
   if (pairIdx === -1) {
-    console.log("Foydalanish: npm run pair -- '<QR JSON>'");
+    console.log("Foydalanish:");
+    console.log("  npm run pair -- '<QR JSON>'   — kamerani pairing qilish");
+    console.log("  npm start -- --serve          — doimiy HTTP server (snapshot/status)");
     process.exit(1);
   }
 

@@ -12,15 +12,23 @@ topadi va Jarvis'ga **outbound** (chiquvchi) so'rovlar orqali xabar beradi.
 - Jarvis Cloud'dagi pairing sessionni QR orqali claim qiladi
 - Topilgan kameralar ro'yxatini Jarvis'ga yuboradi (`/report`)
 - RTSP'dan bitta snapshot frame olish uchun ffmpeg wrapper (`snapshot.ts`)
+- **HTTP server** (`npm start -- --serve`): Jarvis Cloud'ning `RtspProvider`
+  chaqiradigan `/snapshot`, `/stream/status`, `/stream/stop` endpointlari.
+  `/snapshot` — ONVIF `GetStreamUri` orqali RTSP URL'ni topadi, credentials
+  bilan ffmpeg orqali frame oladi, `data:image/jpeg;base64,...` qaytaradi.
+  `CAMERA_GATEWAY_SECRET` bilan Bearer auth talab qilinadi.
 
 ## Bu nima qilmaydi hali (ochiq qoldirilgan, fake qilinmagan)
 
-- **Live stream serving** (WebRTC/HLS) — Cloud tomon on-demand snapshot/stream
-  so'rasa, gateway'ga qanday yetkazish (outbound-only tunnel: WebSocket long-poll
-  yoki reverse tunnel) hali loyihalanmagan
+- **`/stream/start` (live HLS)** — chaqirilsa aniq `501 Not Implemented`
+  qaytaradi. RTSP→HLS transkodlash (ffmpeg segment pipeline) hali yozilmagan.
 - **Device authentication signing** (28-band) — `publicKey` hozircha tasodifiy
   hex qiymat, haqiqiy Ed25519 keypair va so'rov imzolash yo'q
 - **PTZ, recording, event engine** — bular gateway ichida umuman yozilmagan
+- **Gateway'ni cloud'dan yetadigan qilish** — server local portda (`GATEWAY_PORT`,
+  default 8787) ishlaydi. Buni Jarvis Cloud'ga ko'rsatish uchun operator
+  o'zi Cloudflare Tunnel / Tailscale Funnel / ngrok sozlashi kerak — bu
+  gateway kodi ichida avtomatlashtirilmagan.
 
 ## Ishga tushirish
 
